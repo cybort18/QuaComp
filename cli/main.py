@@ -13,6 +13,8 @@ from src.profiler.telemetry import get_system_metadata, get_cpu_utilization
 from src.engine.circuits import generate_shallow_circuit, generate_deep_circuit, generate_qft_circuit
 from src.engine.simulator import run_simulation
 from src.scorer.calculator import calculate_qsim_score, categorize_score
+from src.reporter.json_exporter import export_to_json
+from src.reporter.md_exporter import export_to_markdown
 
 console = Console()
 
@@ -182,6 +184,7 @@ def main():
     parser.add_argument("--qubits", type=int, default=10, help="Number of qubits for custom run (default 10).")
     parser.add_argument("--type", choices=["shallow", "deep", "qft"], default="qft", help="Workload type (default qft).")
     parser.add_argument("--depth", type=int, default=10, help="Depth for deep workload (default 10).")
+    parser.add_argument("--export", choices=["json", "md", "all"], default="all", help="Export results format (default all).")
     
     args = parser.parse_args()
     
@@ -228,6 +231,16 @@ def main():
                 console.print(f"[bold red]Simulation aborted:[/bold red] {res['error']}")
                 
     display_results(results)
+    
+    # Export results if successful runs or if results exist
+    if results:
+        system_metadata = get_system_metadata()
+        if args.export in ("json", "all"):
+            json_path = export_to_json(results, system_metadata)
+            console.print(f"[bold green]JSON report exported to:[/bold green] {json_path}")
+        if args.export in ("md", "all"):
+            md_path = export_to_markdown(results, system_metadata)
+            console.print(f"[bold green]Markdown report exported to:[/bold green] {md_path}")
 
 if __name__ == "__main__":
     main()
