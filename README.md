@@ -48,7 +48,7 @@
 ### System Telemetry & Benchmark Scorer (Phase 2)
 - Inspects real-time multi-core CPU usage, processor models, RAM, OS environment details.
 - Computes overall **QuaComp Score** via the formula:
-  $$\text{Score} = (2^{\text{max\_qubits}} \times 10) + \left(\frac{\text{total\_gates}}{\text{execution\_time}}\right)$$
+  $$\text{Score} = (2^{\text{max qubits}} \times 10) + \left(\frac{\text{total gates}}{\text{execution time}}\right)$$
 
 ### JSON & Markdown Exporters (Phase 3)
 - Automatically serializes run telemetry to `results/benchmark_<timestamp>.json`.
