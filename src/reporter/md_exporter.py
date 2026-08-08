@@ -37,6 +37,10 @@ def export_to_markdown(results: List[Dict[str, Any]], system_metadata: Dict[str,
     score = 0.0
     category = "N/A"
     
+    best_method = "statevector"
+    best_bond_dim = None
+    ram_savings = {}
+    
     if successful_runs:
         from src.scorer.calculator import calculate_qsim_score, categorize_score
         best_run = max(successful_runs, key=lambda x: x["qubits"])
@@ -45,6 +49,9 @@ def export_to_markdown(results: List[Dict[str, Any]], system_metadata: Dict[str,
         latency = best_run["latency"]
         score = calculate_qsim_score(best_qubits, gates, latency)
         category = categorize_score(score)
+        best_method = best_run.get("method", "statevector")
+        best_bond_dim = best_run.get("bond_dimension")
+        ram_savings = best_run.get("ram_savings", {})
         
     current_time = time.strftime("%Y-%m-%d %H:%M:%S")
     
@@ -57,6 +64,14 @@ def export_to_markdown(results: List[Dict[str, Any]], system_metadata: Dict[str,
     md_content.append("## Benchmark Summary")
     md_content.append(f"> **QuaComp Score:** `{score:,.2f}`")
     md_content.append(f"> **Performance Category:** `{category}`")
+    
+    method_name = "Statevector" if best_method == "statevector" else f"MPS (max_bond_dimension={best_bond_dim})"
+    md_content.append(f"> **Simulation Method:** `{method_name}`")
+    
+    if ram_savings:
+        savings_gb = ram_savings["savings_bytes"] / (1024 ** 3)
+        md_content.append(f"> **MPS RAM Efficiency:** `{ram_savings['savings_percent']:.2f}%` savings (Saved ~`{savings_gb:.4f} GB` vs Statevector)")
+        
     md_content.append(f"> **Max Qubits Simulated:** `{best_qubits} qubits` (using `{gates:,}` gates)")
     md_content.append("\n---\n")
     
@@ -72,8 +87,8 @@ def export_to_markdown(results: List[Dict[str, Any]], system_metadata: Dict[str,
     
     # Runs summary
     md_content.append("## Detailed Simulation Runs")
-    md_content.append("| Qubits | Workload | Total Gates | Latency (s) | Avg CPU % | RAM Status | Success |")
-    md_content.append("| :---: | :--- | :---: | :---: | :---: | :---: | :---: |")
+    md_content.append("| Qubits | Method | Workload | Total Gates | Latency (s) | Avg CPU % | RAM Status | Success |")
+    md_content.append("| :---: | :--- | :--- | :---: | :---: | :---: | :---: | :---: |")
     
     for r in results:
         success_str = "SUCCESS" if r["success"] else "FAILED"
@@ -81,8 +96,12 @@ def export_to_markdown(results: List[Dict[str, Any]], system_metadata: Dict[str,
         cpu_str = f"{r['cpu_usage']:.1f}%" if r["success"] else "-"
         workload = r.get("workload_label", "QFT")
         
+        method_str = r.get("method", "statevector")
+        if method_str in ('mps', 'matrix_product_state') and r.get("bond_dimension"):
+            method_str = f"mps (chi={r['bond_dimension']})"
+            
         md_content.append(
-            f"| {r['qubits']} | {workload} | {r['gates']} | {latency_str} | {cpu_str} | {r['ram_status']} | {success_str} |"
+            f"| {r['qubits']} | {method_str} | {workload} | {r['gates']} | {latency_str} | {cpu_str} | {r['ram_status']} | {success_str} |"
         )
         
     md_content.append("\n---\n")

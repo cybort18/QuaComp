@@ -3,14 +3,16 @@ from typing import Any, Dict
 from qiskit import QuantumCircuit, transpile
 from qiskit_aer import AerSimulator
 
-def run_simulation(circuit: QuantumCircuit) -> Dict[str, Any]:
+def run_simulation(circuit: QuantumCircuit, method: str = 'statevector', bond_dimension: int = 64) -> Dict[str, Any]:
     """
-    Execute a Qiskit quantum circuit using AerSimulator with statevector method.
+    Execute a Qiskit quantum circuit using AerSimulator with selected method (statevector or mps).
     
     Measures the execution latency including transpilation and simulation run.
     
     Args:
         circuit (QuantumCircuit): The Qiskit quantum circuit to execute.
+        method (str): The simulation method ('statevector' or 'mps'/'matrix_product_state').
+        bond_dimension (int): Max bond dimension for MPS.
         
     Returns:
         dict: A dictionary containing execution telemetry:
@@ -28,9 +30,15 @@ def run_simulation(circuit: QuantumCircuit) -> Dict[str, Any]:
     start_time = time.perf_counter()
     
     try:
-        # Initialize AerSimulator with statevector method
-        simulator = AerSimulator(method='statevector')
-        
+        # Initialize AerSimulator based on simulation method
+        if method in ('mps', 'matrix_product_state'):
+            simulator = AerSimulator(
+                method='matrix_product_state',
+                matrix_product_state_max_bond_dimension=bond_dimension
+            )
+        else:
+            simulator = AerSimulator(method='statevector')
+            
         # Transpile circuit for the simulator backend
         transpiled_circuit = transpile(circuit, simulator)
         
@@ -46,6 +54,8 @@ def run_simulation(circuit: QuantumCircuit) -> Dict[str, Any]:
             "backend_version": result.backend_version,
             "job_id": result.job_id,
             "success": result.success,
+            "method": method,
+            "bond_dimension": bond_dimension if method in ('mps', 'matrix_product_state') else None
         }
         
         return {

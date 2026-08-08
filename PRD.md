@@ -13,13 +13,14 @@
 ### 1.1 Overview
 `QuaComp` adalah pustaka *open-source* dan alat penguji berbasis CLI (*Command Line Interface*) yang dirancang untuk menguji batas kemampuan komputasi lokal (PC / Laptop / Workstation) dalam melakukan simulasi komputer kuantum. 
 
-Dengan memanfaatkan simulasi ruang keadaan (*state-vector simulation*) berdimensi $2^n$, `QuaComp-Bench` mengukur alokasi memori (RAM), tingkat penggunaan CPU/GPU, serta kecepatan eksekusi matriks gerbang kuantum (*quantum gates*) pada berbagai tingkat *qubit* dan kedalaman sirkuit (*circuit depth*).
+Dengan memanfaatkan simulasi ruang keadaan (*state-vector simulation*) berdimensi $2^n$, `QuaComp-Bench` mengukur alokasi memori (RAM), tingkat penggunaan CPU/GPU, serta kecepatan eksekusi matriks gerbang kuantum (*quantum gates*) pada berbagai tingkat *qubit* dan kedalaman sirkuit (*circuit depth*). Selain metode state-vector, QuaComp juga mendukung simulasi Matrix Product State (MPS) untuk menangani sirkuit kuantum skala besar (30 hingga 100+ qubit) secara efisien dengan melakukan kompresi tensor ruang keadaan pada kapasitas RAM yang terbatas.
 
 ### 1.2 Core Value Proposition
 - **Pre-flight Safety:** Mencegah terjadinya *Crash / Out-Of-Memory (OOM)* dengan menghitung estimasi alokasi $2^n$ sebelum eksekusi.
 - **Realistic Benchmarks:** Menguji berbagai jenis beban sirkuit kuantum (*Shallow*, *Deep*, dan *Algorithmic QFT*).
 - **Comprehensive Profiling:** Melacak waktu eksekusi, *latency*, alokasi RAM puncak (*peak RAM*), serta penggunaan CPU *multi-core*.
 - **Standardized Scoring:** Menghasilkan skor acuan kuantum ("QuaComp Score") agar pengguna dapat membandingkan performa antar perangkat.
+- **Scalable MPS Simulation:** Mendukung simulasi sirkuit kuantum dengan qubit tinggi (hingga 100+ qubit) menggunakan tensor compression (Matrix Product State), melampaui batasan memori state-vector konvensional pada sirkuit ber-entanglement rendah-sedang.
 
 ---
 
@@ -83,6 +84,16 @@ $$\text{QuaComp Score} = \left( 2^{n_{\text{max}}} \times 10
   2. **Markdown Summary:** Laporan rapi yang siap di-paste ke GitHub Issue/Discussion (`results/report.md`).
   3. **Terminal Dashboard:** Tampilan tabel & progress bar interaktif di CLI.
 
+### FR-7: Matrix Product State (MPS) Simulation Engine
+- **Deskripsi:** Sistem harus menyediakan opsi untuk mengeksekusi sirkuit menggunakan metode network tensor Matrix Product State (MPS) untuk mensimulasikan qubit dalam jumlah sangat besar dengan konsumsi memori RAM yang minimal.
+- **Spesifikasi & Perilaku:**
+  - Integrasi dengan backend `qiskit_aer.AerSimulator(method='matrix_product_state')`.
+  - Konfigurasi batas Bond Dimension ($\chi$) yang dapat disesuaikan via CLI `--bond-dim` (nilai default $\chi = 64$).
+  - Kemampuan simulasi high-qubit stress test pada rentang $n = 30\text{--}100$ qubits untuk tipe sirkuit dengan tingkat entanglement rendah hingga sedang.
+  - Pelacakan metrik MPS khusus:
+    - Perbandingan efisiensi RAM antara metode MPS dengan Statevector teoritis ($2^n \times 16$ bytes).
+    - Ukuran puncak Bond Dimension yang aktif digunakan selama simulasi berjalan.
+
 ---
 
 ## 4. Non-Functional Requirements (NFR)
@@ -100,13 +111,14 @@ $$\text{QuaComp Score} = \left( 2^{n_{\text{max}}} \times 10
 QuaComp-bench/
 ├── cli/
 │   ├── __init__.py
-│   └── main.py             # Entry point CLI (Rich UI)
+│   └── main.py             # Entry point CLI (Rich UI - update: Opsi argumen --method dan --bond-dim)
 ├── src/
 │   ├── __init__.py
 │   ├── engine/
 │   │   ├── __init__.py
 │   │   ├── circuits.py     # Pembuat sirkuit kuantum (Shallow, Deep, QFT)
-│   │   └── simulator.py    # Wrapper eksekusi Qiskit Aer
+│   │   ├── mps.py          # Handler konfigurasi MPS & kalkulasi kompresi tensor
+│   │   └── simulator.py    # Wrapper eksekusi Qiskit Aer (mendukung 'statevector' & 'matrix_product_state')
 │   ├── profiler/
 │   │   ├── __init__.py
 │   │   ├── memory.py       # Pre-flight safety check & RAM profiler
@@ -119,9 +131,10 @@ QuaComp-bench/
 │       ├── json_exporter.py
 │       └── md_exporter.py
 ├── tests/
-│   ├── test_circuits.py
-│   ├── test_memory.py
-│   └── test_scorer.py
+│   ├── test_engine.py      # Pengujian sirkuit dan simulator
+│   ├── test_memory.py      # Pengujian estimator memori
+│   ├── test_scorer.py      # Pengujian kalkulasi skor
+│   └── test_mps.py         # Pengujian modul MPS baru
 ├── requirements.txt
 ├── PRD.md
 ├── README.md
@@ -145,3 +158,9 @@ QuaComp-bench/
 - [ ] Tambahkan eksportir ke JSON dan Markdown summary di `reporter/`.
 - [ ] Buat unit test lengkap di folder `tests/`.
 - [ ] Tulis dokumentasi `README.md` open-source dengan contoh penggunaan & petunjuk kontribusi.
+
+### Phase 4: MPS Integration & High-Qubit Benchmarking (Week 4)
+- [ ] Buat modul `src/engine/mps.py` dan perbarui `src/engine/simulator.py` untuk mendukung backend MPS.
+- [ ] Integrasikan flag `--method` dan `--bond-dim` pada CLI (`cli/main.py`).
+- [ ] Tambahkan unit test khusus MPS di `tests/test_mps.py`.
+- [ ] Perbarui modul reporter (JSON/MD) untuk menampilkan metrik statistik MPS.

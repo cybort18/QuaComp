@@ -2,6 +2,7 @@ import argparse
 import sys
 import time
 from typing import List, Dict, Any
+import psutil
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
@@ -15,6 +16,7 @@ from src.engine.simulator import run_simulation
 from src.scorer.calculator import calculate_qsim_score, categorize_score
 from src.reporter.json_exporter import export_to_json
 from src.reporter.md_exporter import export_to_markdown
+from src.engine.mps import calculate_mps_ram_savings
 
 console = Console()
 
@@ -43,23 +45,28 @@ def print_system_info():
     console.print(table)
     console.print()
 
-def run_single_simulation(qubits: int, workload_type: str, depth: int) -> Dict[str, Any]:
+def run_single_simulation(qubits: int, workload_type: str, depth: int, method: str = 'statevector', bond_dimension: int = 64) -> Dict[str, Any]:
     """Execute a single simulation step with safety checks and telemetry collection."""
     # 1. Memory safety check
-    is_safe, msg = check_memory_safety(qubits)
+    is_safe, msg = check_memory_safety(qubits, method)
     if not is_safe:
         return {
             "qubits": qubits,
+            "method": method,
+            "bond_dimension": bond_dimension if method in ('mps', 'matrix_product_state') else None,
             "success": False,
             "latency": 0.0,
             "gates": 0,
             "cpu_usage": 0.0,
             "ram_status": "UNSAFE",
-            "error": msg
+            "error": msg,
+            "ram_savings": {}
         }
         
-    # 2. Get baseline CPU usage
+    # 2. Get baseline CPU usage and process memory
     cpu_before = get_cpu_utilization()["overall_percent"]
+    process = psutil.Process()
+    ram_before = process.memory_info().rss
     
     # 3. Generate circuit
     try:
@@ -72,48 +79,66 @@ def run_single_simulation(qubits: int, workload_type: str, depth: int) -> Dict[s
     except Exception as e:
         return {
             "qubits": qubits,
+            "method": method,
+            "bond_dimension": bond_dimension if method in ('mps', 'matrix_product_state') else None,
             "success": False,
             "latency": 0.0,
             "gates": 0,
             "cpu_usage": 0.0,
             "ram_status": "FAIL_GEN",
-            "error": f"Circuit generation error: {e}"
+            "error": f"Circuit generation error: {e}",
+            "ram_savings": {}
         }
         
     gate_count = circuit.size()
     
     # 4. Execute simulation
-    sim_result = run_simulation(circuit)
+    sim_result = run_simulation(circuit, method, bond_dimension)
     
-    # 5. Get CPU usage after
+    # 5. Get CPU usage and memory footprint after
     cpu_after = get_cpu_utilization()["overall_percent"]
     avg_cpu = (cpu_before + cpu_after) / 2
+    ram_after = process.memory_info().rss
+    actual_ram_used = max(0, ram_after - ram_before)
+    if actual_ram_used == 0:
+        actual_ram_used = process.memory_info().rss
+        
+    ram_savings = {}
+    if sim_result["success"] and method in ('mps', 'matrix_product_state'):
+        ram_savings = calculate_mps_ram_savings(qubits, actual_ram_used)
     
     if sim_result["success"]:
         return {
             "qubits": qubits,
+            "method": method,
+            "bond_dimension": bond_dimension if method in ('mps', 'matrix_product_state') else None,
             "success": True,
             "latency": sim_result["latency"],
             "gates": gate_count,
             "cpu_usage": avg_cpu,
             "ram_status": "SAFE",
-            "error": None
+            "error": None,
+            "ram_savings": ram_savings
         }
     else:
         return {
             "qubits": qubits,
+            "method": method,
+            "bond_dimension": bond_dimension if method in ('mps', 'matrix_product_state') else None,
             "success": False,
             "latency": sim_result["latency"],
             "gates": gate_count,
             "cpu_usage": avg_cpu,
             "ram_status": "FAIL_EXEC",
-            "error": sim_result["error"]
+            "error": sim_result["error"],
+            "ram_savings": {}
         }
 
 def display_results(results: List[Dict[str, Any]]):
     """Present simulation results in a beautiful table and calculate overall score."""
     table = Table(title="QuaComp Benchmark Results", show_header=True, header_style="bold blue")
     table.add_column("Qubits", justify="right", style="cyan")
+    table.add_column("Method", style="magenta")
     table.add_column("Workload", style="yellow")
     table.add_column("Total Gates", justify="right", style="green")
     table.add_column("Latency (s)", justify="right", style="green")
@@ -127,8 +152,13 @@ def display_results(results: List[Dict[str, Any]]):
         status_text = "[green]SUCCESS[/green]" if r["success"] else "[red]FAILED[/red]"
         ram_color = "green" if r["ram_status"] == "SAFE" else "red"
         
+        method_str = r.get("method", "statevector")
+        if method_str in ('mps', 'matrix_product_state') and r.get("bond_dimension"):
+            method_str = f"mps (chi={r['bond_dimension']})"
+            
         table.add_row(
             str(r["qubits"]),
+            method_str,
             r.get("workload_label", "QFT"),
             str(r["gates"]),
             f"{r['latency']:.4f}" if r["success"] else "-",
@@ -170,6 +200,17 @@ def display_results(results: List[Dict[str, Any]]):
     panel_content.append(f"{score:,.2f}\n", style=f"bold {color}")
     panel_content.append("Performance Category: ", style="bold")
     panel_content.append(f"{category}\n", style=f"bold {color}")
+    
+    method_used = best_run.get("method", "statevector")
+    if method_used in ('mps', 'matrix_product_state') and best_run.get("bond_dimension"):
+        method_used = f"MPS (max_bond_dimension={best_run['bond_dimension']})"
+    panel_content.append(f"Simulation Method: {method_used}\n", style="cyan")
+    
+    ram_savings = best_run.get("ram_savings", {})
+    if ram_savings:
+        savings_gb = ram_savings["savings_bytes"] / (1024 ** 3)
+        panel_content.append(f"MPS RAM Efficiency: {ram_savings['savings_percent']:.2f}% savings (Saved ~{savings_gb:.4f} GB vs Statevector)\n", style="bold green")
+        
     panel_content.append(f"Max Qubits Simulated: {max_qubits} qubits (using {gates} gates)", style="italic")
     
     console.print(Panel(panel_content, title="[bold gold3]Final Benchmark Report[/bold gold3]", border_style=color, expand=False))
@@ -184,6 +225,8 @@ def main():
     parser.add_argument("--qubits", type=int, default=10, help="Number of qubits for custom run (default 10).")
     parser.add_argument("--type", choices=["shallow", "deep", "qft"], default="qft", help="Workload type (default qft).")
     parser.add_argument("--depth", type=int, default=10, help="Depth for deep workload (default 10).")
+    parser.add_argument("--method", choices=["statevector", "mps"], default="statevector", help="Simulation method (default statevector).")
+    parser.add_argument("--bond-dim", type=int, default=64, help="Max bond dimension for MPS simulation (default 64).")
     parser.add_argument("--export", choices=["json", "md", "all"], default="all", help="Export results format (default all).")
     
     args = parser.parse_args()
@@ -194,24 +237,26 @@ def main():
     results = []
     
     if args.quick:
-        console.print("[bold yellow]Executing Quick Benchmark Suite (Qubits: 10, 15, 20)...[/bold yellow]\n")
+        console.print(f"[bold yellow]Executing Quick Benchmark Suite (Qubits: 10, 15, 20) using {args.method.upper()}...[/bold yellow]\n")
         qubits_list = [10, 15, 20]
         
         for q in qubits_list:
             with Status(f"Running simulation for {q} qubits...", console=console) as status:
-                res = run_single_simulation(q, "qft", 0)
+                res = run_single_simulation(q, "qft", 0, args.method, args.bond_dim)
                 res["workload_label"] = "QFT"
                 results.append(res)
                 if not res["success"]:
-                    console.print(f"[bold red]Skipping remaining runs due to OOM warning/error at {q} qubits:[/bold red] {res['error']}")
+                    console.print(f"[bold red]Skipping remaining runs due to limit/warning at {q} qubits:[/bold red] {res['error']}")
                     break
                     
     elif args.full:
-        console.print("[bold yellow]Executing Full Incremental Stress Test (starting from 10 qubits)...[/bold yellow]\n")
+        console.print(f"[bold yellow]Executing Full Incremental Stress Test (starting from 10 qubits) using {args.method.upper()}...[/bold yellow]\n")
         q = 10
-        while True:
+        # If method is MPS, let's limit full benchmark to 35 qubits to prevent excessive CPU runtime
+        max_limit = 35 if args.method == 'mps' else 100
+        while q <= max_limit:
             with Status(f"Running simulation for {q} qubits...", console=console) as status:
-                res = run_single_simulation(q, "qft", 0)
+                res = run_single_simulation(q, "qft", 0, args.method, args.bond_dim)
                 res["workload_label"] = "QFT"
                 results.append(res)
                 if not res["success"]:
@@ -220,9 +265,9 @@ def main():
                 q += 1
                 
     elif args.custom:
-        console.print(f"[bold yellow]Executing Custom Simulation (Qubits: {args.qubits}, Workload: {args.type.upper()})...[/bold yellow]\n")
+        console.print(f"[bold yellow]Executing Custom Simulation (Qubits: {args.qubits}, Workload: {args.type.upper()}, Method: {args.method.upper()})...[/bold yellow]\n")
         with Status(f"Running simulation for {args.qubits} qubits...", console=console) as status:
-            res = run_single_simulation(args.qubits, args.type, args.depth)
+            res = run_single_simulation(args.qubits, args.type, args.depth, args.method, args.bond_dim)
             res["workload_label"] = args.type.upper()
             if args.type == "deep":
                 res["workload_label"] += f" (d={args.depth})"

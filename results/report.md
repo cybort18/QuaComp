@@ -1,12 +1,14 @@
 # QuaComp Benchmark Report
-Generated on: `2026-08-08 02:59:13`
+Generated on: `2026-08-08 20:02:30`
 
 ---
 
 ## Benchmark Summary
-> **QuaComp Score:** `10,486,540.60`
-> **Performance Category:** `High-Performance`
-> **Max Qubits Simulated:** `20 qubits` (using `220` gates)
+> **QuaComp Score:** `10,737,420,078.77`
+> **Performance Category:** `Extreme Workstation`
+> **Simulation Method:** `MPS (max_bond_dimension=64)`
+> **MPS RAM Efficiency:** `99.95%` savings (Saved ~`15.9919 GB` vs Statevector)
+> **Max Qubits Simulated:** `30 qubits` (using `480` gates)
 
 ---
 
@@ -21,11 +23,9 @@ Generated on: `2026-08-08 02:59:13`
 ---
 
 ## Detailed Simulation Runs
-| Qubits | Workload | Total Gates | Latency (s) | Avg CPU % | RAM Status | Success |
-| :---: | :--- | :---: | :---: | :---: | :---: | :---: |
-| 10 | QFT | 60 | 0.2128 | 43.2% | SAFE | SUCCESS |
-| 15 | QFT | 127 | 0.2490 | 16.8% | SAFE | SUCCESS |
-| 20 | QFT | 220 | 0.2818 | 11.0% | SAFE | SUCCESS |
+| Qubits | Method | Workload | Total Gates | Latency (s) | Avg CPU % | RAM Status | Success |
+| :---: | :--- | :--- | :---: | :---: | :---: | :---: | :---: |
+| 30 | mps (chi=64) | QFT | 480 | 0.2610 | 21.9% | SAFE | SUCCESS |
 
 ---
 
