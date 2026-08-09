@@ -1,6 +1,6 @@
 # QuaComp
 
-> **Quantum Computer Simulation Benchmark** — A modular Python utility designed to measure, stress-test, and benchmark quantum computer simulation limits on local hardware environments.
+> **Quantum Computer Simulation Benchmark** — A modular Python utility designed to measure, stress-test, and profile quantum computer simulation limits on local hardware environments.
 
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![Tests Status](https://img.shields.io/badge/tests-27%20passed-green.svg)](#running-tests)
@@ -24,7 +24,7 @@
 
 ## Overview
 
-**QuaComp** is an open-source tool and benchmarking suite developed to profile and identify the computational boundaries of local machines when executing quantum simulations. Supporting Statevector, Matrix Product State (MPS), and Noisy Intermediate-Scale Quantum (NISQ) noise engines, QuaComp helps researchers, students, and hardware enthusiasts evaluate execution latencies, CPU/memory performance, state fidelity loss, and calculate standardized reference metrics for comparison across platforms.
+**QuaComp** is an open-source tool and benchmarking suite developed to profile local machine performance during quantum circuit simulation. Supporting Statevector, Matrix Product State (MPS), and Noisy Intermediate-Scale Quantum (NISQ) noise engines, QuaComp evaluates execution latencies, CPU/memory performance, state fidelity loss, and calculates consistent metrics defined by QuaComp for comparative profiling across local environments.
 
 ---
 
@@ -43,26 +43,29 @@
 
 ### Multi-Engine Simulator Core (Phase 1 & Phase 4)
 - **Statevector Simulation Engine**: Exact statevector simulation method (`AerSimulator(method='statevector')`).
-- **Matrix Product State (MPS) Engine**: Tensor network simulation engine (`AerSimulator(method='matrix_product_state')`) enabling high-qubit simulation ($30\text{--}100+$ qubits) with custom bond dimensions (`--bond-dim`, default 64).
+- **Matrix Product State (MPS) Engine**: Tensor network simulation engine (`AerSimulator(method='matrix_product_state')`) enabling high-qubit simulation ($30\text{--}100+$ qubits) specifically for circuits with low-to-moderate entanglement using custom bond dimensions (`--bond-dim`, default 64).
 - **RAM Efficiency Profiling**: Calculates exact memory savings achieved by MPS compared to theoretical statevector memory footprint ($2^n \times 16$ bytes).
 
 ### NISQ Noise & Fidelity Profiler (Phase 5)
-- **Realistic Noise Channels**: Incorporates Thermal Relaxation ($T_1, T_2$) and Depolarizing Errors using `qiskit_aer.noise`.
+- **Synthetic Parameterized Noise Channels**: Incorporates Thermal Relaxation ($T_1, T_2$) and Depolarizing Errors using `qiskit_aer.noise`.
 - **Preset Noise Profiles**: Configurable noise presets via `--noise-level [none|low|medium|high]`:
   - `none`: Ideal noise-free simulation.
   - `low`: Mild decoherence ($T_1=100\,\mu\text{s}, T_2=120\,\mu\text{s}$, gate error $0.1\%$).
-  - `medium`: Standard physical hardware profile ($T_1=50\,\mu\text{s}, T_2=70\,\mu\text{s}$, gate error $0.5\%$).
+  - `medium`: Synthetic representative noise profile ($T_1=50\,\mu\text{s}, T_2=70\,\mu\text{s}$, gate error $0.5\%$).
   - `high`: Heavy noise profile for extreme stress testing ($T_1=20\,\mu\text{s}, T_2=30\,\mu\text{s}$, gate error $2.0\%$).
 - **Fidelity & Overhead Metrics**: Computes classical Hellinger Quantum State Fidelity (%) and CPU Computation Overhead ratio (%).
 
-### System Telemetry & Benchmark Scorer (Phase 2)
-- Inspects real-time multi-core CPU usage, processor models, RAM, OS environment details.
-- Computes overall **QuaComp Score** via the formula:
-  $$\text{Score} = (2^{\text{max qubits}} \times 10) + \left(\frac{\text{total gates}}{\text{execution time}}\right)$$
+### Multi-Run Benchmarking & Telemetry (Methodology Revision)
+- **Statistical Repeatability**: Executes `--runs INT` (default 3) benchmark iterations per circuit to compute Mean ($\mu$), Median, and Standard Deviation ($\sigma$) of execution latency, mitigating CPU governor and background task noise.
+- **Composite Heuristic Scoring**: Computes the **QuaComp Composite Score** (a project-specific heuristic score) that separates state-space capacity from gate throughput:
+  $$\text{Score} = (C \times 10) + T = (2^{\text{max qubits}} \times 10) + \left(\frac{\text{Total Gates}}{\mu_{\text{latency}}}\right)$$
+  - **Capacity Metric ($C = 2^{\text{max qubits}}$)**: Qubit state-space capacity metric.
+  - **Throughput Metric ($T = \frac{\text{Total Gates}}{\mu_{\text{latency}}}$)**: Gate processing throughput metric (gates/second).
+  *Note: QuaComp Score is a project-specific composite heuristic prioritizing state-space capacity scaling.*
 
 ### JSON & Markdown Exporters (Phase 3)
-- Automatically serializes run telemetry to `results/benchmark_<timestamp>.json`.
-- Exports readable summary reports to `results/report.md` for copy-pasting to GitHub issues or discussions.
+- Automatically serializes run telemetry and statistical summaries to `results/benchmark_<timestamp>.json`.
+- Exports readable summary reports to `results/report.md` formatted for GitHub issues or discussions.
 
 ---
 
@@ -72,29 +75,29 @@
 QuaComp/
 ├── cli/
 │   ├── __init__.py
-│   └── main.py             # Rich terminal GUI CLI entry point (supports --method, --bond-dim, --noise-level)
+│   └── main.py             # Rich terminal GUI CLI entry point (supports --method, --bond-dim, --noise-level, --runs)
 ├── src/
 │   ├── engine/
 │   │   ├── __init__.py
 │   │   ├── circuits.py     # Circuit generators (Shallow, Deep, QFT)
 │   │   ├── mps.py          # MPS configuration & RAM savings profiler
 │   │   ├── noise.py        # NISQ noise presets & state fidelity calculator
-│   │   └── simulator.py    # Aer Simulator wrapper (Statevector, MPS, and Noise support)
+│   │   └── simulator.py    # Aer Simulator wrapper (Multi-run statistics, Statevector, MPS, Noise support)
 │   ├── profiler/
 │   │   ├── __init__.py
 │   │   ├── memory.py       # Pre-flight memory estimator & safety check
 │   │   └── telemetry.py    # CPU and hardware profiler
 │   ├── scorer/
 │   │   ├── __init__.py
-│   │   └── calculator.py   # Benchmark scorer engine
+│   │   └── calculator.py   # Benchmark scorer engine & breakdown calculator
 │   └── reporter/
 │       ├── __init__.py
-│       ├── json_exporter.py# Save results in JSON format
+│       ├── json_exporter.py# Save results & statistics in JSON format
 │       └── md_exporter.py  # Save reports in Markdown format
 ├── tests/
 │   ├── test_engine.py      # Circuit and simulation execution tests
 │   ├── test_memory.py      # Memory limits and checker tests
-│   ├── test_scorer.py      # Score calculations & categorization tests
+│   ├── test_scorer.py      # Score calculations & breakdown tests
 │   ├── test_reporter.py    # Exporters files creation tests
 │   ├── test_mps.py         # Matrix Product State (MPS) logic tests
 │   └── test_noise.py       # NISQ noise models and state fidelity tests
@@ -129,20 +132,17 @@ pip install -r requirements.txt
 You can execute the benchmark program via the terminal. Specify `PYTHONPATH` to ensure Python resolves the codebase packages correctly:
 
 ```bash
-# Run a quick benchmark on qubits 10, 15, and 20
+# Run a quick benchmark on qubits 10, 15, and 20 with 3 runs per circuit
 $env:PYTHONPATH="." ; python cli/main.py --quick
 
-# Run a full incremental stress test starting from 10 qubits until memory safety limits
-$env:PYTHONPATH="." ; python cli/main.py --full
+# Run a full incremental stress test starting from 10 qubits with 5 statistical runs
+$env:PYTHONPATH="." ; python cli/main.py --full --runs 5
 
-# Run a custom 30 qubits simulation using Matrix Product State (MPS) engine
+# Run a custom 30 qubits simulation using Matrix Product State (MPS) engine for low-entanglement circuits
 $env:PYTHONPATH="." ; python cli/main.py --custom --qubits 30 --method mps --bond-dim 64
 
-# Run a custom simulation under a medium NISQ noise profile
-$env:PYTHONPATH="." ; python cli/main.py --custom --qubits 10 --noise-level medium
-
-# Run a custom 12 qubits deep workload simulation of depth 15
-$env:PYTHONPATH="." ; python cli/main.py --custom --qubits 12 --type deep --depth 15
+# Run a custom simulation under a synthetic representative noise profile (medium)
+$env:PYTHONPATH="." ; python cli/main.py --custom --qubits 10 --noise-level medium --runs 5
 ```
 
 ### Command Flags Reference
@@ -157,14 +157,15 @@ $env:PYTHONPATH="." ; python cli/main.py --custom --qubits 12 --type deep --dept
 | `--depth` | `INT` (default: `10`) | Depth parameter for deep random circuit workloads. |
 | `--method` | `statevector`, `mps` (default: `statevector`) | Simulation engine method. |
 | `--bond-dim` | `INT` (default: `64`) | Maximum bond dimension for MPS tensor network engine. |
-| `--noise-level` | `none`, `low`, `medium`, `high` (default: `none`) | NISQ noise preset level profile. |
+| `--noise-level` | `none`, `low`, `medium`, `high` (default: `none`) | NISQ synthetic noise preset level. |
+| `--runs` | `INT` (default: `3`) | Number of benchmark iterations per circuit for statistical mean/std calculation. |
 | `--export` | `json`, `md`, `all` (default: `all`) | Benchmark report output format. |
 
 ---
 
 ## Running Tests
 
-Automated unit tests are written with `pytest`. They cover statevector simulation, memory safety limits, MPS tensor compression, NISQ noise models, scoring formulas, and report exporters.
+Automated unit tests are written with `pytest`. They cover statevector simulation, multi-run latency statistics, MPS tensor compression, NISQ synthetic noise models, scoring breakdown, and report exporters.
 
 To execute the full test suite, run:
 ```bash
@@ -175,7 +176,7 @@ Output:
 ```text
 ============================= test session starts =============================
 platform win32 -- Python 3.13.3, pytest-9.1.1, pluggy-1.6.0
-rootdir: C:\Users\HP\Documents\PROJECT\QuadComp
+rootdir: C:\Users\HP\Documents\PROJECT\QuaComp
 collected 27 items
 
 tests\test_engine.py .....                                               [ 18%]
@@ -192,7 +193,7 @@ tests\test_scorer.py .....                                               [100%]
 
 ## Scoring Categories
 
-QuaComp Score maps directly into performance tiers, reflecting the computing capabilities of local environments:
+QuaComp Composite Score maps directly into performance tiers, reflecting the computing capabilities of local environments:
 
 | Tier Category | Score Range (Points) | Max Qubits Simulation Range |
 | :--- | :--- | :--- |
@@ -200,6 +201,8 @@ QuaComp Score maps directly into performance tiers, reflecting the computing cap
 | **Mid-Range** | $100,000$ to $1,000,000$ | Up to 22-25 Qubits |
 | **High-Performance** | $1,000,000$ to $50,000,000$ | Up to 26-28 Qubits |
 | **Extreme Workstation** | $> 50,000,000$ | $29+$ Qubits |
+
+*Note: QuaComp Score is a project-specific heuristic score combining capacity scaling ($2^n$) and gate throughput.*
 
 ---
 
@@ -217,13 +220,17 @@ QuaComp Score maps directly into performance tiers, reflecting the computing cap
   - Add JSON / Markdown export features.
   - Publish documentation.
 - [x] **Phase 4: Matrix Product State (MPS) Engine**
-  - High-qubit simulation capabilities ($30\text{--}100+$ qubits).
+  - High-qubit simulation capabilities ($30\text{--}100+$ qubits for low-to-moderate entanglement).
   - Parameterizable bond dimension (`--bond-dim`).
   - Memory efficiency savings profiler.
 - [x] **Phase 5: NISQ Noise & Fidelity Benchmarking**
-  - Qiskit Aer noise model integration ($T_1/T_2$ relaxation & depolarizing error).
+  - Qiskit Aer synthetic noise channel integration ($T_1/T_2$ relaxation & depolarizing error).
   - Customizable noise presets (`--noise-level [none|low|medium|high]`).
   - Quantum State Fidelity (%) & CPU Computation Overhead (%) tracking.
+- [x] **Methodological Revision Phase**
+  - Multi-run statistical benchmarking (`--runs INT`, Mean, Median, Std Dev).
+  - Scoring breakdown (Capacity Metric $C$ & Throughput Metric $T$).
+  - Softened academic terminology across documentation.
 
 ---
 

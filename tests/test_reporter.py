@@ -11,6 +11,11 @@ def sample_data():
             "qubits": 10,
             "success": True,
             "latency": 0.25,
+            "mean_latency": 0.25,
+            "median_latency": 0.25,
+            "std_latency": 0.01,
+            "runs_count": 3,
+            "latencies": [0.24, 0.25, 0.26],
             "gates": 60,
             "cpu_usage": 30.0,
             "ram_status": "SAFE",
@@ -21,6 +26,11 @@ def sample_data():
             "qubits": 15,
             "success": False,
             "latency": 0.0,
+            "mean_latency": 0.0,
+            "median_latency": 0.0,
+            "std_latency": 0.0,
+            "runs_count": 0,
+            "latencies": [],
             "gates": 127,
             "cpu_usage": 0.0,
             "ram_status": "UNSAFE",
@@ -52,6 +62,11 @@ def test_export_to_json(tmp_path, sample_data):
         
     assert "timestamp" in data
     assert data["final_score"] > 0.0
+    assert data["final_composite_score"] > 0.0
+    assert "scoring_breakdown" in data
+    assert "capacity_metric" in data["scoring_breakdown"]
+    assert "throughput_metric" in data["scoring_breakdown"]
+    assert "statistical_summary" in data
     assert data["performance_category"] == "Entry-Level"
     assert data["max_qubits_simulated"] == 10
     assert data["system_metadata"]["cpu_name"] == "Test CPU"
@@ -84,6 +99,8 @@ def test_export_to_markdown(tmp_path, sample_data):
     assert "16.00 GB" in md_text
     assert "UNSAFE" in md_text
     assert "Entry-Level" in md_text
+    assert "Capacity Metric" in md_text
+    assert "Throughput Metric" in md_text
 
 def test_export_to_markdown_type_errors():
     with pytest.raises(TypeError):

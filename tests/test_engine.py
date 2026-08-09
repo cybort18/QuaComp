@@ -63,7 +63,7 @@ def test_generate_qft_circuit():
 
 def test_run_simulation_success():
     qc = generate_shallow_circuit(3)
-    res = run_simulation(qc)
+    res = run_simulation(qc, runs=3)
     
     assert isinstance(res, dict)
     assert res["success"] is True
@@ -72,7 +72,16 @@ def test_run_simulation_success():
     assert res["latency"] > 0
     assert "metadata" in res
     assert res["metadata"]["success"] is True
+    
+    # Statistical multi-run assertions
+    assert len(res["latencies"]) == 3
+    assert res["mean_latency"] > 0
+    assert res["median_latency"] > 0
+    assert res["std_latency"] >= 0
+    assert res["runs_count"] == 3
 
 def test_run_simulation_type_error():
     with pytest.raises(TypeError):
         run_simulation("not a circuit")  # type: ignore
+    with pytest.raises(ValueError):
+        run_simulation(generate_shallow_circuit(2), runs=0)

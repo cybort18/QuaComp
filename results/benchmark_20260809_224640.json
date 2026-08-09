@@ -1,0 +1,62 @@
+{
+    "timestamp": "2026-08-09T22:46:40",
+    "final_score": 10335.870447579058,
+    "final_composite_score": 10335.870447579058,
+    "score_type": "project-specific composite heuristic score",
+    "scoring_breakdown": {
+        "capacity_metric": 1024.0,
+        "throughput_metric": 95.87044757905872
+    },
+    "performance_category": "Entry-Level",
+    "max_qubits_simulated": 10,
+    "simulation_method": "statevector",
+    "bond_dimension": null,
+    "noise_level": "medium",
+    "quantum_state_fidelity": 34.46333591826497,
+    "cpu_overhead_ratio": 156.8680971711335,
+    "ram_savings": {},
+    "statistical_summary": {
+        "runs_count": 5,
+        "mean_latency_seconds": 0.625844580004923,
+        "median_latency_seconds": 0.6172150000056718,
+        "std_latency_seconds": 0.018149529939891957
+    },
+    "system_metadata": {
+        "cpu_name": "AMD Ryzen 3 5300U with Radeon Graphics",
+        "total_ram_bytes": 12160622592,
+        "total_ram_gb": 11.325462341308594,
+        "os_name": "Windows",
+        "os_release": "11",
+        "os_version": "10.0.26200",
+        "python_version": "3.13.3"
+    },
+    "results": [
+        {
+            "qubits": 10,
+            "method": "statevector",
+            "bond_dimension": null,
+            "noise_level": "medium",
+            "fidelity": 34.46333591826497,
+            "overhead_ratio": 156.8680971711335,
+            "success": true,
+            "latency": 0.625844580004923,
+            "mean_latency": 0.625844580004923,
+            "median_latency": 0.6172150000056718,
+            "std_latency": 0.018149529939891957,
+            "latencies": [
+                0.6397928000078537,
+                0.6097230000013951,
+                0.6503554999944754,
+                0.6172150000056718,
+                0.6121366000152193
+            ],
+            "runs_count": 5,
+            "gates": 60,
+            "cpu_usage": 41.45,
+            "ram_status": "SAFE",
+            "error": null,
+            "ram_savings": {},
+            "workload_label": "QFT"
+        }
+    ]
+}

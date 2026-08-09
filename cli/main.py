@@ -13,7 +13,7 @@ from src.profiler.memory import check_memory_safety, estimate_qubit_ram
 from src.profiler.telemetry import get_system_metadata, get_cpu_utilization
 from src.engine.circuits import generate_shallow_circuit, generate_deep_circuit, generate_qft_circuit
 from src.engine.simulator import run_simulation
-from src.scorer.calculator import calculate_qsim_score, categorize_score
+from src.scorer.calculator import calculate_qsim_score, categorize_score, calculate_scoring_breakdown
 from src.reporter.json_exporter import export_to_json
 from src.reporter.md_exporter import export_to_markdown
 from src.engine.mps import calculate_mps_ram_savings
@@ -52,9 +52,10 @@ def run_single_simulation(
     depth: int, 
     method: str = 'statevector', 
     bond_dimension: int = 64,
-    noise_level: str = 'none'
+    noise_level: str = 'none',
+    runs: int = 3
 ) -> Dict[str, Any]:
-    """Execute a single simulation step with safety checks, noise model options, and telemetry collection."""
+    """Execute a single simulation step with safety checks, multi-run noise options, and telemetry collection."""
     # 1. Memory safety check
     is_safe, msg = check_memory_safety(qubits, method)
     if not is_safe:
@@ -67,6 +68,11 @@ def run_single_simulation(
             "overhead_ratio": 0.0,
             "success": False,
             "latency": 0.0,
+            "mean_latency": 0.0,
+            "median_latency": 0.0,
+            "std_latency": 0.0,
+            "latencies": [],
+            "runs_count": 0,
             "gates": 0,
             "cpu_usage": 0.0,
             "ram_status": "UNSAFE",
@@ -97,6 +103,11 @@ def run_single_simulation(
             "overhead_ratio": 0.0,
             "success": False,
             "latency": 0.0,
+            "mean_latency": 0.0,
+            "median_latency": 0.0,
+            "std_latency": 0.0,
+            "latencies": [],
+            "runs_count": 0,
             "gates": 0,
             "cpu_usage": 0.0,
             "ram_status": "FAIL_GEN",
@@ -106,20 +117,20 @@ def run_single_simulation(
         
     gate_count = circuit.size()
     
-    # 4. Execute simulation (ideal baseline + noisy if requested)
+    # 4. Execute simulation (ideal baseline + noisy if requested) with runs iterations
     fidelity = 100.0
     overhead_ratio = 0.0
     
     if noise_level != 'none':
-        ideal_res = run_simulation(circuit, method, bond_dimension, noise_model=None, noise_level='none')
+        ideal_res = run_simulation(circuit, method, bond_dimension, noise_model=None, noise_level='none', runs=runs)
         noise_model = get_noise_model(noise_level)
-        sim_result = run_simulation(circuit, method, bond_dimension, noise_model=noise_model, noise_level=noise_level)
+        sim_result = run_simulation(circuit, method, bond_dimension, noise_model=noise_model, noise_level=noise_level, runs=runs)
         
         if ideal_res["success"] and sim_result["success"]:
             fidelity = calculate_state_fidelity(ideal_res["counts"], sim_result["counts"])
-            overhead_ratio = calculate_overhead_ratio(ideal_res["latency"], sim_result["latency"])
+            overhead_ratio = calculate_overhead_ratio(ideal_res["mean_latency"], sim_result["mean_latency"])
     else:
-        sim_result = run_simulation(circuit, method, bond_dimension, noise_model=None, noise_level='none')
+        sim_result = run_simulation(circuit, method, bond_dimension, noise_model=None, noise_level='none', runs=runs)
     
     # 5. Get CPU usage and memory footprint after
     cpu_after = get_cpu_utilization()["overall_percent"]
@@ -142,7 +153,12 @@ def run_single_simulation(
             "fidelity": fidelity,
             "overhead_ratio": overhead_ratio,
             "success": True,
-            "latency": sim_result["latency"],
+            "latency": sim_result["mean_latency"],
+            "mean_latency": sim_result["mean_latency"],
+            "median_latency": sim_result["median_latency"],
+            "std_latency": sim_result["std_latency"],
+            "latencies": sim_result["latencies"],
+            "runs_count": sim_result["runs_count"],
             "gates": gate_count,
             "cpu_usage": avg_cpu,
             "ram_status": "SAFE",
@@ -158,7 +174,12 @@ def run_single_simulation(
             "fidelity": 0.0,
             "overhead_ratio": 0.0,
             "success": False,
-            "latency": sim_result["latency"],
+            "latency": 0.0,
+            "mean_latency": 0.0,
+            "median_latency": 0.0,
+            "std_latency": 0.0,
+            "latencies": [],
+            "runs_count": 0,
             "gates": gate_count,
             "cpu_usage": avg_cpu,
             "ram_status": "FAIL_EXEC",
@@ -171,10 +192,10 @@ def display_results(results: List[Dict[str, Any]]):
     table = Table(title="QuaComp Benchmark Results", show_header=True, header_style="bold blue")
     table.add_column("Qubits", justify="right", style="cyan")
     table.add_column("Method", style="magenta")
-    table.add_column("Noise", style="yellow")
+    table.add_column("Noise Profile", style="yellow")
     table.add_column("Workload", style="yellow")
     table.add_column("Total Gates", justify="right", style="green")
-    table.add_column("Latency (s)", justify="right", style="green")
+    table.add_column("Latency (Mean ± Std Dev)", justify="right", style="green")
     table.add_column("Fidelity %", justify="right", style="bold cyan")
     table.add_column("Avg CPU %", justify="right", style="magenta")
     table.add_column("RAM Status", style="blue")
@@ -194,13 +215,17 @@ def display_results(results: List[Dict[str, Any]]):
         fidelity_val = r.get("fidelity", 100.0)
         fidelity_str = f"{fidelity_val:.2f}%" if r["success"] else "-"
         
+        mean_lat = r.get("mean_latency", r.get("latency", 0.0))
+        std_lat = r.get("std_latency", 0.0)
+        latency_str = f"{mean_lat:.4f} ± {std_lat:.4f}s" if r["success"] else "-"
+        
         table.add_row(
             str(r["qubits"]),
             method_str,
             noise_str,
             r.get("workload_label", "QFT"),
             str(r["gates"]),
-            f"{r['latency']:.4f}" if r["success"] else "-",
+            latency_str,
             fidelity_str,
             f"{r['cpu_usage']:.1f}%" if r["success"] else "-",
             f"[{ram_color}]{r['ram_status']}[/{ram_color}]",
@@ -221,9 +246,10 @@ def display_results(results: List[Dict[str, Any]]):
     best_run = max(successful_runs, key=lambda x: x["qubits"])
     max_qubits = best_run["qubits"]
     gates = best_run["gates"]
-    latency = best_run["latency"]
+    mean_latency = best_run.get("mean_latency", best_run.get("latency", 0.0))
     
-    score = calculate_qsim_score(max_qubits, gates, latency)
+    breakdown = calculate_scoring_breakdown(max_qubits, gates, mean_latency)
+    score = breakdown["composite_score"]
     category = categorize_score(score)
     
     # Tier descriptions and styling
@@ -236,8 +262,11 @@ def display_results(results: List[Dict[str, Any]]):
     color = tier_colors.get(category, "white")
     
     panel_content = Text()
-    panel_content.append("QuaComp Score: ", style="bold")
+    panel_content.append("QuaComp Composite Score: ", style="bold")
     panel_content.append(f"{score:,.2f}\n", style=f"bold {color}")
+    panel_content.append("  (Project-Specific Heuristic Score)\n", style="dim italic white")
+    panel_content.append(f"  - Capacity Metric (2^n): {breakdown['capacity_metric']:,.0f}\n", style="dim cyan")
+    panel_content.append(f"  - Throughput Metric: {breakdown['throughput_metric']:,.2f} gates/sec\n", style="dim cyan")
     panel_content.append("Performance Category: ", style="bold")
     panel_content.append(f"{category}\n", style=f"bold {color}")
     
@@ -248,7 +277,7 @@ def display_results(results: List[Dict[str, Any]]):
     
     noise_used = best_run.get("noise_level", "none")
     if noise_used != "none":
-        panel_content.append(f"NISQ Noise Profile: {noise_used}\n", style="bold yellow")
+        panel_content.append(f"NISQ Noise Profile: {noise_used} (synthetic representative)\n", style="bold yellow")
         panel_content.append(f"Quantum State Fidelity: {best_run['fidelity']:.2f}%\n", style="bold cyan")
         panel_content.append(f"CPU Computation Overhead: +{best_run['overhead_ratio']:.2f}%\n", style="magenta")
         
@@ -257,6 +286,9 @@ def display_results(results: List[Dict[str, Any]]):
         savings_gb = ram_savings["savings_bytes"] / (1024 ** 3)
         panel_content.append(f"MPS RAM Efficiency: {ram_savings['savings_percent']:.2f}% savings (Saved ~{savings_gb:.4f} GB vs Statevector)\n", style="bold green")
         
+    runs_cnt = best_run.get("runs_count", 1)
+    std_lat = best_run.get("std_latency", 0.0)
+    panel_content.append(f"Statistical Repeatability: {runs_cnt} runs (Mean: {mean_latency:.4f}s, Std Dev: {std_lat:.4f}s)\n", style="dim green")
     panel_content.append(f"Max Qubits Simulated: {max_qubits} qubits (using {gates} gates)", style="italic")
     
     console.print(Panel(panel_content, title="[bold gold3]Final Benchmark Report[/bold gold3]", border_style=color, expand=False))
@@ -274,6 +306,7 @@ def main():
     parser.add_argument("--method", choices=["statevector", "mps"], default="statevector", help="Simulation method (default statevector).")
     parser.add_argument("--bond-dim", type=int, default=64, help="Max bond dimension for MPS simulation (default 64).")
     parser.add_argument("--noise-level", choices=["none", "low", "medium", "high"], default="none", help="NISQ noise model preset level (default none).")
+    parser.add_argument("--runs", type=int, default=3, help="Number of benchmark iterations per circuit for statistical reproducibility (default 3).")
     parser.add_argument("--export", choices=["json", "md", "all"], default="all", help="Export results format (default all).")
     
     args = parser.parse_args()
@@ -284,12 +317,12 @@ def main():
     results = []
     
     if args.quick:
-        console.print(f"[bold yellow]Executing Quick Benchmark Suite (Qubits: 10, 15, 20) [Method: {args.method.upper()}, Noise: {args.noise_level.upper()}]...[/bold yellow]\n")
+        console.print(f"[bold yellow]Executing Quick Benchmark Suite (Qubits: 10, 15, 20) [Method: {args.method.upper()}, Noise: {args.noise_level.upper()}, Runs: {args.runs}]...[/bold yellow]\n")
         qubits_list = [10, 15, 20]
         
         for q in qubits_list:
-            with Status(f"Running simulation for {q} qubits...", console=console) as status:
-                res = run_single_simulation(q, "qft", 0, args.method, args.bond_dim, args.noise_level)
+            with Status(f"Running simulation for {q} qubits ({args.runs} runs)...", console=console) as status:
+                res = run_single_simulation(q, "qft", 0, args.method, args.bond_dim, args.noise_level, args.runs)
                 res["workload_label"] = "QFT"
                 results.append(res)
                 if not res["success"]:
@@ -297,13 +330,13 @@ def main():
                     break
                     
     elif args.full:
-        console.print(f"[bold yellow]Executing Full Incremental Stress Test (starting from 10 qubits) [Method: {args.method.upper()}, Noise: {args.noise_level.upper()}]...[/bold yellow]\n")
+        console.print(f"[bold yellow]Executing Full Incremental Stress Test (starting from 10 qubits) [Method: {args.method.upper()}, Noise: {args.noise_level.upper()}, Runs: {args.runs}]...[/bold yellow]\n")
         q = 10
         # If method is MPS, let's limit full benchmark to 35 qubits to prevent excessive CPU runtime
         max_limit = 35 if args.method == 'mps' else 100
         while q <= max_limit:
-            with Status(f"Running simulation for {q} qubits...", console=console) as status:
-                res = run_single_simulation(q, "qft", 0, args.method, args.bond_dim, args.noise_level)
+            with Status(f"Running simulation for {q} qubits ({args.runs} runs)...", console=console) as status:
+                res = run_single_simulation(q, "qft", 0, args.method, args.bond_dim, args.noise_level, args.runs)
                 res["workload_label"] = "QFT"
                 results.append(res)
                 if not res["success"]:
@@ -312,9 +345,9 @@ def main():
                 q += 1
                 
     elif args.custom:
-        console.print(f"[bold yellow]Executing Custom Simulation (Qubits: {args.qubits}, Workload: {args.type.upper()}, Method: {args.method.upper()}, Noise: {args.noise_level.upper()})...[/bold yellow]\n")
-        with Status(f"Running simulation for {args.qubits} qubits...", console=console) as status:
-            res = run_single_simulation(args.qubits, args.type, args.depth, args.method, args.bond_dim, args.noise_level)
+        console.print(f"[bold yellow]Executing Custom Simulation (Qubits: {args.qubits}, Workload: {args.type.upper()}, Method: {args.method.upper()}, Noise: {args.noise_level.upper()}, Runs: {args.runs})...[/bold yellow]\n")
+        with Status(f"Running simulation for {args.qubits} qubits ({args.runs} runs)...", console=console) as status:
+            res = run_single_simulation(args.qubits, args.type, args.depth, args.method, args.bond_dim, args.noise_level, args.runs)
             res["workload_label"] = args.type.upper()
             if args.type == "deep":
                 res["workload_label"] += f" (d={args.depth})"

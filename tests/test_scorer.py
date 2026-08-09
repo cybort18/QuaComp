@@ -1,5 +1,5 @@
 import pytest
-from src.scorer.calculator import calculate_qsim_score, categorize_score
+from src.scorer.calculator import calculate_qsim_score, categorize_score, calculate_scoring_breakdown
 
 def test_calculate_qsim_score_valid():
     # Formula: (2^max_qubits * 10) + (total_gates / execution_time)
@@ -11,6 +11,13 @@ def test_calculate_qsim_score_valid():
     # Qubits=0: 2^0 * 10 = 10
     # Expected: 10 + (0 / 1.0) = 10.0
     assert calculate_qsim_score(0, 0, 1.0) == 10.0
+
+def test_calculate_scoring_breakdown():
+    breakdown = calculate_scoring_breakdown(10, 100, 2.0)
+    assert isinstance(breakdown, dict)
+    assert breakdown["capacity_metric"] == 1024.0
+    assert breakdown["throughput_metric"] == 50.0
+    assert breakdown["composite_score"] == 10290.0
 
 def test_calculate_qsim_score_division_by_zero():
     # If time is 0, it should use 1e-9

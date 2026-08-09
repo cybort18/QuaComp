@@ -1,5 +1,6 @@
 import time
-from typing import Any, Dict
+from typing import Any, Dict, List
+import numpy as np
 from qiskit import QuantumCircuit, transpile
 from qiskit_aer import AerSimulator
 
@@ -9,12 +10,13 @@ def run_simulation(
     bond_dimension: int = 64,
     noise_model: Any = None,
     noise_level: str = 'none',
-    shots: int = 1024
+    shots: int = 1024,
+    runs: int = 3
 ) -> Dict[str, Any]:
     """
-    Execute a Qiskit quantum circuit using AerSimulator with selected method (statevector or mps) and noise model.
+    Execute a Qiskit quantum circuit using AerSimulator across multiple benchmark runs for statistical repeatability.
     
-    Measures the execution latency including transpilation and simulation run.
+    Measures execution latency across `runs` iterations and calculates Mean, Median, and Standard Deviation.
     
     Args:
         circuit (QuantumCircuit): The Qiskit quantum circuit to execute.
@@ -23,23 +25,31 @@ def run_simulation(
         noise_model (Optional[NoiseModel]): Optional Qiskit Aer NoiseModel instance.
         noise_level (str): Label of the noise level ('none', 'low', 'medium', 'high').
         shots (int): Number of measurement shots (default 1024).
+        runs (int): Number of benchmark iterations (default 3).
         
     Returns:
-        dict: A dictionary containing execution telemetry:
+        dict: A dictionary containing execution telemetry and statistical metrics:
             - "success" (bool): True if simulation succeeded, False otherwise.
-            - "latency" (float): Total execution time in seconds.
+            - "latency" (float): Mean execution time in seconds.
+            - "latencies" (list): List of execution latencies for each run.
+            - "mean_latency" (float): Sample mean latency.
+            - "median_latency" (float): Sample median latency.
+            - "std_latency" (float): Sample standard deviation of latency.
+            - "runs_count" (int): Number of successful runs completed.
             - "error" (str or None): Error message if failed, None if succeeded.
-            - "counts" (dict): Measurement counts dictionary.
+            - "counts" (dict): Measurement counts dictionary from final run.
             - "metadata" (dict): Simulator execution metadata if succeeded, empty dict otherwise.
             
     Raises:
         TypeError: If the input circuit is not a Qiskit QuantumCircuit.
+        ValueError: If runs is less than 1.
     """
     if not isinstance(circuit, QuantumCircuit):
         raise TypeError("Input must be a Qiskit QuantumCircuit instance.")
         
-    start_time = time.perf_counter()
-    
+    if not isinstance(runs, int) or runs < 1:
+        raise ValueError("Number of runs must be an integer >= 1.")
+        
     try:
         # Prepare circuit with measurements for count extraction if needed
         circ_to_run = circuit.copy()
@@ -58,42 +68,62 @@ def run_simulation(
             sim_kwargs['noise_model'] = noise_model
             
         simulator = AerSimulator(**sim_kwargs)
+        
+        latencies: List[float] = []
+        last_counts: Dict[str, int] = {}
+        last_result = None
+        
+        # Execute multi-run benchmark loop for statistical reproducibility
+        for _ in range(runs):
+            run_start = time.perf_counter()
+            transpiled_circuit = transpile(circ_to_run, simulator)
+            job = simulator.run(transpiled_circuit, shots=shots)
+            last_result = job.result()
+            run_lat = time.perf_counter() - run_start
+            latencies.append(run_lat)
             
-        # Transpile circuit for the simulator backend
-        transpiled_circuit = transpile(circ_to_run, simulator)
-        
-        # Run simulation and fetch result
-        job = simulator.run(transpiled_circuit, shots=shots)
-        result = job.result()
-        
-        counts = result.get_counts()
-        latency = time.perf_counter() - start_time
+        if last_result is not None:
+            last_counts = last_result.get_counts()
+            
+        mean_latency = float(np.mean(latencies))
+        median_latency = float(np.median(latencies))
+        std_latency = float(np.std(latencies, ddof=1)) if len(latencies) > 1 else 0.0
         
         # Extract metadata from result
         metadata = {
-            "backend_name": result.backend_name,
-            "backend_version": result.backend_version,
-            "job_id": result.job_id,
-            "success": result.success,
+            "backend_name": last_result.backend_name if last_result else "AerSimulator",
+            "backend_version": last_result.backend_version if last_result else "Unknown",
+            "job_id": last_result.job_id if last_result else None,
+            "success": last_result.success if last_result else True,
             "method": method,
             "bond_dimension": bond_dimension if method in ('mps', 'matrix_product_state') else None,
             "noise_level": noise_level,
-            "counts": counts
+            "runs_count": runs,
+            "counts": last_counts
         }
         
         return {
             "success": True,
-            "latency": latency,
-            "counts": counts,
+            "latency": mean_latency,
+            "latencies": latencies,
+            "mean_latency": mean_latency,
+            "median_latency": median_latency,
+            "std_latency": std_latency,
+            "runs_count": len(latencies),
+            "counts": last_counts,
             "error": None,
             "metadata": metadata
         }
         
     except Exception as e:
-        latency = time.perf_counter() - start_time
         return {
             "success": False,
-            "latency": latency,
+            "latency": 0.0,
+            "latencies": [],
+            "mean_latency": 0.0,
+            "median_latency": 0.0,
+            "std_latency": 0.0,
+            "runs_count": 0,
             "counts": {},
             "error": str(e),
             "metadata": {}
