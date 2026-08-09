@@ -1,14 +1,16 @@
 # QuaComp Benchmark Report
-Generated on: `2026-08-08 20:02:30`
+Generated on: `2026-08-09 18:30:08`
 
 ---
 
 ## Benchmark Summary
-> **QuaComp Score:** `10,737,420,078.77`
-> **Performance Category:** `Extreme Workstation`
-> **Simulation Method:** `MPS (max_bond_dimension=64)`
-> **MPS RAM Efficiency:** `99.95%` savings (Saved ~`15.9919 GB` vs Statevector)
-> **Max Qubits Simulated:** `30 qubits` (using `480` gates)
+> **QuaComp Score:** `10,340.61`
+> **Performance Category:** `Entry-Level`
+> **Simulation Method:** `Statevector`
+> **NISQ Noise Profile:** `medium`
+> **Quantum State Fidelity:** `36.00%`
+> **CPU Computation Overhead:** `+93.56%`
+> **Max Qubits Simulated:** `10 qubits` (using `60` gates)
 
 ---
 
@@ -23,9 +25,9 @@ Generated on: `2026-08-08 20:02:30`
 ---
 
 ## Detailed Simulation Runs
-| Qubits | Method | Workload | Total Gates | Latency (s) | Avg CPU % | RAM Status | Success |
-| :---: | :--- | :--- | :---: | :---: | :---: | :---: | :---: |
-| 30 | mps (chi=64) | QFT | 480 | 0.2610 | 21.9% | SAFE | SUCCESS |
+| Qubits | Method | Noise | Workload | Total Gates | Latency (s) | Fidelity % | Avg CPU % | RAM Status | Success |
+| :---: | :--- | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| 10 | statevector | medium | QFT | 60 | 0.5963 | 36.00% | 41.8% | SAFE | SUCCESS |
 
 ---
 

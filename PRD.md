@@ -13,7 +13,7 @@
 ### 1.1 Overview
 `QuaComp` is an open-source library and CLI-based benchmarking tool designed to test the limits of local hardware (PC / Laptop / Workstation) when simulating quantum computers. 
 
-By leveraging state-vector simulation of dimension $2^n$, `QuaComp-Bench` measures memory allocation (RAM), CPU usage, and execution latency of quantum gate operations across different qubit sizes and circuit depths. In addition to the state-vector method, QuaComp supports Matrix Product State (MPS) simulations to efficiently handle large-scale quantum circuits (30 to 100+ qubits) by compressing the state-space tensor representation on memory-constrained systems.
+By leveraging state-vector simulation of dimension $2^n$, `QuaComp-Bench` measures memory allocation (RAM), CPU usage, and execution latency of quantum gate operations across different qubit sizes and circuit depths. In addition to the state-vector method, QuaComp supports Matrix Product State (MPS) simulations to efficiently handle large-scale quantum circuits (30 to 100+ qubits) by compressing the state-space tensor representation on memory-constrained systems. Furthermore, QuaComp supports Noisy Intermediate-Scale Quantum (NISQ) simulation benchmarking using built-in noise models (Thermal Relaxation $T_1/T_2$ & Depolarizing Error) to evaluate CPU computational overhead and quantum state fidelity loss compared to ideal circuit execution.
 
 ### 1.2 Core Value Proposition
 - **Pre-flight Safety:** Prevents system crashes and Out-Of-Memory (OOM) errors by calculating theoretical $2^n$ RAM requirements before running simulation runs.
@@ -21,6 +21,7 @@ By leveraging state-vector simulation of dimension $2^n$, `QuaComp-Bench` measur
 - **Comprehensive Profiling:** Tracks execution time, latency, peak RAM consumption, and multi-core CPU utilization.
 - **Standardized Scoring:** Computes a standardized quantum score ("QuaComp Score") allowing users to compare performance across different machine configurations.
 - **Scalable MPS Simulation:** Supports high-qubit simulation (up to 100+ qubits) using tensor network compression (Matrix Product State), overcoming conventional state-vector memory limits for low-to-moderate entanglement circuits.
+- **NISQ Noise & Fidelity Profiling:** Evaluates hardware computational overhead under realistic quantum noise channels (thermal relaxation and depolarizing errors) while measuring quantum state fidelity loss.
 
 ---
 
@@ -92,6 +93,20 @@ $$\text{QuaComp Score} = \left( 2^{n_{\text{max}}} \times 10 \right) + \left( \f
     - RAM footprint comparison between the MPS method and theoretical Statevector memory requirements ($2^n \times 16$ bytes).
     - Maximum active bond dimension used during simulation.
 
+### FR-8: Noisy Quantum Simulation Engine (NISQ)
+- **Description:** The system must provide options to run simulations under realistic quantum noise channels using Qiskit Aer's noise module to measure computational overhead and state fidelity degradation.
+- **Specifications & Behavior:**
+  - Integration with `qiskit_aer.noise` (`NoiseModel`, `ThermalRelaxationError`, `depolarizing_error`).
+  - Customizable noise level presets configurable via CLI `--noise-level [none|low|medium|high]`:
+    - `none`: Ideal simulation (no noise applied).
+    - `low`: Mild decoherence ($T_1 = 100\,\mu\text{s}, T_2 = 120\,\mu\text{s}$, gate error rate $0.1\%$).
+    - `medium`: Standard physical hardware profile ($T_1 = 50\,\mu\text{s}, T_2 = 70\,\mu\text{s}$, gate error rate $0.5\%$).
+    - `high`: Heavy noise profile for extreme stress testing ($T_1 = 20\,\mu\text{s}, T_2 = 30\,\mu\text{s}$, gate error rate $2.0\%$).
+  - Simulation support using `density_matrix` or `statevector` simulation backends with inserted noise channels.
+  - Tracking specific NISQ metrics:
+    - **Quantum State Fidelity / Overlap Loss:** Quantitative comparison between ideal statevector and noisy simulation outcome.
+    - **CPU Computation Overhead Ratio:** Percentage increase in CPU execution latency resulting from noise channel matrix operations.
+
 ---
 
 ## 4. Non-Functional Requirements (NFR)
@@ -109,14 +124,15 @@ $$\text{QuaComp Score} = \left( 2^{n_{\text{max}}} \times 10 \right) + \left( \f
 QuaComp-bench/
 ├── cli/
 │   ├── __init__.py
-│   └── main.py             # CLI Entry point (Rich UI - supports --method and --bond-dim)
+│   └── main.py             # CLI Entry point (Rich UI - supports --method, --bond-dim, --noise-level)
 ├── src/
 │   ├── __init__.py
 │   ├── engine/
 │   │   ├── __init__.py
 │   │   ├── circuits.py     # Quantum circuit generator (Shallow, Deep, QFT)
 │   │   ├── mps.py          # MPS configuration and tensor compression metrics handler
-│   │   └── simulator.py    # Qiskit Aer simulator wrapper (supports 'statevector' & 'matrix_product_state')
+│   │   ├── noise.py        # Preset noise model generator & state fidelity calculator
+│   │   └── simulator.py    # Qiskit Aer simulator wrapper (supports 'statevector', 'matrix_product_state', & noise models)
 │   ├── profiler/
 │   │   ├── __init__.py
 │   │   ├── memory.py       # Pre-flight safety checks & RAM estimation
@@ -132,7 +148,8 @@ QuaComp-bench/
 │   ├── test_engine.py      # Circuit generator and simulator tests
 │   ├── test_memory.py      # RAM safety estimator tests
 │   ├── test_scorer.py      # Score formula and tier classification tests
-│   └── test_mps.py         # Matrix Product State (MPS) logic tests
+│   ├── test_mps.py         # Matrix Product State (MPS) logic tests
+│   └── test_noise.py       # NISQ noise models and state fidelity tests
 ├── requirements.txt
 ├── PRD.md
 ├── README.md
@@ -162,3 +179,10 @@ QuaComp-bench/
 - [x] Integrate `--method` and `--bond-dim` command flags in `cli/main.py`.
 - [x] Implement specialized MPS tests in `tests/test_mps.py`.
 - [x] Update JSON and Markdown exporters to report MPS metrics and RAM savings.
+
+### Phase 5: NISQ Simulation & Fidelity Benchmarking (Week 5)
+- [ ] Create `src/engine/noise.py` to generate preset noise models and calculate quantum state fidelity.
+- [ ] Update `src/engine/simulator.py` to accept a `noise_model` parameter.
+- [ ] Integrate `--noise-level` flag in `cli/main.py` and display fidelity/overhead metrics in the Rich CLI output.
+- [ ] Add NISQ unit tests in `tests/test_noise.py`.
+- [ ] Update reporter modules (JSON/MD) to record noise parameters and fidelity metrics.

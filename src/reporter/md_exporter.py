@@ -40,6 +40,9 @@ def export_to_markdown(results: List[Dict[str, Any]], system_metadata: Dict[str,
     best_method = "statevector"
     best_bond_dim = None
     ram_savings = {}
+    best_noise_level = "none"
+    best_fidelity = 100.0
+    best_overhead_ratio = 0.0
     
     if successful_runs:
         from src.scorer.calculator import calculate_qsim_score, categorize_score
@@ -52,6 +55,9 @@ def export_to_markdown(results: List[Dict[str, Any]], system_metadata: Dict[str,
         best_method = best_run.get("method", "statevector")
         best_bond_dim = best_run.get("bond_dimension")
         ram_savings = best_run.get("ram_savings", {})
+        best_noise_level = best_run.get("noise_level", "none")
+        best_fidelity = best_run.get("fidelity", 100.0)
+        best_overhead_ratio = best_run.get("overhead_ratio", 0.0)
         
     current_time = time.strftime("%Y-%m-%d %H:%M:%S")
     
@@ -67,6 +73,11 @@ def export_to_markdown(results: List[Dict[str, Any]], system_metadata: Dict[str,
     
     method_name = "Statevector" if best_method == "statevector" else f"MPS (max_bond_dimension={best_bond_dim})"
     md_content.append(f"> **Simulation Method:** `{method_name}`")
+    
+    if best_noise_level != "none":
+        md_content.append(f"> **NISQ Noise Profile:** `{best_noise_level}`")
+        md_content.append(f"> **Quantum State Fidelity:** `{best_fidelity:.2f}%`")
+        md_content.append(f"> **CPU Computation Overhead:** `+{best_overhead_ratio:.2f}%`")
     
     if ram_savings:
         savings_gb = ram_savings["savings_bytes"] / (1024 ** 3)
@@ -87,8 +98,8 @@ def export_to_markdown(results: List[Dict[str, Any]], system_metadata: Dict[str,
     
     # Runs summary
     md_content.append("## Detailed Simulation Runs")
-    md_content.append("| Qubits | Method | Workload | Total Gates | Latency (s) | Avg CPU % | RAM Status | Success |")
-    md_content.append("| :---: | :--- | :--- | :---: | :---: | :---: | :---: | :---: |")
+    md_content.append("| Qubits | Method | Noise | Workload | Total Gates | Latency (s) | Fidelity % | Avg CPU % | RAM Status | Success |")
+    md_content.append("| :---: | :--- | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |")
     
     for r in results:
         success_str = "SUCCESS" if r["success"] else "FAILED"
@@ -100,8 +111,12 @@ def export_to_markdown(results: List[Dict[str, Any]], system_metadata: Dict[str,
         if method_str in ('mps', 'matrix_product_state') and r.get("bond_dimension"):
             method_str = f"mps (chi={r['bond_dimension']})"
             
+        noise_str = r.get("noise_level", "none")
+        fidelity_val = r.get("fidelity", 100.0)
+        fidelity_str = f"{fidelity_val:.2f}%" if r["success"] else "-"
+            
         md_content.append(
-            f"| {r['qubits']} | {method_str} | {workload} | {r['gates']} | {latency_str} | {cpu_str} | {r['ram_status']} | {success_str} |"
+            f"| {r['qubits']} | {method_str} | {noise_str} | {workload} | {r['gates']} | {latency_str} | {fidelity_str} | {cpu_str} | {r['ram_status']} | {success_str} |"
         )
         
     md_content.append("\n---\n")

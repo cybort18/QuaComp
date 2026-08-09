@@ -44,6 +44,9 @@ def export_to_json(results: List[Dict[str, Any]], system_metadata: Dict[str, Any
     best_method = "statevector"
     best_bond_dim = None
     best_ram_savings = {}
+    best_noise_level = "none"
+    best_fidelity = 100.0
+    best_overhead_ratio = 0.0
     
     if successful_runs:
         from src.scorer.calculator import calculate_qsim_score, categorize_score
@@ -56,6 +59,9 @@ def export_to_json(results: List[Dict[str, Any]], system_metadata: Dict[str, Any
         best_method = best_run.get("method", "statevector")
         best_bond_dim = best_run.get("bond_dimension")
         best_ram_savings = best_run.get("ram_savings", {})
+        best_noise_level = best_run.get("noise_level", "none")
+        best_fidelity = best_run.get("fidelity", 100.0)
+        best_overhead_ratio = best_run.get("overhead_ratio", 0.0)
         
     data = {
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
@@ -64,6 +70,9 @@ def export_to_json(results: List[Dict[str, Any]], system_metadata: Dict[str, Any
         "max_qubits_simulated": best_qubits,
         "simulation_method": best_method,
         "bond_dimension": best_bond_dim,
+        "noise_level": best_noise_level,
+        "quantum_state_fidelity": best_fidelity,
+        "cpu_overhead_ratio": best_overhead_ratio,
         "ram_savings": best_ram_savings,
         "system_metadata": system_metadata,
         "results": results
