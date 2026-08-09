@@ -3,7 +3,7 @@
 > **Quantum Computer Simulation Benchmark** — A modular Python utility designed to measure, stress-test, and benchmark quantum computer simulation limits on local hardware environments.
 
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
-[![Tests Status](https://img.shields.io/badge/tests-passing-green.svg)](#running-tests)
+[![Tests Status](https://img.shields.io/badge/tests-27%20passed-green.svg)](#running-tests)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 ---
@@ -15,8 +15,8 @@
 - [Getting Started](#getting-started)
 - [Usage Examples](#usage-examples)
 - [Running Tests](#running-tests)
-- [Roadmap](#roadmap)
 - [Scoring Categories](#scoring-categories)
+- [Roadmap](#roadmap)
 - [Contribution Guide](#contribution-guide)
 - [License](#license)
 
@@ -24,26 +24,36 @@
 
 ## Overview
 
-**QuaComp** is an open-source tool and benchmarking suite developed to profile and identify the computational boundaries of local machines when executing quantum statevector simulations. By utilizing $2^n$ dimensional simulation workloads, QuaComp helps researchers, students, and hardware enthusiasts evaluate execution latencies, CPU/memory performance, and calculate standard reference metrics for comparison across platforms.
+**QuaComp** is an open-source tool and benchmarking suite developed to profile and identify the computational boundaries of local machines when executing quantum simulations. Supporting Statevector, Matrix Product State (MPS), and Noisy Intermediate-Scale Quantum (NISQ) noise engines, QuaComp helps researchers, students, and hardware enthusiasts evaluate execution latencies, CPU/memory performance, state fidelity loss, and calculate standardized reference metrics for comparison across platforms.
 
 ---
 
 ## Key Features
 
 ### Pre-flight Memory Safety (Phase 1)
-- Computes estimated memory requirements prior to simulation runs using:
+- Computes estimated memory requirements prior to statevector simulation runs using:
   $$\text{RAM Bytes} = 2^n \times 16 \text{ bytes (for complex128 representation)}$$
 - Integrates with `psutil` to dynamically inspect physical system memory.
 - Blocks and warns simulations exceeding 85% of available RAM to prevent OS crashes and Out-Of-Memory (OOM) situations.
 
 ### Quantum Workload Generators (Phase 1)
 - **Shallow Workloads**: Initial state allocations using Hadamard gates coupled with 1D entanglement (CNOT chains).
-- **Deep Workloads**: Intensive random rotation matrices ($R_x, R_y, R_z$) and multi-layered entanglement chains designed to stress memory-bandwidth.
+- **Deep Workloads**: Intensive random rotation matrices ($R_x, R_y, R_z$) and multi-layered entanglement chains designed to stress memory bandwidth.
 - **Quantum Fourier Transform (QFT)**: Standard implementation representing realistic quantum algorithms.
 
-### Aer Simulator Engine (Phase 1)
-- Seamless execution wrapper around Qiskit Aer's `AerSimulator(method='statevector')` backend.
-- Accurate telemetry tracking for simulation execution latency.
+### Multi-Engine Simulator Core (Phase 1 & Phase 4)
+- **Statevector Simulation Engine**: Exact statevector simulation method (`AerSimulator(method='statevector')`).
+- **Matrix Product State (MPS) Engine**: Tensor network simulation engine (`AerSimulator(method='matrix_product_state')`) enabling high-qubit simulation ($30\text{--}100+$ qubits) with custom bond dimensions (`--bond-dim`, default 64).
+- **RAM Efficiency Profiling**: Calculates exact memory savings achieved by MPS compared to theoretical statevector memory footprint ($2^n \times 16$ bytes).
+
+### NISQ Noise & Fidelity Profiler (Phase 5)
+- **Realistic Noise Channels**: Incorporates Thermal Relaxation ($T_1, T_2$) and Depolarizing Errors using `qiskit_aer.noise`.
+- **Preset Noise Profiles**: Configurable noise presets via `--noise-level [none|low|medium|high]`:
+  - `none`: Ideal noise-free simulation.
+  - `low`: Mild decoherence ($T_1=100\,\mu\text{s}, T_2=120\,\mu\text{s}$, gate error $0.1\%$).
+  - `medium`: Standard physical hardware profile ($T_1=50\,\mu\text{s}, T_2=70\,\mu\text{s}$, gate error $0.5\%$).
+  - `high`: Heavy noise profile for extreme stress testing ($T_1=20\,\mu\text{s}, T_2=30\,\mu\text{s}$, gate error $2.0\%$).
+- **Fidelity & Overhead Metrics**: Computes classical Hellinger Quantum State Fidelity (%) and CPU Computation Overhead ratio (%).
 
 ### System Telemetry & Benchmark Scorer (Phase 2)
 - Inspects real-time multi-core CPU usage, processor models, RAM, OS environment details.
@@ -62,12 +72,14 @@
 QuaComp/
 ├── cli/
 │   ├── __init__.py
-│   └── main.py             # Rich terminal GUI CLI entry point
+│   └── main.py             # Rich terminal GUI CLI entry point (supports --method, --bond-dim, --noise-level)
 ├── src/
 │   ├── engine/
 │   │   ├── __init__.py
 │   │   ├── circuits.py     # Circuit generators (Shallow, Deep, QFT)
-│   │   └── simulator.py    # Aer Simulator wrapper & latency profiler
+│   │   ├── mps.py          # MPS configuration & RAM savings profiler
+│   │   ├── noise.py        # NISQ noise presets & state fidelity calculator
+│   │   └── simulator.py    # Aer Simulator wrapper (Statevector, MPS, and Noise support)
 │   ├── profiler/
 │   │   ├── __init__.py
 │   │   ├── memory.py       # Pre-flight memory estimator & safety check
@@ -83,7 +95,9 @@ QuaComp/
 │   ├── test_engine.py      # Circuit and simulation execution tests
 │   ├── test_memory.py      # Memory limits and checker tests
 │   ├── test_scorer.py      # Score calculations & categorization tests
-│   └── test_reporter.py    # Exporters files creation tests
+│   ├── test_reporter.py    # Exporters files creation tests
+│   ├── test_mps.py         # Matrix Product State (MPS) logic tests
+│   └── test_noise.py       # NISQ noise models and state fidelity tests
 ├── requirements.txt        # Package dependencies
 ├── PRD.md                  # Product Requirement Document
 ├── README.md               # Project documentation
@@ -96,7 +110,7 @@ QuaComp/
 
 ### 1. Clone the repository
 ```bash
-git clone https://github.com/your-username/QuaComp.git
+git clone https://github.com/cybort18/QuaComp.git
 cd QuaComp
 ```
 
@@ -121,27 +135,38 @@ $env:PYTHONPATH="." ; python cli/main.py --quick
 # Run a full incremental stress test starting from 10 qubits until memory safety limits
 $env:PYTHONPATH="." ; python cli/main.py --full
 
+# Run a custom 30 qubits simulation using Matrix Product State (MPS) engine
+$env:PYTHONPATH="." ; python cli/main.py --custom --qubits 30 --method mps --bond-dim 64
+
+# Run a custom simulation under a medium NISQ noise profile
+$env:PYTHONPATH="." ; python cli/main.py --custom --qubits 10 --noise-level medium
+
 # Run a custom 12 qubits deep workload simulation of depth 15
 $env:PYTHONPATH="." ; python cli/main.py --custom --qubits 12 --type deep --depth 15
 ```
 
-### Export Options
-By default, completing a benchmark run automatically creates exports of both JSON and Markdown reports. You can control the output using the `--export` flag:
-```bash
-# Export only Markdown reports
-$env:PYTHONPATH="." ; python cli/main.py --quick --export md
+### Command Flags Reference
 
-# Export only JSON reports
-$env:PYTHONPATH="." ; python cli/main.py --quick --export json
-```
+| Flag | Options / Default | Description |
+| :--- | :--- | :--- |
+| `--quick` | N/A | Runs benchmark suite on 10, 15, and 20 qubits. |
+| `--full` | N/A | Incremental stress test starting from 10 qubits. |
+| `--custom` | N/A | Custom simulation mode with specific qubit parameters. |
+| `--qubits` | `INT` (default: `10`) | Qubit count for custom simulation run. |
+| `--type` | `shallow`, `deep`, `qft` (default: `qft`) | Quantum circuit workload type. |
+| `--depth` | `INT` (default: `10`) | Depth parameter for deep random circuit workloads. |
+| `--method` | `statevector`, `mps` (default: `statevector`) | Simulation engine method. |
+| `--bond-dim` | `INT` (default: `64`) | Maximum bond dimension for MPS tensor network engine. |
+| `--noise-level` | `none`, `low`, `medium`, `high` (default: `none`) | NISQ noise preset level profile. |
+| `--export` | `json`, `md`, `all` (default: `all`) | Benchmark report output format. |
 
 ---
 
 ## Running Tests
 
-Automated unit tests are written with `pytest`. They mock hardware details to ensure compatibility and correctness across all environments.
+Automated unit tests are written with `pytest`. They cover statevector simulation, memory safety limits, MPS tensor compression, NISQ noise models, scoring formulas, and report exporters.
 
-To execute the test suite, run:
+To execute the full test suite, run:
 ```bash
 python -m pytest
 ```
@@ -150,15 +175,17 @@ Output:
 ```text
 ============================= test session starts =============================
 platform win32 -- Python 3.13.3, pytest-9.1.1, pluggy-1.6.0
-rootdir: C:\Users\HP\Documents\PROJECT\QuaComp
-collected 19 items
+rootdir: C:\Users\HP\Documents\PROJECT\QuadComp
+collected 27 items
 
-tests\test_engine.py .....                                               [ 26%]
-tests\test_memory.py .....                                               [ 52%]
-tests\test_reporter.py ....                                              [ 73%]
+tests\test_engine.py .....                                               [ 18%]
+tests\test_memory.py .....                                               [ 37%]
+tests\test_mps.py ....                                                   [ 51%]
+tests\test_noise.py ....                                                 [ 66%]
+tests\test_reporter.py ....                                              [ 81%]
 tests\test_scorer.py .....                                               [100%]
 
-============================= 19 passed in 2.76s ==============================
+============================= 27 passed in 3.68s ==============================
 ```
 
 ---
@@ -182,13 +209,21 @@ QuaComp Score maps directly into performance tiers, reflecting the computing cap
   - Implement memory safety checks.
   - Implement circuit workload generators (Shallow, Deep, QFT).
   - Integrate Aer simulator execution & time tracking.
-  - Build out full unit test coverage.
+  - Build out unit test coverage.
 - [x] **Phase 2: Scoring & CLI Interface**
   - Implement benchmark scoring algorithms ("QuaComp Score").
   - Create interactive terminal GUI using the `rich` library.
 - [x] **Phase 3: Exporters & Reports**
   - Add JSON / Markdown export features.
   - Publish documentation.
+- [x] **Phase 4: Matrix Product State (MPS) Engine**
+  - High-qubit simulation capabilities ($30\text{--}100+$ qubits).
+  - Parameterizable bond dimension (`--bond-dim`).
+  - Memory efficiency savings profiler.
+- [x] **Phase 5: NISQ Noise & Fidelity Benchmarking**
+  - Qiskit Aer noise model integration ($T_1/T_2$ relaxation & depolarizing error).
+  - Customizable noise presets (`--noise-level [none|low|medium|high]`).
+  - Quantum State Fidelity (%) & CPU Computation Overhead (%) tracking.
 
 ---
 
