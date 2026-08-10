@@ -26,6 +26,14 @@
 
 **QuaComp** is an open-source tool and benchmarking suite developed to profile local machine performance during quantum circuit simulation. Supporting Statevector, Matrix Product State (MPS), and Noisy Intermediate-Scale Quantum (NISQ) noise engines, QuaComp evaluates execution latencies, CPU/memory performance, state fidelity loss, and calculates consistent metrics defined by QuaComp for comparative profiling across local environments.
 
+### Benchmark Telemetry Showcase
+
+When executed with the `--chart` flag, QuaComp generates high-DPI visualization plots of execution telemetry:
+
+| Execution Latency Scaling (Mean ± Std Dev) | Memory Footprint & RAM Safety Threshold |
+| :---: | :---: |
+| ![Qubit vs Latency](docs/images/qubit_vs_latency.png) | ![Qubit vs RAM](docs/images/qubit_vs_ram.png) |
+
 ---
 
 ## Key Features
