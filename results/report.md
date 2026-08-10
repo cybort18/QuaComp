@@ -1,19 +1,16 @@
 # QuaComp Benchmark Report
-Generated on: `2026-08-09 22:46:40`
+Generated on: `2026-08-10 20:58:31`
 
 ---
 
 ## Benchmark Summary
-> **QuaComp Composite Score:** `10,335.87` *(Project-Specific Heuristic Score)*
-> - **Capacity Metric (2^n):** `1,024`
-> - **Throughput Metric:** `95.87 gates/sec`
-> **Performance Category:** `Entry-Level`
+> **QuaComp Composite Score:** `10,486,124.36` *(Project-Specific Heuristic Score)*
+> - **Capacity Metric (2^n):** `1,048,576`
+> - **Throughput Metric:** `364.36 gates/sec`
+> **Performance Category:** `High-Performance`
 > **Simulation Method:** `Statevector`
-> **NISQ Noise Profile:** `medium` *(synthetic representative)*
-> **Quantum State Fidelity:** `34.46%`
-> **CPU Computation Overhead:** `+156.87%`
-> **Statistical Repeatability:** `5 runs` (Mean Latency: `0.6258s`, Std Dev: `0.0181s`)`
-> **Max Qubits Simulated:** `10 qubits` (using `60` gates)
+> **Statistical Repeatability:** `3 runs` (Mean Latency: `0.6038s`, Std Dev: `0.1976s`)
+> **Max Qubits Simulated:** `20 qubits` (using `220` gates)
 
 ---
 
@@ -30,7 +27,17 @@ Generated on: `2026-08-09 22:46:40`
 ## Detailed Simulation Runs
 | Qubits | Method | Noise Profile | Workload | Total Gates | Latency (Mean ± Std Dev) | Fidelity % | Avg CPU % | RAM Status | Success |
 | :---: | :--- | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| 10 | statevector | medium | QFT | 60 | 0.6258 ± 0.0181s | 34.46% | 41.5% | SAFE | SUCCESS |
+| 10 | statevector | none | QFT | 60 | 0.2550 ± 0.0484s | 100.00% | 54.3% | SAFE | SUCCESS |
+| 15 | statevector | none | QFT | 127 | 0.2567 ± 0.0090s | 100.00% | 50.9% | SAFE | SUCCESS |
+| 20 | statevector | none | QFT | 220 | 0.6038 ± 0.1976s | 100.00% | 57.7% | SAFE | SUCCESS |
+
+---
+
+## Telemetry Visualizations
+![Qubit Vs Latency](qubit_vs_latency.png)
+
+![Qubit Vs Ram](qubit_vs_ram.png)
+
 
 ---
 

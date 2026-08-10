@@ -1,0 +1,110 @@
+{
+    "timestamp": "2026-08-10T20:58:31",
+    "final_score": 10486124.360809285,
+    "final_composite_score": 10486124.360809285,
+    "score_type": "project-specific composite heuristic score",
+    "scoring_breakdown": {
+        "capacity_metric": 1048576.0,
+        "throughput_metric": 364.3608092855239
+    },
+    "performance_category": "High-Performance",
+    "max_qubits_simulated": 20,
+    "simulation_method": "statevector",
+    "bond_dimension": null,
+    "noise_level": "none",
+    "quantum_state_fidelity": 100.0,
+    "cpu_overhead_ratio": 0.0,
+    "ram_savings": {},
+    "statistical_summary": {
+        "runs_count": 3,
+        "mean_latency_seconds": 0.6037970999993073,
+        "median_latency_seconds": 0.5012685999972746,
+        "std_latency_seconds": 0.19756758066886076
+    },
+    "system_metadata": {
+        "cpu_name": "AMD Ryzen 3 5300U with Radeon Graphics",
+        "total_ram_bytes": 12160622592,
+        "total_ram_gb": 11.325462341308594,
+        "os_name": "Windows",
+        "os_release": "11",
+        "os_version": "10.0.26200",
+        "python_version": "3.13.3"
+    },
+    "results": [
+        {
+            "qubits": 10,
+            "method": "statevector",
+            "bond_dimension": null,
+            "noise_level": "none",
+            "fidelity": 100.0,
+            "overhead_ratio": 0.0,
+            "success": true,
+            "latency": 0.25504116666464444,
+            "mean_latency": 0.25504116666464444,
+            "median_latency": 0.23532259999774396,
+            "std_latency": 0.04839775923233738,
+            "latencies": [
+                0.31018539998331107,
+                0.21961550001287833,
+                0.23532259999774396
+            ],
+            "runs_count": 3,
+            "gates": 60,
+            "cpu_usage": 54.3,
+            "ram_status": "SAFE",
+            "error": null,
+            "ram_savings": {},
+            "workload_label": "QFT"
+        },
+        {
+            "qubits": 15,
+            "method": "statevector",
+            "bond_dimension": null,
+            "noise_level": "none",
+            "fidelity": 100.0,
+            "overhead_ratio": 0.0,
+            "success": true,
+            "latency": 0.2566690666717477,
+            "mean_latency": 0.2566690666717477,
+            "median_latency": 0.25415620001149364,
+            "std_latency": 0.00895349646924995,
+            "latencies": [
+                0.24924050000845455,
+                0.25415620001149364,
+                0.26661049999529496
+            ],
+            "runs_count": 3,
+            "gates": 127,
+            "cpu_usage": 50.85,
+            "ram_status": "SAFE",
+            "error": null,
+            "ram_savings": {},
+            "workload_label": "QFT"
+        },
+        {
+            "qubits": 20,
+            "method": "statevector",
+            "bond_dimension": null,
+            "noise_level": "none",
+            "fidelity": 100.0,
+            "overhead_ratio": 0.0,
+            "success": true,
+            "latency": 0.6037970999993073,
+            "mean_latency": 0.6037970999993073,
+            "median_latency": 0.5012685999972746,
+            "std_latency": 0.19756758066886076,
+            "latencies": [
+                0.5012685999972746,
+                0.47857089998433366,
+                0.8315518000163138
+            ],
+            "runs_count": 3,
+            "gates": 220,
+            "cpu_usage": 57.7,
+            "ram_status": "SAFE",
+            "error": null,
+            "ram_savings": {},
+            "workload_label": "QFT"
+        }
+    ]
+}

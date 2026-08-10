@@ -3,7 +3,7 @@
 > **Quantum Computer Simulation Benchmark** — A modular Python utility designed to measure, stress-test, and profile quantum computer simulation limits on local hardware environments.
 
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
-[![Tests Status](https://img.shields.io/badge/tests-27%20passed-green.svg)](#running-tests)
+[![Tests Status](https://img.shields.io/badge/tests-31%20passed-green.svg)](#running-tests)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 ---
@@ -63,6 +63,14 @@
   - **Throughput Metric ($T = \frac{\text{Total Gates}}{\mu_{\text{latency}}}$)**: Gate processing throughput metric (gates/second).
   *Note: QuaComp Score is a project-specific composite heuristic prioritizing state-space capacity scaling.*
 
+### Visualization Engine & Chart Generator (Phase 6)
+- **Automated Plot Generation**: Passing `--chart` automatically generates 4 high-DPI (300 DPI) PNG charts in `results/`:
+  - `qubit_vs_latency.png`: Line plot of Qubits vs Mean Latency (seconds) with standard deviation error shading.
+  - `qubit_vs_ram.png`: Line plot of Qubits vs Memory Allocation (GB) with physical RAM safety threshold line.
+  - `method_comparison.png`: Comparison bar chart between Statevector vs MPS latency & memory.
+  - `noise_fidelity_impact.png`: Bar plot comparing NISQ noise profiles vs Quantum State Fidelity (%) & CPU Overhead (%).
+- **Markdown Report Embedding**: Automatically links and embeds generated chart graphics into `results/report.md`.
+
 ### JSON & Markdown Exporters (Phase 3)
 - Automatically serializes run telemetry and statistical summaries to `results/benchmark_<timestamp>.json`.
 - Exports readable summary reports to `results/report.md` formatted for GitHub issues or discussions.
@@ -75,7 +83,7 @@
 QuaComp/
 ├── cli/
 │   ├── __init__.py
-│   └── main.py             # Rich terminal GUI CLI entry point (supports --method, --bond-dim, --noise-level, --runs)
+│   └── main.py             # Rich terminal GUI CLI entry point (supports --method, --bond-dim, --noise-level, --runs, --chart)
 ├── src/
 │   ├── engine/
 │   │   ├── __init__.py
@@ -92,16 +100,18 @@ QuaComp/
 │   │   └── calculator.py   # Benchmark scorer engine & breakdown calculator
 │   └── reporter/
 │       ├── __init__.py
+│       ├── charts.py       # Visualization Engine & Chart Generator
 │       ├── json_exporter.py# Save results & statistics in JSON format
-│       └── md_exporter.py  # Save reports in Markdown format
+│       └── md_exporter.py  # Save reports & chart links in Markdown format
 ├── tests/
 │   ├── test_engine.py      # Circuit and simulation execution tests
 │   ├── test_memory.py      # Memory limits and checker tests
 │   ├── test_scorer.py      # Score calculations & breakdown tests
 │   ├── test_reporter.py    # Exporters files creation tests
 │   ├── test_mps.py         # Matrix Product State (MPS) logic tests
-│   └── test_noise.py       # NISQ noise models and state fidelity tests
-├── requirements.txt        # Package dependencies
+│   ├── test_noise.py       # NISQ noise models and state fidelity tests
+│   └── test_charts.py      # Visualization engine and PNG plot tests
+├── requirements.txt        # Package dependencies (psutil, qiskit, rich, matplotlib, seaborn)
 ├── PRD.md                  # Product Requirement Document
 ├── README.md               # Project documentation
 └── .gitignore              # Git ignore file
@@ -132,17 +142,17 @@ pip install -r requirements.txt
 You can execute the benchmark program via the terminal. Specify `PYTHONPATH` to ensure Python resolves the codebase packages correctly:
 
 ```bash
-# Run a quick benchmark on qubits 10, 15, and 20 with 3 runs per circuit
-$env:PYTHONPATH="." ; python cli/main.py --quick
+# Run a quick benchmark on qubits 10, 15, and 20 with chart generation enabled
+$env:PYTHONPATH="." ; python cli/main.py --quick --chart
 
 # Run a full incremental stress test starting from 10 qubits with 5 statistical runs
-$env:PYTHONPATH="." ; python cli/main.py --full --runs 5
+$env:PYTHONPATH="." ; python cli/main.py --full --runs 5 --chart
 
 # Run a custom 30 qubits simulation using Matrix Product State (MPS) engine for low-entanglement circuits
-$env:PYTHONPATH="." ; python cli/main.py --custom --qubits 30 --method mps --bond-dim 64
+$env:PYTHONPATH="." ; python cli/main.py --custom --qubits 30 --method mps --bond-dim 64 --chart
 
 # Run a custom simulation under a synthetic representative noise profile (medium)
-$env:PYTHONPATH="." ; python cli/main.py --custom --qubits 10 --noise-level medium --runs 5
+$env:PYTHONPATH="." ; python cli/main.py --custom --qubits 10 --noise-level medium --runs 5 --chart
 ```
 
 ### Command Flags Reference
@@ -159,13 +169,14 @@ $env:PYTHONPATH="." ; python cli/main.py --custom --qubits 10 --noise-level medi
 | `--bond-dim` | `INT` (default: `64`) | Maximum bond dimension for MPS tensor network engine. |
 | `--noise-level` | `none`, `low`, `medium`, `high` (default: `none`) | NISQ synthetic noise preset level. |
 | `--runs` | `INT` (default: `3`) | Number of benchmark iterations per circuit for statistical mean/std calculation. |
+| `--chart` | N/A | Automatically generates PNG telemetry chart plots in `results/`. |
 | `--export` | `json`, `md`, `all` (default: `all`) | Benchmark report output format. |
 
 ---
 
 ## Running Tests
 
-Automated unit tests are written with `pytest`. They cover statevector simulation, multi-run latency statistics, MPS tensor compression, NISQ synthetic noise models, scoring breakdown, and report exporters.
+Automated unit tests are written with `pytest`. They cover statevector simulation, multi-run latency statistics, MPS tensor compression, NISQ synthetic noise models, scoring breakdown, report exporters, and chart generation.
 
 To execute the full test suite, run:
 ```bash
@@ -177,16 +188,17 @@ Output:
 ============================= test session starts =============================
 platform win32 -- Python 3.13.3, pytest-9.1.1, pluggy-1.6.0
 rootdir: C:\Users\HP\Documents\PROJECT\QuaComp
-collected 27 items
+collected 31 items
 
-tests\test_engine.py .....                                               [ 18%]
-tests\test_memory.py .....                                               [ 37%]
-tests\test_mps.py ....                                                   [ 51%]
-tests\test_noise.py ....                                                 [ 66%]
-tests\test_reporter.py ....                                              [ 81%]
-tests\test_scorer.py .....                                               [100%]
+tests\test_charts.py ...                                                 [  9%]
+tests\test_engine.py .....                                               [ 25%]
+tests\test_memory.py .....                                               [ 41%]
+tests\test_mps.py ....                                                   [ 54%]
+tests\test_noise.py ....                                                 [ 67%]
+tests\test_reporter.py ....                                              [ 80%]
+tests\test_scorer.py ......                                              [100%]
 
-============================= 27 passed in 3.68s ==============================
+============================= 31 passed in 5.62s ==============================
 ```
 
 ---
@@ -202,7 +214,7 @@ QuaComp Composite Score maps directly into performance tiers, reflecting the com
 | **High-Performance** | $1,000,000$ to $50,000,000$ | Up to 26-28 Qubits |
 | **Extreme Workstation** | $> 50,000,000$ | $29+$ Qubits |
 
-*Note: QuaComp Score is a project-specific heuristic score combining capacity scaling ($2^n$) and gate throughput.*
+*Note: QuaComp Score is a project-specific composite heuristic score combining capacity scaling ($2^n$) and gate throughput.*
 
 ---
 
@@ -231,6 +243,10 @@ QuaComp Composite Score maps directly into performance tiers, reflecting the com
   - Multi-run statistical benchmarking (`--runs INT`, Mean, Median, Std Dev).
   - Scoring breakdown (Capacity Metric $C$ & Throughput Metric $T$).
   - Softened academic terminology across documentation.
+- [x] **Phase 6: Visualization Engine & Chart Generator**
+  - Matplotlib & Seaborn integration (`--chart`).
+  - Automated generation of `qubit_vs_latency.png`, `qubit_vs_ram.png`, `method_comparison.png`, `noise_fidelity_impact.png`.
+  - Chart embedding in Markdown reports (`results/report.md`).
 
 ---
 

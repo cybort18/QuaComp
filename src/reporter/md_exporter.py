@@ -2,14 +2,20 @@ import os
 import time
 from typing import List, Dict, Any
 
-def export_to_markdown(results: List[Dict[str, Any]], system_metadata: Dict[str, Any], output_path: str = "results/report.md") -> str:
+def export_to_markdown(
+    results: List[Dict[str, Any]], 
+    system_metadata: Dict[str, Any], 
+    output_path: str = "results/report.md",
+    generated_charts: List[str] = None
+) -> str:
     """
-    Export benchmark results, scoring breakdown, statistical metrics, and system telemetry to a Markdown file.
+    Export benchmark results, scoring breakdown, statistical metrics, system telemetry, and chart images to a Markdown file.
     
     Args:
         results (list): List of simulation run dictionaries.
         system_metadata (dict): Collected system metadata.
         output_path (str): File path where the Markdown report should be saved.
+        generated_charts (list): Optional list of absolute chart file paths.
         
     Returns:
         str: Absolute path to the saved Markdown file.
@@ -136,6 +142,33 @@ def export_to_markdown(results: List[Dict[str, Any]], system_metadata: Dict[str,
         )
         
     md_content.append("\n---\n")
+    
+    # Telemetry Visualizations (if charts exist)
+    chart_files = []
+    if generated_charts:
+        chart_files = generated_charts
+    else:
+        # Check default files in output_dir
+        target_dir = output_dir if output_dir else "results"
+        potential_charts = [
+            "qubit_vs_latency.png",
+            "qubit_vs_ram.png",
+            "method_comparison.png",
+            "noise_fidelity_impact.png"
+        ]
+        for cfile in potential_charts:
+            cpath = os.path.join(target_dir, cfile)
+            if os.path.exists(cpath):
+                chart_files.append(cpath)
+                
+    if chart_files:
+        md_content.append("## Telemetry Visualizations")
+        for cpath in chart_files:
+            fname = os.path.basename(cpath)
+            title = fname.replace(".png", "").replace("_", " ").title()
+            md_content.append(f"![{title}]({fname})\n")
+        md_content.append("\n---\n")
+        
     md_content.append("## GitHub Ready")
     md_content.append("This report is formatted and ready to be posted directly into GitHub Issues, pull request reviews, or Discussions.")
     

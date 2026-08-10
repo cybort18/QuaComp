@@ -3,3 +3,5 @@ pytest>=7.0.0
 qiskit>=1.0.0
 qiskit-aer>=0.14.0
 rich>=12.0.0
+matplotlib>=3.5.0
+seaborn>=0.12.0

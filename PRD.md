@@ -1,10 +1,10 @@
 # Product Requirement Document (PRD)
 # Project Name: QuaComp (Quantum Computer Simulation Benchmark)
 
-**Version:** 1.2.0  
+**Version:** 1.3.0  
 **Status:** Approved / Completed  
 **Target Environment:** Cross-platform (Windows, macOS, Linux)  
-**Primary Tech Stack:** Python 3.10+, Qiskit / Aer, psutil, Rich, Pytest  
+**Primary Tech Stack:** Python 3.10+, Qiskit / Aer, psutil, Rich, Matplotlib, Seaborn, Pytest  
 
 ---
 
@@ -13,7 +13,7 @@
 ### 1.1 Overview
 `QuaComp` is an open-source library and CLI-based benchmarking tool designed to profile local hardware performance (PC / Laptop / Workstation) when simulating quantum computers. 
 
-By leveraging state-vector simulation of dimension $2^n$, `QuaComp` measures memory allocation (RAM), CPU usage, and execution latency of quantum gate operations across different qubit sizes and circuit depths. In addition to the state-vector method, QuaComp supports Matrix Product State (MPS) simulations to efficiently handle large-scale quantum circuits (30 to 100+ qubits for low-to-moderate entanglement workloads) by compressing the state-space tensor representation on memory-constrained systems. Furthermore, QuaComp supports Noisy Intermediate-Scale Quantum (NISQ) simulation benchmarking using synthetic parameterized noise channels (Thermal Relaxation $T_1/T_2$ & Depolarizing Error) to evaluate CPU computational overhead and quantum state fidelity loss compared to ideal circuit execution.
+By leveraging state-vector simulation of dimension $2^n$, `QuaComp` measures memory allocation (RAM), CPU usage, and execution latency of quantum gate operations across different qubit sizes and circuit depths. In addition to the state-vector method, QuaComp supports Matrix Product State (MPS) simulations to efficiently handle large-scale quantum circuits (30 to 100+ qubits for low-to-moderate entanglement workloads) by compressing the state-space tensor representation on memory-constrained systems. Furthermore, QuaComp supports Noisy Intermediate-Scale Quantum (NISQ) simulation benchmarking using synthetic parameterized noise channels (Thermal Relaxation $T_1/T_2$ & Depolarizing Error) to evaluate CPU computational overhead and quantum state fidelity loss compared to ideal circuit execution. QuaComp also features an automated Visualization Engine (`--chart`) that generates high-resolution telemetry plots for latency, memory safety thresholds, MPS savings, and NISQ noise fidelity impacts.
 
 ### 1.2 Core Value Proposition
 - **Pre-flight Safety:** Prevents system crashes and Out-Of-Memory (OOM) errors by calculating theoretical $2^n$ RAM requirements before running simulation runs.
@@ -22,6 +22,7 @@ By leveraging state-vector simulation of dimension $2^n$, `QuaComp` measures mem
 - **Project-Specific Composite Scoring:** Computes a project-specific composite heuristic score ("QuaComp Composite Score") that decouples state-space capacity ($C = 2^n$) and gate throughput ($T = \text{gates}/\mu_{\text{latency}}$).
 - **Scalable MPS Simulation:** Supports high-qubit simulation (up to 100+ qubits) specifically for low-to-moderate entanglement circuits using tensor network compression (Matrix Product State), overcoming conventional state-vector memory limits.
 - **NISQ Synthetic Noise & Fidelity Profiling:** Evaluates hardware computational overhead under synthetic parameterized noise channels (thermal relaxation and depolarizing errors) while measuring classical Hellinger state fidelity loss.
+- **Automated Telemetry Visualizations:** Generates modern high-DPI chart graphics (`--chart`) illustrating qubit scalability, memory safety boundaries, simulation method comparisons, and noise fidelity degradation.
 
 ---
 
@@ -105,3 +106,14 @@ $$\text{QuaComp Composite Score} = (C \times 10) + T = (2^{n_{\text{max}}} \time
     - `medium`: Synthetic representative noise profile ($T_1 = 50\,\mu\text{s}, T_2 = 70\,\mu\text{s}$, gate error rate $0.005$).
     - `high`: Heavy noise profile ($T_1 = 20\,\mu\text{s}, T_2 = 30\,\mu\text{s}$, gate error rate $0.02$).
   - Calculates classical Hellinger state fidelity percentage (%) and CPU computation overhead ratio (%).
+
+### FR-9: Visualization Engine & Chart Generator
+- **Description:** The system must provide automated generation of clean, modern visualization chart images (PNG format) from simulation telemetry via CLI flag `--chart`.
+- **Specifications & Behavior:**
+  - Integrates `matplotlib` (non-interactive `Agg` backend) and `seaborn` plotting libraries.
+  - Automatically produces 4 core chart artifacts in `results/`:
+    1. `qubit_vs_latency.png`: Qubit Count vs Mean Latency (seconds) with standard deviation error shading.
+    2. `qubit_vs_ram.png`: Qubit Count vs Memory Allocation (GB) with physical RAM safety threshold line (85% limit).
+    3. `method_comparison.png`: Latency comparison between Statevector and Matrix Product State (MPS) engines.
+    4. `noise_fidelity_impact.png`: NISQ noise profile impact on Quantum State Fidelity (%) and CPU Computation Overhead (%).
+  - Automatically embeds generated chart image links into `results/report.md`.
