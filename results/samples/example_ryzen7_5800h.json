@@ -1,0 +1,85 @@
+{
+  "timestamp": "2026-08-11T14:30:00",
+  "final_score": 167772480.0,
+  "final_composite_score": 167772480.0,
+  "score_type": "project-specific composite heuristic score",
+  "scoring_breakdown": {
+    "capacity_metric": 16777216.0,
+    "throughput_metric": 320.0
+  },
+  "performance_category": "Extreme Workstation",
+  "max_qubits_simulated": 24,
+  "statistical_summary": {
+    "best_qubits": 24,
+    "runs_count": 3,
+    "mean_latency": 0.9625,
+    "median_latency": 0.958,
+    "std_latency": 0.045
+  },
+  "system_metadata": {
+    "cpu_name": "AMD Ryzen 7 5800H with Radeon Graphics",
+    "total_ram_gb": 16.0,
+    "os_name": "Linux",
+    "os_release": "6.5.0-ubuntu",
+    "python_version": "3.11.8"
+  },
+  "results": [
+    {
+      "qubits": 10,
+      "success": true,
+      "latency": 0.125,
+      "mean_latency": 0.125,
+      "median_latency": 0.122,
+      "std_latency": 0.015,
+      "runs_count": 3,
+      "latencies": [0.112, 0.122, 0.141],
+      "gates": 60,
+      "cpu_usage": 88.5,
+      "ram_status": "SAFE",
+      "error": null,
+      "workload_label": "QFT",
+      "method": "statevector",
+      "noise_level": "none",
+      "fidelity": 100.0,
+      "overhead_ratio": 0.0
+    },
+    {
+      "qubits": 20,
+      "success": true,
+      "latency": 0.385,
+      "mean_latency": 0.385,
+      "median_latency": 0.381,
+      "std_latency": 0.022,
+      "runs_count": 3,
+      "latencies": [0.365, 0.381, 0.409],
+      "gates": 220,
+      "cpu_usage": 82.0,
+      "ram_status": "SAFE",
+      "error": null,
+      "workload_label": "QFT",
+      "method": "statevector",
+      "noise_level": "none",
+      "fidelity": 100.0,
+      "overhead_ratio": 0.0
+    },
+    {
+      "qubits": 24,
+      "success": true,
+      "latency": 0.9625,
+      "mean_latency": 0.9625,
+      "median_latency": 0.958,
+      "std_latency": 0.045,
+      "runs_count": 3,
+      "latencies": [0.921, 0.958, 1.0085],
+      "gates": 308,
+      "cpu_usage": 91.2,
+      "ram_status": "SAFE",
+      "error": null,
+      "workload_label": "QFT",
+      "method": "statevector",
+      "noise_level": "none",
+      "fidelity": 100.0,
+      "overhead_ratio": 0.0
+    }
+  ]
+}

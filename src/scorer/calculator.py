@@ -11,7 +11,10 @@ def calculate_qsim_score(max_qubits: int, total_gates: int, execution_time: floa
         
     Note:
         QuaComp Score is a project-specific composite heuristic prioritizing state-space capacity scaling.
-        It is intended for comparative profiling across local environments within the QuaComp benchmark suite.
+        Because statevector memory allocation scales exponentially (2^n), the Capacity Metric (10 * 2^n)
+        exponentially dominates the Throughput Metric (T). A system simulating 30 qubits will score higher
+        than a system simulating 28 qubits with faster gate throughput, reflecting QuaComp's deliberate
+        design choice to prioritize state-space memory scaling over gate execution speed.
         
     Args:
         max_qubits (int): The maximum number of qubits successfully simulated.

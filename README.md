@@ -15,6 +15,7 @@
 - [Getting Started](#getting-started)
 - [Usage Examples](#usage-examples)
 - [Running Tests](#running-tests)
+- [Reference Hardware Benchmarks](#reference-hardware-benchmarks)
 - [Scoring Categories](#scoring-categories)
 - [Roadmap](#roadmap)
 - [Contribution Guide](#contribution-guide)
@@ -211,6 +212,18 @@ tests\test_scorer.py ......                                              [100%]
 
 ---
 
+## Reference Hardware Benchmarks
+
+The repository includes committed sample benchmark telemetry files in `results/samples/` representing performance across reference hardware platforms:
+
+| Reference CPU | Total RAM | Max Qubits (SV) | QuaComp Composite Score | Performance Category | Sample JSON File |
+| :--- | :---: | :---: | :---: | :--- | :--- |
+| **AMD Ryzen 3 5300U** | 11.33 GB | 20 Qubits | `10,486,120.47` | High-Performance | [`example_ryzen3_5300u.json`](results/samples/example_ryzen3_5300u.json) |
+| **AMD Ryzen 7 5800H** | 16.00 GB | 24 Qubits | `167,772,480.00` | Extreme Workstation | [`example_ryzen7_5800h.json`](results/samples/example_ryzen7_5800h.json) |
+| **Apple M3 (8-core)** | 24.00 GB | 25 Qubits | `335,544,830.00` | Extreme Workstation | [`example_apple_m3.json`](results/samples/example_apple_m3.json) |
+
+---
+
 ## Scoring Categories
 
 QuaComp Composite Score maps directly into performance tiers, reflecting the computing capabilities of local environments:
@@ -222,7 +235,8 @@ QuaComp Composite Score maps directly into performance tiers, reflecting the com
 | **High-Performance** | $1,000,000$ to $50,000,000$ | Up to 26-28 Qubits |
 | **Extreme Workstation** | $> 50,000,000$ | $29+$ Qubits |
 
-*Note: QuaComp Score is a project-specific composite heuristic score combining capacity scaling ($2^n$) and gate throughput.*
+> **Methodology Note on Capacity Dominance:**  
+> Because state-vector memory allocation scales exponentially ($2^n$), the Capacity Metric ($10 \times 2^n$) exponentially dominates the Throughput Metric ($T = \text{gates}/\mu$). A system simulating 30 qubits will score higher than a system simulating 28 qubits with faster gate throughput, reflecting QuaComp's deliberate design choice to prioritize state-space memory capacity scaling over execution speed.
 
 ---
 

@@ -1,0 +1,85 @@
+{
+  "timestamp": "2026-08-12T10:15:00",
+  "final_score": 335544830.0,
+  "final_composite_score": 335544830.0,
+  "score_type": "project-specific composite heuristic score",
+  "scoring_breakdown": {
+    "capacity_metric": 33554432.0,
+    "throughput_metric": 510.0
+  },
+  "performance_category": "Extreme Workstation",
+  "max_qubits_simulated": 25,
+  "statistical_summary": {
+    "best_qubits": 25,
+    "runs_count": 3,
+    "mean_latency": 0.637,
+    "median_latency": 0.635,
+    "std_latency": 0.018
+  },
+  "system_metadata": {
+    "cpu_name": "Apple M3 (8-core CPU)",
+    "total_ram_gb": 24.0,
+    "os_name": "Darwin",
+    "os_release": "23.4.0",
+    "python_version": "3.12.2"
+  },
+  "results": [
+    {
+      "qubits": 10,
+      "success": true,
+      "latency": 0.082,
+      "mean_latency": 0.082,
+      "median_latency": 0.081,
+      "std_latency": 0.008,
+      "runs_count": 3,
+      "latencies": [0.075, 0.081, 0.09],
+      "gates": 60,
+      "cpu_usage": 92.0,
+      "ram_status": "SAFE",
+      "error": null,
+      "workload_label": "QFT",
+      "method": "statevector",
+      "noise_level": "none",
+      "fidelity": 100.0,
+      "overhead_ratio": 0.0
+    },
+    {
+      "qubits": 20,
+      "success": true,
+      "latency": 0.245,
+      "mean_latency": 0.245,
+      "median_latency": 0.243,
+      "std_latency": 0.012,
+      "runs_count": 3,
+      "latencies": [0.235, 0.243, 0.257],
+      "gates": 220,
+      "cpu_usage": 89.4,
+      "ram_status": "SAFE",
+      "error": null,
+      "workload_label": "QFT",
+      "method": "statevector",
+      "noise_level": "none",
+      "fidelity": 100.0,
+      "overhead_ratio": 0.0
+    },
+    {
+      "qubits": 25,
+      "success": true,
+      "latency": 0.637,
+      "mean_latency": 0.637,
+      "median_latency": 0.635,
+      "std_latency": 0.018,
+      "runs_count": 3,
+      "latencies": [0.621, 0.635, 0.655],
+      "gates": 325,
+      "cpu_usage": 94.1,
+      "ram_status": "SAFE",
+      "error": null,
+      "workload_label": "QFT",
+      "method": "statevector",
+      "noise_level": "none",
+      "fidelity": 100.0,
+      "overhead_ratio": 0.0
+    }
+  ]
+}

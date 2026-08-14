@@ -79,6 +79,7 @@ $$\text{QuaComp Composite Score} = (C \times 10) + T = (2^{n_{\text{max}}} \time
   - *Mid-Range:* 100,000 - 1,000,000 pts (Max 22-25 Qubits)
   - *High-Performance:* 1,000,000 - 50,000,000 pts (Max 26-28 Qubits)
   - *Extreme Workstation:* > 50,000,000 pts (>= 29 Qubits)
+- **Methodology Note on Capacity Dominance:** Because state-vector memory allocation scales exponentially ($2^n$), the Capacity Metric ($10 \times 2^n$) exponentially dominates the Throughput Metric ($T$). A machine simulating 30 qubits will score higher than a machine simulating 28 qubits with faster gate throughput, reflecting QuaComp's deliberate design choice to prioritize memory capacity scaling over execution speed.
 
 ### FR-6: Report & Export Module
 - Benchmark results can be exported as:
