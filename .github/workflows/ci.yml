@@ -37,7 +37,7 @@ jobs:
 
       - name: Run unit tests with Pytest
         run: |
-          python -m pytest -v
+          python -m pytest -v -rA --tb=short
 
       - name: Verify CLI command execution
         run: |
