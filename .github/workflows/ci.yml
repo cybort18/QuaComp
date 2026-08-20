@@ -43,7 +43,15 @@ jobs:
 
       - name: Run unit tests with Pytest
         run: |
-          python -m pytest -v -rA --tb=short
+          python -m pytest -v -rA --tb=short 2>&1 | tee pytest_summary.log
+
+      - name: Publish Test Summary
+        if: always()
+        run: |
+          echo "### Pytest Summary" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat pytest_summary.log >> $GITHUB_STEP_SUMMARY || true
+          echo '```' >> $GITHUB_STEP_SUMMARY
 
       - name: Verify CLI command execution
         run: |
