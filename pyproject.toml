@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "quacomp"
-version = "1.5.0"
+version = "1.6.0"
 description = "Quantum Computer Simulation Benchmark — A modular Python utility designed to measure, stress-test, and profile quantum computer simulation limits on local hardware."
 readme = "README.md"
 authors = [

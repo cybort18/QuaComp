@@ -1,7 +1,7 @@
 # Product Requirement Document (PRD)
 # Project Name: QuaComp (Quantum Computer Simulation Benchmark)
 
-**Version:** 1.5.0  
+**Version:** 1.6.0  
 **Status:** Approved / Completed  
 **Target Environment:** Cross-platform (Windows, macOS, Linux)  
 **Primary Tech Stack:** Python 3.10+, Qiskit / Aer, psutil, Rich, Matplotlib, Seaborn, Setuptools, Pytest, GitHub Actions  
@@ -13,7 +13,7 @@
 ### 1.1 Overview
 `QuaComp` is an open-source library and CLI-based benchmarking tool designed to profile local hardware performance (PC / Laptop / Workstation) when simulating quantum computers. 
 
-By leveraging state-vector simulation of dimension $2^n$, `QuaComp` measures memory allocation (RAM), CPU usage, and execution latency of quantum gate operations across different qubit sizes and circuit depths. In addition to the state-vector method, QuaComp supports Matrix Product State (MPS) simulations to efficiently handle large-scale quantum circuits (30 to 100+ qubits for low-to-moderate entanglement workloads) by compressing the state-space tensor representation on memory-constrained systems. Furthermore, QuaComp supports Noisy Intermediate-Scale Quantum (NISQ) simulation benchmarking using synthetic parameterized noise channels (Thermal Relaxation $T_1/T_2$ & Depolarizing Error) to evaluate CPU computational overhead and quantum state fidelity loss compared to ideal circuit execution. QuaComp also features an automated Visualization Engine (`--chart`) that generates high-resolution telemetry plots for latency, memory safety thresholds, MPS savings, and NISQ noise fidelity impacts.
+By leveraging state-vector simulation of dimension $2^n$, `QuaComp` measures memory allocation (RAM), CPU usage, and execution latency of quantum gate operations across different qubit sizes and circuit depths. In addition to the state-vector method, QuaComp supports Matrix Product State (MPS) simulations to efficiently handle large-scale quantum circuits (30 to 100+ qubits for low-to-moderate entanglement workloads) by compressing the state-space tensor representation on memory-constrained systems. Furthermore, QuaComp supports Noisy Intermediate-Scale Quantum (NISQ) simulation benchmarking using synthetic parameterized noise channels (Thermal Relaxation $T_1/T_2$ & Depolarizing Error) to evaluate CPU computational overhead and quantum state fidelity loss compared to ideal circuit execution. QuaComp also features an automated Visualization Engine (`--chart`) that generates high-resolution telemetry plots for latency, memory safety thresholds, MPS savings, and NISQ noise fidelity impacts. Version 1.6.0 introduces the **Relative Benchmark Comparison Engine (`--compare`)** for side-by-side hardware differencing against historical runs and reference profiles.
 
 ### 1.2 Core Value Proposition
 - **Pre-flight Safety:** Prevents system crashes and Out-Of-Memory (OOM) errors by calculating theoretical $2^n$ RAM requirements before running simulation runs.
@@ -125,3 +125,21 @@ $$\text{QuaComp Composite Score} = (C \times 10) + T = (2^{n_{\text{max}}} \time
   - Standard `pyproject.toml` build system with `quacomp = "cli.main:main"` console script entry point.
   - Single-command installation support via `pip install -e .` without manual `PYTHONPATH` exports.
   - Multi-platform GitHub Actions CI workflow (`.github/workflows/ci.yml`) testing on Ubuntu, Windows, and macOS across Python 3.10, 3.11, 3.12, and 3.13.
+
+### FR-11: Relative Benchmark Comparison Engine (`--compare`)
+- **Description:** The system must provide automated mathematical and visual side-by-side comparison between two benchmark result JSON runs or between a live benchmark run and a target reference hardware baseline.
+- **Specifications & Behavior:**
+  - **Mathematical Differencing:**
+    - Calculates Composite Score Ratio ($Score_{target} / Score_{base}$) and Score Delta ($\Delta Score\%$).
+    - Computes Throughput Speedup Factor ($T_{target} / T_{base}$) and Throughput Gain Percentage.
+    - Evaluates Qubit Simulation Capacity Gap ($\Delta n = n_{target} - n_{base}$) and State-space Scaling ($2^{\Delta n}\times$).
+    - Performs per-qubit latency matching, computing speedup multipliers ($t_{base} / t_{target}$) and execution time savings.
+  - **CLI Interface & Presets:**
+    - `quacomp --compare <file1.json> <file2.json>`: Standalone two-file comparison.
+    - `quacomp --compare results/report.json --target <alias>`: Compares against built-in preset aliases (`apple_m3`, `ryzen3_5300u`, `ryzen7_5800h`).
+    - `quacomp --quick --compare --target apple_m3`: Executes live benchmark and performs instantaneous comparison against the baseline target.
+  - **Rich Output & Reports:**
+    - Renders color-coded Rich comparison tables and an academic summary verdict in the terminal.
+    - Automatically exports `results/comparison.json` and `results/comparison_report.md`.
+    - Generates grouped bar chart plots (`qubit_latency_comparison.png` and `throughput_comparison.png`) when `--chart` is provided.
+

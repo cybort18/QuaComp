@@ -90,6 +90,15 @@ When executed with the `--chart` flag, QuaComp generates high-DPI visualization 
   - `noise_fidelity_impact.png`: Bar plot comparing NISQ noise profiles vs Quantum State Fidelity (%) & CPU Overhead (%).
 - **Markdown Report Embedding**: Automatically links and embeds generated chart graphics into `results/report.md`.
 
+### Relative Benchmark Comparison Engine (v1.6.0)
+- **Side-by-Side Differencing**: Compares two benchmark JSON runs (or live benchmark against a target reference baseline) using `quacomp --compare`.
+- **Metrics Evaluated**:
+  - **Composite Score Ratio & Delta**: Relative speed and capacity gain percentage.
+  - **Throughput Speedup Factor**: Direct gate simulation throughput ratio ($T_{target} / T_{base}$).
+  - **Qubit Capacity Gap**: Physical qubit scaling difference ($2^{\Delta n}\times$ statevector space).
+  - **Per-Qubit Latency Differencing**: Execution latency speedup multipliers and percentage savings.
+- **Rich Terminal Comparison & Exporters**: Displays side-by-side colorized Rich tables and an academic verdict in terminal, while exporting `results/comparison.json`, `results/comparison_report.md`, and comparison plots (`qubit_latency_comparison.png`, `throughput_comparison.png`).
+
 ### JSON & Markdown Exporters (Phase 3)
 - Automatically serializes run telemetry and statistical summaries to `results/benchmark_<timestamp>.json`.
 - Exports readable summary reports to `results/report.md` formatted for GitHub issues or discussions.
@@ -106,8 +115,12 @@ QuaComp/
 ├── cli/
 │   ├── __init__.py
 │   ├── __main__.py
-│   └── main.py             # Rich terminal GUI CLI entry point (supports --method, --bond-dim, --noise-level, --runs, --chart)
+│   └── main.py             # Rich terminal GUI CLI entry point (supports --method, --bond-dim, --noise-level, --runs, --chart, --compare)
 ├── src/
+│   ├── comparator/
+│   │   ├── __init__.py
+│   │   ├── differ.py       # Relative mathematical comparison engine & target resolver
+│   │   └── reporter.py     # Comparison Rich tables, Markdown & JSON exporters
 │   ├── engine/
 │   │   ├── __init__.py
 │   │   ├── circuits.py     # Circuit generators (Shallow, Deep, QFT)
@@ -123,7 +136,7 @@ QuaComp/
 │   │   └── calculator.py   # Benchmark scorer engine & breakdown calculator
 │   └── reporter/
 │       ├── __init__.py
-│       ├── charts.py       # Visualization Engine & Chart Generator
+│       ├── charts.py       # Visualization Engine & Chart Generator (Benchmark & Comparison plots)
 │       ├── json_exporter.py# Save results & statistics in JSON format
 │       └── md_exporter.py  # Save reports & chart links in Markdown format
 ├── tests/
@@ -133,11 +146,12 @@ QuaComp/
 │   ├── test_reporter.py    # Exporters files creation tests
 │   ├── test_mps.py         # Matrix Product State (MPS) logic tests
 │   ├── test_noise.py       # NISQ noise models and state fidelity tests
-│   └── test_charts.py      # Visualization engine and PNG plot tests
+│   ├── test_charts.py      # Visualization engine and PNG plot tests
+│   └── test_comparator.py  # Relative benchmark comparison & differencing tests
 ├── pyproject.toml          # PEP 517/621 Modern build configuration & executable entry point
 ├── setup.py                # Setuptools compatibility shim
 ├── requirements.txt        # Package dependencies (psutil, qiskit, rich, matplotlib, seaborn)
-├── PRD.md                  # Product Requirement Document
+├── PRD.md                  # Product Requirement Document (v1.6.0)
 ├── README.md               # Project documentation
 └── .gitignore              # Git ignore file
 ```
@@ -174,6 +188,15 @@ quacomp --quick --chart
 # Run a full incremental stress test starting from 10 qubits with 5 statistical runs
 quacomp --full --runs 5 --chart
 
+# Compare two benchmark JSON files side-by-side with comparison charts
+quacomp --compare results/samples/example_ryzen3_5300u.json results/samples/example_apple_m3.json --chart
+
+# Compare latest benchmark report against a reference profile (apple_m3, ryzen3_5300u, ryzen7_5800h)
+quacomp --compare results/report.json --target apple_m3
+
+# Run live quick benchmark and compare immediately against Apple M3 reference baseline
+quacomp --quick --compare --target apple_m3 --runs 3
+
 # Run a custom 30 qubits simulation using Matrix Product State (MPS) engine for low-entanglement circuits
 quacomp --custom --qubits 30 --method mps --bond-dim 64 --chart
 
@@ -181,7 +204,7 @@ quacomp --custom --qubits 30 --method mps --bond-dim 64 --chart
 quacomp --custom --qubits 10 --noise-level medium --runs 5 --chart
 ```
 
-> *Tip: You can also execute via `python -m cli.main` if preferred.*
+> *Tip: You can also execute via `python -m cli` if preferred.*
 
 ### Command Flags Reference
 
@@ -190,6 +213,8 @@ quacomp --custom --qubits 10 --noise-level medium --runs 5 --chart
 | `--quick` | N/A | Runs benchmark suite on 10, 15, and 20 qubits. |
 | `--full` | N/A | Incremental stress test starting from 10 qubits. |
 | `--custom` | N/A | Custom simulation mode with specific qubit parameters. |
+| `--compare` | `[FILE1] [FILE2]` | Side-by-side relative benchmark comparison between two JSON runs or against a live run. |
+| `--target` | `apple_m3`, `ryzen3_5300u`, `ryzen7_5800h`, or `PATH` | Target reference baseline alias or file path for `--compare`. |
 | `--qubits` | `INT` (default: `10`) | Qubit count for custom simulation run. |
 | `--type` | `shallow`, `deep`, `qft` (default: `qft`) | Quantum circuit workload type. |
 | `--depth` | `INT` (default: `10`) | Depth parameter for deep random circuit workloads. |
@@ -204,7 +229,7 @@ quacomp --custom --qubits 10 --noise-level medium --runs 5 --chart
 
 ## Running Tests
 
-Automated unit tests are written with `pytest`. They cover statevector simulation, multi-run latency statistics, MPS tensor compression, NISQ synthetic noise models, scoring breakdown, report exporters, and chart generation.
+Automated unit tests are written with `pytest`. They cover statevector simulation, multi-run latency statistics, MPS tensor compression, NISQ synthetic noise models, relative benchmark comparison, scoring breakdown, report exporters, and chart generation.
 
 To execute the full test suite, run:
 ```bash
@@ -216,17 +241,18 @@ Output:
 ============================= test session starts =============================
 platform win32 -- Python 3.13.3, pytest-9.1.1, pluggy-1.6.0
 rootdir: C:\Users\HP\Documents\PROJECT\QuaComp
-collected 31 items
+collected 38 items
 
-tests\test_charts.py ...                                                 [  9%]
-tests\test_engine.py .....                                               [ 25%]
-tests\test_memory.py .....                                               [ 41%]
-tests\test_mps.py ....                                                   [ 54%]
-tests\test_noise.py ....                                                 [ 67%]
-tests\test_reporter.py ....                                              [ 80%]
+tests\test_charts.py ...                                                 [  7%]
+tests\test_comparator.py .......                                         [ 26%]
+tests\test_engine.py .....                                               [ 39%]
+tests\test_memory.py .....                                               [ 52%]
+tests\test_mps.py ....                                                   [ 63%]
+tests\test_noise.py ....                                                 [ 73%]
+tests\test_reporter.py ....                                              [ 84%]
 tests\test_scorer.py ......                                              [100%]
 
-============================= 31 passed in 5.62s ==============================
+============================= 38 passed in 6.42s ==============================
 ```
 
 ---

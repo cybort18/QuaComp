@@ -184,3 +184,105 @@ def generate_benchmark_charts(
         generated_chart_paths.append(path_noise)
         
     return generated_chart_paths
+
+def generate_comparison_charts(
+    diff_data: Dict[str, Any], 
+    output_dir: str = 'results'
+) -> List[str]:
+    """
+    Generate side-by-side relative comparison charts for two benchmark runs.
+    
+    Charts generated:
+        1. qubit_latency_comparison.png: Grouped bar chart of Mean Latency for Base vs Target.
+        2. throughput_comparison.png: Bar chart of Throughput Metric (gates/sec) for Base vs Target.
+        
+    Args:
+        diff_data: Benchmark comparison dictionary produced by compare_benchmarks().
+        output_dir: Output directory where chart images will be saved.
+        
+    Returns:
+        List of absolute file paths to generated PNG chart images.
+    """
+    if not isinstance(diff_data, dict):
+        raise TypeError("diff_data must be a dictionary.")
+        
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir, exist_ok=True)
+        
+    sns.set_theme(style="whitegrid", palette="muted")
+    plt.rcParams.update({
+        "font.sans-serif": ["DejaVu Sans", "Arial", "sans-serif"],
+        "font.family": "sans-serif",
+        "figure.dpi": 300,
+        "axes.titlesize": 13,
+        "axes.titleweight": "bold",
+        "axes.labelsize": 11,
+        "xtick.labelsize": 10,
+        "ytick.labelsize": 10
+    })
+    
+    chart_paths: List[str] = []
+    matched = diff_data.get("matched_qubits", [])
+    lbl_base = diff_data.get("base_label", "Base")[:16]
+    lbl_target = diff_data.get("target_label", "Target")[:16]
+    summary = diff_data.get("score_summary", {})
+    
+    # Chart 1: Grouped Latency Comparison per Qubit
+    if matched:
+        fig, ax = plt.subplots(figsize=(8, 5))
+        qubit_labels = [f"{m['qubits']} Qubits\n({m['workload_label']})" for m in matched]
+        lat_base = [m["latency_base"] for m in matched]
+        lat_target = [m["latency_target"] for m in matched]
+        
+        x = np.arange(len(qubit_labels))
+        width = 0.35
+        
+        rects1 = ax.bar(x - width/2, lat_base, width, label=f"Base: {lbl_base}", color='#1f77b4')
+        rects2 = ax.bar(x + width/2, lat_target, width, label=f"Target: {lbl_target}", color='#2ca02c')
+        
+        ax.set_ylabel("Execution Latency (seconds)")
+        ax.set_title("QuaComp Comparison: Qubit Simulation Latency (Lower is Better)")
+        ax.set_xticks(x)
+        ax.set_xticklabels(qubit_labels)
+        ax.legend(loc="upper left")
+        
+        # Annotate bars
+        for rect in rects1:
+            h = rect.get_height()
+            ax.annotate(f"{h:.3f}s", xy=(rect.get_x() + rect.get_width()/2, h),
+                        xytext=(0, 3), textcoords="offset points", ha='center', va='bottom', fontsize=8)
+                        
+        for rect in rects2:
+            h = rect.get_height()
+            ax.annotate(f"{h:.3f}s", xy=(rect.get_x() + rect.get_width()/2, h),
+                        xytext=(0, 3), textcoords="offset points", ha='center', va='bottom', fontsize=8, fontweight='bold')
+                        
+        plt.tight_layout()
+        path_lat_comp = os.path.abspath(os.path.join(output_dir, "qubit_latency_comparison.png"))
+        plt.savefig(path_lat_comp)
+        plt.close(fig)
+        chart_paths.append(path_lat_comp)
+        
+    # Chart 2: Throughput Metric Comparison
+    t_base = summary.get("throughput_metric_base", 0.0)
+    t_target = summary.get("throughput_metric_target", 0.0)
+    if t_base > 0 or t_target > 0:
+        fig, ax = plt.subplots(figsize=(7, 4.5))
+        bars = ax.bar([f"Base:\n{lbl_base}", f"Target:\n{lbl_target}"], [t_base, t_target], color=['#1f77b4', '#2ca02c'], width=0.45)
+        
+        ax.set_ylabel("Simulation Throughput (gates / second)")
+        ax.set_title("Quantum Gate Simulation Throughput Comparison (Higher is Better)")
+        
+        for bar in bars:
+            h = bar.get_height()
+            ax.annotate(f"{h:,.1f} g/s", xy=(bar.get_x() + bar.get_width()/2, h),
+                        xytext=(0, 3), textcoords="offset points", ha='center', va='bottom', fontsize=9, fontweight='bold')
+                        
+        plt.tight_layout()
+        path_tput = os.path.abspath(os.path.join(output_dir, "throughput_comparison.png"))
+        plt.savefig(path_tput)
+        plt.close(fig)
+        chart_paths.append(path_tput)
+        
+    return chart_paths
+
