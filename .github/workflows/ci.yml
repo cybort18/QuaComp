@@ -26,9 +26,15 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: "pip"
 
-      - name: Install macOS OpenMP dependency (libomp)
+      - name: Install and configure macOS OpenMP (libomp)
         if: runner.os == 'macOS'
-        run: brew install libomp
+        run: |
+          brew install libomp
+          LIBOMP_DIR="$(brew --prefix libomp)/lib"
+          echo "DYLD_LIBRARY_PATH=$LIBOMP_DIR:$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
+          echo "DYLD_FALLBACK_LIBRARY_PATH=$LIBOMP_DIR:$DYLD_FALLBACK_LIBRARY_PATH" >> $GITHUB_ENV
+          sudo mkdir -p /usr/local/lib
+          sudo cp "$LIBOMP_DIR/libomp.dylib" /usr/local/lib/ 2>/dev/null || true
 
       - name: Install dependencies and QuaComp in editable mode
         run: |
