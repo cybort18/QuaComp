@@ -65,7 +65,7 @@ def test_run_simulation_mps_30_qubits():
     result = run_simulation(circuit, method="mps", bond_dimension=64)
     
     assert isinstance(result, dict)
-    assert result["success"] is True
+    assert result["success"] is True, f"MPS Simulation failed: {result.get('error')}"
     assert result["error"] is None
     assert result["latency"] > 0
     assert "metadata" in result

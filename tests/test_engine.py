@@ -66,7 +66,7 @@ def test_run_simulation_success():
     res = run_simulation(qc, runs=3)
     
     assert isinstance(res, dict)
-    assert res["success"] is True
+    assert res["success"] is True, f"Simulation failed with error: {res.get('error')}"
     assert res["error"] is None
     assert isinstance(res["latency"], float)
     assert res["latency"] > 0

@@ -65,13 +65,13 @@ def test_simulation_with_noise():
     
     # Ideal simulation
     res_ideal = run_simulation(circuit, noise_model=None, noise_level="none")
-    assert res_ideal["success"] is True
+    assert res_ideal["success"] is True, f"Ideal simulation failed: {res_ideal.get('error')}"
     assert len(res_ideal["counts"]) > 0
     
     # Noisy simulation with medium noise
     noise_model = get_noise_model("medium")
     res_noisy = run_simulation(circuit, noise_model=noise_model, noise_level="medium")
-    assert res_noisy["success"] is True
+    assert res_noisy["success"] is True, f"Noisy simulation failed: {res_noisy.get('error')}"
     assert len(res_noisy["counts"]) > 0
     assert res_noisy["metadata"]["noise_level"] == "medium"
     

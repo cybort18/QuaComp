@@ -44,7 +44,7 @@ def generate_benchmark_charts(
     # Configure global seaborn plot style
     sns.set_theme(style="whitegrid", palette="muted")
     plt.rcParams.update({
-        "font.sans-serif": "Arial",
+        "font.sans-serif": ["DejaVu Sans", "Arial", "sans-serif"],
         "font.family": "sans-serif",
         "figure.dpi": 300,
         "axes.titlesize": 13,
