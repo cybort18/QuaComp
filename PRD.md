@@ -1,10 +1,10 @@
 # Product Requirement Document (PRD)
 # Project Name: QuaComp (Quantum Computer Simulation Benchmark)
 
-**Version:** 1.3.0  
+**Version:** 1.5.0  
 **Status:** Approved / Completed  
 **Target Environment:** Cross-platform (Windows, macOS, Linux)  
-**Primary Tech Stack:** Python 3.10+, Qiskit / Aer, psutil, Rich, Matplotlib, Seaborn, Pytest  
+**Primary Tech Stack:** Python 3.10+, Qiskit / Aer, psutil, Rich, Matplotlib, Seaborn, Setuptools, Pytest, GitHub Actions  
 
 ---
 
@@ -118,3 +118,10 @@ $$\text{QuaComp Composite Score} = (C \times 10) + T = (2^{n_{\text{max}}} \time
     3. `method_comparison.png`: Latency comparison between Statevector and Matrix Product State (MPS) engines.
     4. `noise_fidelity_impact.png`: NISQ noise profile impact on Quantum State Fidelity (%) and CPU Computation Overhead (%).
   - Automatically embeds generated chart image links into `results/report.md`.
+
+### FR-10: Python Packaging & CI/CD Pipeline
+- **Description:** The system must adhere to modern Python PEP 517/621 packaging standards, providing direct terminal CLI binaries and automated multi-platform continuous integration.
+- **Specifications & Behavior:**
+  - Standard `pyproject.toml` build system with `quacomp = "cli.main:main"` console script entry point.
+  - Single-command installation support via `pip install -e .` without manual `PYTHONPATH` exports.
+  - Multi-platform GitHub Actions CI workflow (`.github/workflows/ci.yml`) testing on Ubuntu, Windows, and macOS across Python 3.10, 3.11, 3.12, and 3.13.

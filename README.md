@@ -3,6 +3,7 @@
 > **Quantum Computer Simulation Benchmark** — A modular Python utility designed to measure, stress-test, and profile quantum computer simulation limits on local hardware environments.
 
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
+[![CI](https://github.com/cybort18/QuaComp/actions/workflows/ci.yml/badge.svg)](https://github.com/cybort18/QuaComp/actions)
 [![Tests Status](https://img.shields.io/badge/tests-31%20passed-green.svg)](#running-tests)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
@@ -90,8 +91,12 @@ When executed with the `--chart` flag, QuaComp generates high-DPI visualization 
 
 ```text
 QuaComp/
+├── .github/
+│   └── workflows/
+│       └── ci.yml          # GitHub Actions CI matrix (Ubuntu, Windows, macOS across Python 3.10-3.13)
 ├── cli/
 │   ├── __init__.py
+│   ├── __main__.py
 │   └── main.py             # Rich terminal GUI CLI entry point (supports --method, --bond-dim, --noise-level, --runs, --chart)
 ├── src/
 │   ├── engine/
@@ -120,6 +125,8 @@ QuaComp/
 │   ├── test_mps.py         # Matrix Product State (MPS) logic tests
 │   ├── test_noise.py       # NISQ noise models and state fidelity tests
 │   └── test_charts.py      # Visualization engine and PNG plot tests
+├── pyproject.toml          # PEP 517/621 Modern build configuration & executable entry point
+├── setup.py                # Setuptools compatibility shim
 ├── requirements.txt        # Package dependencies (psutil, qiskit, rich, matplotlib, seaborn)
 ├── PRD.md                  # Product Requirement Document
 ├── README.md               # Project documentation
@@ -136,33 +143,36 @@ git clone https://github.com/cybort18/QuaComp.git
 cd QuaComp
 ```
 
-### 2. Install dependencies
-Install the required packages using `pip`:
+### 2. Install QuaComp
+Install QuaComp in editable mode:
 ```bash
-pip install -r requirements.txt
+pip install -e .
 ```
+*(Or install requirements directly via `pip install -r requirements.txt`)*
 
 ---
 
 ## Usage Examples
 
-### Running the CLI Benchmark Suite
+### Running the `quacomp` CLI Command
 
-You can execute the benchmark program via the terminal. Specify `PYTHONPATH` to ensure Python resolves the codebase packages correctly:
+After installing, the `quacomp` command is available directly in your terminal:
 
 ```bash
 # Run a quick benchmark on qubits 10, 15, and 20 with chart generation enabled
-$env:PYTHONPATH="." ; python cli/main.py --quick --chart
+quacomp --quick --chart
 
 # Run a full incremental stress test starting from 10 qubits with 5 statistical runs
-$env:PYTHONPATH="." ; python cli/main.py --full --runs 5 --chart
+quacomp --full --runs 5 --chart
 
 # Run a custom 30 qubits simulation using Matrix Product State (MPS) engine for low-entanglement circuits
-$env:PYTHONPATH="." ; python cli/main.py --custom --qubits 30 --method mps --bond-dim 64 --chart
+quacomp --custom --qubits 30 --method mps --bond-dim 64 --chart
 
 # Run a custom simulation under a synthetic representative noise profile (medium)
-$env:PYTHONPATH="." ; python cli/main.py --custom --qubits 10 --noise-level medium --runs 5 --chart
+quacomp --custom --qubits 10 --noise-level medium --runs 5 --chart
 ```
+
+> *Tip: You can also execute via `python -m cli.main` if preferred.*
 
 ### Command Flags Reference
 
@@ -269,6 +279,9 @@ QuaComp Composite Score maps directly into performance tiers, reflecting the com
   - Matplotlib & Seaborn integration (`--chart`).
   - Automated generation of `qubit_vs_latency.png`, `qubit_vs_ram.png`, `method_comparison.png`, `noise_fidelity_impact.png`.
   - Chart embedding in Markdown reports (`results/report.md`).
+- [x] **Phase 7: Packaging & CI/CD Pipeline (v1.5.0)**
+  - PEP 517/621 `pyproject.toml` build system & `quacomp` executable CLI entry point.
+  - Multi-platform GitHub Actions CI matrix running automated `pytest` across Ubuntu, Windows, and macOS on Python 3.10–3.13.
 
 ---
 
