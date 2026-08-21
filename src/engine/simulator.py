@@ -8,6 +8,7 @@ def run_simulation(
     circuit: QuantumCircuit, 
     method: str = 'statevector', 
     bond_dimension: int = 64,
+    device: str = 'CPU',
     noise_model: Any = None,
     noise_level: str = 'none',
     shots: int = 1024,
@@ -22,6 +23,7 @@ def run_simulation(
         circuit (QuantumCircuit): The Qiskit quantum circuit to execute.
         method (str): The simulation method ('statevector' or 'mps'/'matrix_product_state').
         bond_dimension (int): Max bond dimension for MPS.
+        device (str): Compute device ('CPU' or 'GPU').
         noise_model (Optional[NoiseModel]): Optional Qiskit Aer NoiseModel instance.
         noise_level (str): Label of the noise level ('none', 'low', 'medium', 'high').
         shots (int): Number of measurement shots (default 1024).
@@ -36,13 +38,14 @@ def run_simulation(
             - "median_latency" (float): Sample median latency.
             - "std_latency" (float): Sample standard deviation of latency.
             - "runs_count" (int): Number of successful runs completed.
+            - "device" (str): Device used ('CPU' or 'GPU').
             - "error" (str or None): Error message if failed, None if succeeded.
             - "counts" (dict): Measurement counts dictionary from final run.
             - "metadata" (dict): Simulator execution metadata if succeeded, empty dict otherwise.
             
     Raises:
         TypeError: If the input circuit is not a Qiskit QuantumCircuit.
-        ValueError: If runs is less than 1.
+        ValueError: If runs is less than 1 or device is invalid.
     """
     if not isinstance(circuit, QuantumCircuit):
         raise TypeError("Input must be a Qiskit QuantumCircuit instance.")
@@ -50,14 +53,36 @@ def run_simulation(
     if not isinstance(runs, int) or runs < 1:
         raise ValueError("Number of runs must be an integer >= 1.")
         
+    dev_clean = str(device).upper()
+    if dev_clean not in ("CPU", "GPU"):
+        raise ValueError(f"Invalid device '{device}'. Must be 'CPU' or 'GPU'.")
+        
     try:
+        # Check available devices in AerSimulator
+        temp_sim = AerSimulator()
+        avail_devices = [str(d).upper() for d in temp_sim.available_devices()]
+        if dev_clean == "GPU" and "GPU" not in avail_devices:
+            return {
+                "success": False,
+                "latency": 0.0,
+                "latencies": [],
+                "mean_latency": 0.0,
+                "median_latency": 0.0,
+                "std_latency": 0.0,
+                "runs_count": 0,
+                "counts": {},
+                "device": dev_clean,
+                "error": f"GPU device requested, but Qiskit Aer on this system does not have GPU/CUDA backend support enabled. Available devices: {avail_devices}",
+                "metadata": {}
+            }
+            
         # Prepare circuit with measurements for count extraction if needed
         circ_to_run = circuit.copy()
         if len(circ_to_run.cregs) == 0:
             circ_to_run.measure_all()
             
-        # Initialize AerSimulator based on simulation method & noise model
-        sim_kwargs: Dict[str, Any] = {}
+        # Initialize AerSimulator based on simulation method, device & noise model
+        sim_kwargs: Dict[str, Any] = {"device": dev_clean}
         if method in ('mps', 'matrix_product_state'):
             sim_kwargs['method'] = 'matrix_product_state'
             sim_kwargs['matrix_product_state_max_bond_dimension'] = bond_dimension
@@ -97,6 +122,7 @@ def run_simulation(
             "success": last_result.success if last_result else True,
             "method": method,
             "bond_dimension": bond_dimension if method in ('mps', 'matrix_product_state') else None,
+            "device": dev_clean,
             "noise_level": noise_level,
             "runs_count": runs,
             "counts": last_counts
@@ -111,6 +137,7 @@ def run_simulation(
             "std_latency": std_latency,
             "runs_count": len(latencies),
             "counts": last_counts,
+            "device": dev_clean,
             "error": None,
             "metadata": metadata
         }

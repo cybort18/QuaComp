@@ -55,8 +55,15 @@ def get_system_metadata() -> Dict[str, Any]:
             - "python_version" (str): Python interpreter version.
     """
     vm = psutil.virtual_memory()
+    from src.profiler.gpu import get_gpu_metadata
+    gpu_meta = get_gpu_metadata()
+    
     return {
         "cpu_name": get_cpu_name(),
+        "gpu_name": gpu_meta.get("gpu_name", "None detected"),
+        "has_gpu": gpu_meta.get("has_gpu", False),
+        "aer_gpu_supported": gpu_meta.get("aer_gpu_supported", False),
+        "total_vram_gb": gpu_meta.get("total_vram_gb", 0.0),
         "total_ram_bytes": vm.total,
         "total_ram_gb": vm.total / (1024 ** 3),
         "os_name": platform.system(),

@@ -12,6 +12,7 @@ from rich.status import Status
 
 from src.profiler.memory import check_memory_safety, estimate_qubit_ram
 from src.profiler.telemetry import get_system_metadata, get_cpu_utilization
+from src.profiler.gpu import get_gpu_metadata, is_gpu_available
 from src.engine.circuits import generate_shallow_circuit, generate_deep_circuit, generate_qft_circuit
 from src.engine.simulator import run_simulation
 from src.scorer.calculator import calculate_qsim_score, categorize_score, calculate_scoring_breakdown
@@ -42,12 +43,20 @@ BANNER = r"""
 def print_system_info():
     """Print system hardware and environment metadata in a beautiful table."""
     metadata = get_system_metadata()
+    gpu_meta = get_gpu_metadata()
     table = Table(title="System Metadata & Telemetry", show_header=True, header_style="bold magenta", expand=False)
     table.add_column("Parameter", style="cyan")
     table.add_column("System Value", style="green")
     
     table.add_row("CPU Name", metadata["cpu_name"])
     table.add_row("Total Physical RAM", f"{metadata['total_ram_gb']:.2f} GB")
+    
+    if gpu_meta["has_gpu"]:
+        aer_status = "Available (CUDA)" if gpu_meta["aer_gpu_supported"] else "CPU-only Backend"
+        table.add_row("GPU Hardware", f"{gpu_meta['gpu_name']} [dim](Aer: {aer_status})[/dim]")
+        if gpu_meta["total_vram_gb"] > 0:
+            table.add_row("GPU VRAM", f"{gpu_meta['total_vram_gb']:.2f} GB")
+            
     table.add_row("Operating System", f"{metadata['os_name']} ({metadata['os_release']})")
     table.add_row("Python Version", metadata["python_version"])
     
@@ -60,17 +69,19 @@ def run_single_simulation(
     depth: int, 
     method: str = 'statevector', 
     bond_dimension: int = 64,
+    device: str = 'cpu',
     noise_level: str = 'none',
     runs: int = 3
 ) -> Dict[str, Any]:
-    """Execute a single simulation step with safety checks, multi-run noise options, and telemetry collection."""
-    # 1. Memory safety check
-    is_safe, msg = check_memory_safety(qubits, method)
+    """Execute a single simulation step with safety checks, multi-run noise options, device selection, and telemetry collection."""
+    # 1. Memory safety check (supports RAM and GPU VRAM check)
+    is_safe, msg = check_memory_safety(qubits, method, device=device)
     if not is_safe:
         return {
             "qubits": qubits,
             "method": method,
             "bond_dimension": bond_dimension if method in ('mps', 'matrix_product_state') else None,
+            "device": device.upper(),
             "noise_level": noise_level,
             "fidelity": 0.0,
             "overhead_ratio": 0.0,
@@ -102,12 +113,13 @@ def run_single_simulation(
     # 3. CPU measurement start
     get_cpu_utilization()
     
-    # 4. Simulation run with noise and method support (multiple runs)
+    # 4. Simulation run with noise, device, and method support (multiple runs)
     noise_model = get_noise_model(noise_level)
     sim_result = run_simulation(
         circuit, 
         method=method, 
         bond_dimension=bond_dimension,
+        device=device,
         noise_model=noise_model,
         noise_level=noise_level,
         runs=runs
@@ -133,7 +145,8 @@ def run_single_simulation(
         ideal_sim_result = run_simulation(
             circuit, 
             method=method, 
-            bond_dimension=bond_dimension, 
+            bond_dimension=bond_dimension,
+            device=device,
             noise_model=None, 
             noise_level="none",
             runs=1
@@ -151,6 +164,7 @@ def run_single_simulation(
         "qubits": qubits,
         "method": method,
         "bond_dimension": bond_dimension if method in ('mps', 'matrix_product_state') else None,
+        "device": device.upper(),
         "noise_level": noise_level,
         "fidelity": fidelity,
         "overhead_ratio": overhead_ratio,
@@ -174,6 +188,7 @@ def display_results(results: List[Dict[str, Any]]) -> None:
     table.add_column("Qubits", style="cyan", justify="center")
     table.add_column("Workload", style="white", justify="center")
     table.add_column("Method", style="magenta", justify="center")
+    table.add_column("Device", style="bold cyan", justify="center")
     table.add_column("Noise Profile", style="yellow", justify="center")
     table.add_column("Gates", style="white", justify="right")
     table.add_column("Latency (Mean ± Std Dev)", style="yellow", justify="right")
@@ -208,10 +223,13 @@ def display_results(results: List[Dict[str, Any]]) -> None:
         else:
             latency_str = "—"
             
+        device_label = r.get("device", "CPU").upper()
+        
         table.add_row(
             str(r["qubits"]),
             r["workload_label"],
             method_label,
+            f"[bold cyan]{device_label}[/bold cyan]" if device_label == "GPU" else "[dim]CPU[/dim]",
             noise_label,
             str(r["gates"]) if r["success"] else "—",
             latency_str,
@@ -396,6 +414,8 @@ def main():
     param_group.add_argument("--depth", type=int, default=10, help="Depth for deep workload (default 10).")
     param_group.add_argument("--method", choices=["statevector", "mps"], default="statevector", help="Simulation method (default statevector).")
     param_group.add_argument("--bond-dim", type=int, default=64, help="Max bond dimension for MPS simulation (default 64).")
+    param_group.add_argument("--device", choices=["cpu", "gpu"], default="cpu", help="Simulation compute device backend (default cpu).")
+    param_group.add_argument("--gpu", action="store_true", help="Shorthand flag to enable GPU acceleration (--device gpu).")
     param_group.add_argument("--noise-level", choices=["none", "low", "medium", "high"], default="none", help="NISQ noise model preset level (default none).")
     param_group.add_argument("--runs", type=int, default=3, help="Number of benchmark iterations per circuit (default 3).")
     
@@ -416,6 +436,7 @@ def main():
         console.print(BANNER)
         console.print("[bold yellow]Please select a benchmark mode or comparison mode:[/bold yellow]")
         console.print("  [cyan]quacomp --quick[/cyan]                                                (Quick 10, 15, 20 qubits benchmark)")
+        console.print("  [cyan]quacomp --quick --gpu[/cyan]                                          (Quick benchmark with GPU acceleration)")
         console.print("  [cyan]quacomp --full[/cyan]                                                 (Incremental stress test)")
         console.print("  [cyan]quacomp --compare <file1.json> <file2.json>[/cyan]                     (Compare two benchmark results)")
         console.print("  [cyan]quacomp --compare results/report.json --target apple_m3[/cyan]         (Compare with reference profile)")
@@ -426,30 +447,31 @@ def main():
     console.print(BANNER)
     
     results = []
+    effective_device = "gpu" if args.gpu else args.device
     
     if args.quick or args.full or args.custom:
         print_system_info()
         
         if args.quick:
-            console.print(f"[bold yellow]Executing Quick Benchmark Suite (Qubits: 10, 15, 20) [Method: {args.method.upper()}, Noise: {args.noise_level.upper()}, Runs: {args.runs}]...[/bold yellow]\n")
+            console.print(f"[bold yellow]Executing Quick Benchmark Suite (Qubits: 10, 15, 20) [Method: {args.method.upper()}, Device: {effective_device.upper()}, Noise: {args.noise_level.upper()}, Runs: {args.runs}]...[/bold yellow]\n")
             qubits_list = [10, 15, 20]
             
             for q in qubits_list:
-                with Status(f"Running simulation for {q} qubits ({args.runs} runs)...", console=console) as status:
-                    res = run_single_simulation(q, "qft", 0, args.method, args.bond_dim, args.noise_level, args.runs)
+                with Status(f"Running simulation for {q} qubits on {effective_device.upper()} ({args.runs} runs)...", console=console) as status:
+                    res = run_single_simulation(q, "qft", 0, args.method, args.bond_dim, effective_device, args.noise_level, args.runs)
                     res["workload_label"] = "QFT"
                     results.append(res)
                     if not res["success"]:
-                        console.print(f"[bold red]Skipping remaining runs due to limit/warning at {q} qubits:[/bold red] {res['error']}")
+                        console.print(f"[bold red]Skipping remaining runs due to error/limit at {q} qubits:[/bold red] {res['error']}")
                         break
                         
         elif args.full:
-            console.print(f"[bold yellow]Executing Full Incremental Stress Test (starting from 10 qubits) [Method: {args.method.upper()}, Noise: {args.noise_level.upper()}, Runs: {args.runs}]...[/bold yellow]\n")
+            console.print(f"[bold yellow]Executing Full Incremental Stress Test (starting from 10 qubits) [Method: {args.method.upper()}, Device: {effective_device.upper()}, Noise: {args.noise_level.upper()}, Runs: {args.runs}]...[/bold yellow]\n")
             q = 10
             max_limit = 35 if args.method == 'mps' else 100
             while q <= max_limit:
-                with Status(f"Running simulation for {q} qubits ({args.runs} runs)...", console=console) as status:
-                    res = run_single_simulation(q, "qft", 0, args.method, args.bond_dim, args.noise_level, args.runs)
+                with Status(f"Running simulation for {q} qubits on {effective_device.upper()} ({args.runs} runs)...", console=console) as status:
+                    res = run_single_simulation(q, "qft", 0, args.method, args.bond_dim, effective_device, args.noise_level, args.runs)
                     res["workload_label"] = "QFT"
                     results.append(res)
                     if not res["success"]:
@@ -458,9 +480,9 @@ def main():
                     q += 1
                     
         elif args.custom:
-            console.print(f"[bold yellow]Executing Custom Simulation (Qubits: {args.qubits}, Workload: {args.type.upper()}, Method: {args.method.upper()}, Noise: {args.noise_level.upper()}, Runs: {args.runs})...[/bold yellow]\n")
-            with Status(f"Running simulation for {args.qubits} qubits ({args.runs} runs)...", console=console) as status:
-                res = run_single_simulation(args.qubits, args.type, args.depth, args.method, args.bond_dim, args.noise_level, args.runs)
+            console.print(f"[bold yellow]Executing Custom Simulation (Qubits: {args.qubits}, Workload: {args.type.upper()}, Method: {args.method.upper()}, Device: {effective_device.upper()}, Noise: {args.noise_level.upper()}, Runs: {args.runs})...[/bold yellow]\n")
+            with Status(f"Running simulation for {args.qubits} qubits on {effective_device.upper()} ({args.runs} runs)...", console=console) as status:
+                res = run_single_simulation(args.qubits, args.type, args.depth, args.method, args.bond_dim, effective_device, args.noise_level, args.runs)
                 res["workload_label"] = args.type.upper()
                 if args.type == "deep":
                     res["workload_label"] += f" (d={args.depth})"

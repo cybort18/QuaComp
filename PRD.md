@@ -1,7 +1,7 @@
 # Product Requirement Document (PRD)
 # Project Name: QuaComp (Quantum Computer Simulation Benchmark)
 
-**Version:** 1.6.0  
+**Version:** 1.5.0  
 **Status:** Approved / Completed  
 **Target Environment:** Cross-platform (Windows, macOS, Linux)  
 **Primary Tech Stack:** Python 3.10+, Qiskit / Aer, psutil, Rich, Matplotlib, Seaborn, Setuptools, Pytest, GitHub Actions  
@@ -13,7 +13,7 @@
 ### 1.1 Overview
 `QuaComp` is an open-source library and CLI-based benchmarking tool designed to profile local hardware performance (PC / Laptop / Workstation) when simulating quantum computers. 
 
-By leveraging state-vector simulation of dimension $2^n$, `QuaComp` measures memory allocation (RAM), CPU usage, and execution latency of quantum gate operations across different qubit sizes and circuit depths. In addition to the state-vector method, QuaComp supports Matrix Product State (MPS) simulations to efficiently handle large-scale quantum circuits (30 to 100+ qubits for low-to-moderate entanglement workloads) by compressing the state-space tensor representation on memory-constrained systems. Furthermore, QuaComp supports Noisy Intermediate-Scale Quantum (NISQ) simulation benchmarking using synthetic parameterized noise channels (Thermal Relaxation $T_1/T_2$ & Depolarizing Error) to evaluate CPU computational overhead and quantum state fidelity loss compared to ideal circuit execution. QuaComp also features an automated Visualization Engine (`--chart`) that generates high-resolution telemetry plots for latency, memory safety thresholds, MPS savings, and NISQ noise fidelity impacts. Version 1.6.0 introduces the **Relative Benchmark Comparison Engine (`--compare`)** for side-by-side hardware differencing against historical runs and reference profiles.
+By leveraging state-vector simulation of dimension $2^n$, `QuaComp` measures memory allocation (RAM), CPU usage, and execution latency of quantum gate operations across different qubit sizes and circuit depths. In addition to the state-vector method, QuaComp supports Matrix Product State (MPS) simulations to efficiently handle large-scale quantum circuits (30 to 100+ qubits for low-to-moderate entanglement workloads) by compressing the state-space tensor representation on memory-constrained systems. Furthermore, QuaComp supports Noisy Intermediate-Scale Quantum (NISQ) simulation benchmarking using synthetic parameterized noise channels (Thermal Relaxation $T_1/T_2$ & Depolarizing Error) to evaluate CPU computational overhead and quantum state fidelity loss compared to ideal circuit execution. QuaComp also features an automated Visualization Engine (`--chart`) that generates high-resolution telemetry plots for latency, memory safety thresholds, MPS savings, and NISQ noise fidelity impacts. Version 1.5.0 introduces the **Relative Benchmark Comparison Engine (`--compare`)** and **GPU Acceleration Support (`--device gpu` / `--gpu`)** for high-performance quantum simulation benchmarking.
 
 ### 1.2 Core Value Proposition
 - **Pre-flight Safety:** Prevents system crashes and Out-Of-Memory (OOM) errors by calculating theoretical $2^n$ RAM requirements before running simulation runs.
@@ -142,4 +142,22 @@ $$\text{QuaComp Composite Score} = (C \times 10) + T = (2^{n_{\text{max}}} \time
     - Renders color-coded Rich comparison tables and an academic summary verdict in the terminal.
     - Automatically exports `results/comparison.json` and `results/comparison_report.md`.
     - Generates grouped bar chart plots (`qubit_latency_comparison.png` and `throughput_comparison.png`) when `--chart` is provided.
+
+### FR-12: GPU Acceleration Support (`--device gpu` / `--gpu`)
+- **Description:** The system must support hardware-accelerated quantum simulation using GPU compute devices (e.g., NVIDIA CUDA, Apple GPU, AMD) via Qiskit Aer GPU backends.
+- **Specifications & Behavior:**
+  - **Hardware Discovery & Telemetry:**
+    - Detects GPU device presence and brand/model across Windows (CIM/WMI), Linux (`lspci` / `nvidia-smi`), and macOS (`system_profiler`).
+    - Queries Qiskit Aer supported devices via `AerSimulator().available_devices()`.
+    - Measures total and available GPU VRAM in GB.
+  - **Memory Safety Pre-flight Check:**
+    - Evaluates theoretical statevector VRAM allocation ($2^n \times 16$ bytes) against available GPU VRAM.
+    - Emits warnings if statevector allocation exceeds 70% of VRAM, and halts if exceeding 85%.
+  - **Execution & Fallback:**
+    - Configures `AerSimulator(method=method, device='GPU', ...)` when `--device gpu` or `--gpu` is specified.
+    - Provides graceful diagnostic feedback on CPU-only environments without throwing unhandled exceptions.
+  - **CLI Integration:**
+    - `--device [cpu|gpu]` (default: `cpu`).
+    - `--gpu`: Shorthand flag for `--device gpu`.
+
 

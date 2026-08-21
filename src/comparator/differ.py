@@ -166,10 +166,15 @@ def compare_benchmarks(
             # Speedup: Base / Target (e.g., 2.0s / 0.5s = 4.0x speedup)
             speedup = (lat_base / lat_target) if lat_target > 0 else 1.0
             
+            device_base = str(rb.get("device", "CPU")).upper()
+            device_target = str(rt.get("device", "CPU")).upper()
+            
             matched_qubit_diffs.append({
                 "qubits": q,
                 "method": method,
                 "workload_label": rb.get("workload_label", "QFT"),
+                "device_base": device_base,
+                "device_target": device_target,
                 "gates": rb.get("gates", 0),
                 "latency_base": lat_base,
                 "latency_target": lat_target,

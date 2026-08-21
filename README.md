@@ -13,7 +13,7 @@
 
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![CI](https://github.com/cybort18/QuaComp/actions/workflows/ci.yml/badge.svg)](https://github.com/cybort18/QuaComp/actions)
-[![Tests Status](https://img.shields.io/badge/tests-31%20passed-green.svg)](#running-tests)
+[![Tests Status](https://img.shields.io/badge/tests-47%20passed-green.svg)](#running-tests)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 ---
@@ -35,7 +35,7 @@
 
 ## Overview
 
-**QuaComp** is an open-source tool and benchmarking suite developed to profile local machine performance during quantum circuit simulation. Supporting Statevector, Matrix Product State (MPS), and Noisy Intermediate-Scale Quantum (NISQ) noise engines, QuaComp evaluates execution latencies, CPU/memory performance, state fidelity loss, and calculates consistent metrics defined by QuaComp for comparative profiling across local environments.
+**QuaComp** is an open-source tool and benchmarking suite developed to profile local machine performance during quantum circuit simulation. Supporting Statevector, Matrix Product State (MPS), GPU hardware acceleration, and Noisy Intermediate-Scale Quantum (NISQ) noise engines, QuaComp evaluates execution latencies, CPU/memory performance, state fidelity loss, and calculates consistent metrics defined by QuaComp for comparative profiling across local environments.
 
 ### Benchmark Telemetry Showcase
 
@@ -49,20 +49,21 @@ When executed with the `--chart` flag, QuaComp generates high-DPI visualization 
 
 ## Key Features
 
-### Pre-flight Memory Safety (Phase 1)
+### Pre-flight Memory & VRAM Safety (Phase 1 & Phase 8)
 - Computes estimated memory requirements prior to statevector simulation runs using:
   $$\text{RAM Bytes} = 2^n \times 16 \text{ bytes (for complex128 representation)}$$
-- Integrates with `psutil` to dynamically inspect physical system memory.
-- Blocks and warns simulations exceeding 85% of available RAM to prevent OS crashes and Out-Of-Memory (OOM) situations.
+- Integrates with `psutil` and GPU telemetry to dynamically inspect physical system memory and GPU VRAM.
+- Blocks and warns simulations exceeding 85% of available RAM or GPU VRAM to prevent OS crashes and Out-Of-Memory (OOM) situations.
 
 ### Quantum Workload Generators (Phase 1)
 - **Shallow Workloads**: Initial state allocations using Hadamard gates coupled with 1D entanglement (CNOT chains).
 - **Deep Workloads**: Intensive random rotation matrices ($R_x, R_y, R_z$) and multi-layered entanglement chains designed to stress memory bandwidth.
 - **Quantum Fourier Transform (QFT)**: Standard implementation representing realistic quantum algorithms.
 
-### Multi-Engine Simulator Core (Phase 1 & Phase 4)
+### Multi-Engine Simulator Core (Phase 1, Phase 4 & Phase 8)
 - **Statevector Simulation Engine**: Exact statevector simulation method (`AerSimulator(method='statevector')`).
 - **Matrix Product State (MPS) Engine**: Tensor network simulation engine (`AerSimulator(method='matrix_product_state')`) enabling high-qubit simulation ($30\text{--}100+$ qubits) specifically for circuits with low-to-moderate entanglement using custom bond dimensions (`--bond-dim`, default 64).
+- **GPU Acceleration Engine**: Hardware-accelerated quantum simulation using GPU compute devices (`--device gpu` / `--gpu`) with automatic VRAM safety validation and graceful fallback.
 - **RAM Efficiency Profiling**: Calculates exact memory savings achieved by MPS compared to theoretical statevector memory footprint ($2^n \times 16$ bytes).
 
 ### NISQ Noise & Fidelity Profiler (Phase 5)
@@ -90,7 +91,7 @@ When executed with the `--chart` flag, QuaComp generates high-DPI visualization 
   - `noise_fidelity_impact.png`: Bar plot comparing NISQ noise profiles vs Quantum State Fidelity (%) & CPU Overhead (%).
 - **Markdown Report Embedding**: Automatically links and embeds generated chart graphics into `results/report.md`.
 
-### Relative Benchmark Comparison Engine (v1.6.0)
+### Relative Benchmark Comparison Engine (v1.5.0)
 - **Side-by-Side Differencing**: Compares two benchmark JSON runs (or live benchmark against a target reference baseline) using `quacomp --compare`.
 - **Metrics Evaluated**:
   - **Composite Score Ratio & Delta**: Relative speed and capacity gain percentage.
@@ -115,7 +116,7 @@ QuaComp/
 ├── cli/
 │   ├── __init__.py
 │   ├── __main__.py
-│   └── main.py             # Rich terminal GUI CLI entry point (supports --method, --bond-dim, --noise-level, --runs, --chart, --compare)
+│   └── main.py             # Rich terminal GUI CLI entry point (supports --method, --device, --gpu, --compare, --chart)
 ├── src/
 │   ├── comparator/
 │   │   ├── __init__.py
@@ -126,11 +127,12 @@ QuaComp/
 │   │   ├── circuits.py     # Circuit generators (Shallow, Deep, QFT)
 │   │   ├── mps.py          # MPS configuration & RAM savings profiler
 │   │   ├── noise.py        # NISQ noise presets & state fidelity calculator
-│   │   └── simulator.py    # Aer Simulator wrapper (Multi-run statistics, Statevector, MPS, Noise support)
+│   │   └── simulator.py    # Aer Simulator wrapper (CPU/GPU, Statevector, MPS, Noise, Multi-run)
 │   ├── profiler/
 │   │   ├── __init__.py
-│   │   ├── memory.py       # Pre-flight memory estimator & safety check
-│   │   └── telemetry.py    # CPU and hardware profiler
+│   │   ├── memory.py       # Pre-flight RAM & VRAM memory safety estimator
+│   │   ├── gpu.py          # GPU hardware discovery, VRAM telemetry, & Aer device probe
+│   │   └── telemetry.py    # CPU, OS, and platform hardware telemetry profiler
 │   ├── scorer/
 │   │   ├── __init__.py
 │   │   └── calculator.py   # Benchmark scorer engine & breakdown calculator
@@ -142,16 +144,17 @@ QuaComp/
 ├── tests/
 │   ├── test_engine.py      # Circuit and simulation execution tests
 │   ├── test_memory.py      # Memory limits and checker tests
+│   ├── test_gpu.py         # GPU hardware detection, VRAM safety, and device execution tests
 │   ├── test_scorer.py      # Score calculations & breakdown tests
 │   ├── test_reporter.py    # Exporters files creation tests
 │   ├── test_mps.py         # Matrix Product State (MPS) logic tests
 │   ├── test_noise.py       # NISQ noise models and state fidelity tests
 │   ├── test_charts.py      # Visualization engine and PNG plot tests
 │   └── test_comparator.py  # Relative benchmark comparison & differencing tests
-├── pyproject.toml          # PEP 517/621 Modern build configuration & executable entry point
+├── pyproject.toml          # PEP 517/621 Modern build configuration & executable entry point (v1.5.0)
 ├── setup.py                # Setuptools compatibility shim
 ├── requirements.txt        # Package dependencies (psutil, qiskit, rich, matplotlib, seaborn)
-├── PRD.md                  # Product Requirement Document (v1.6.0)
+├── PRD.md                  # Product Requirement Document (v1.5.0)
 ├── README.md               # Project documentation
 └── .gitignore              # Git ignore file
 ```
@@ -185,23 +188,14 @@ After installing, the `quacomp` command is available directly in your terminal:
 # Run a quick benchmark on qubits 10, 15, and 20 with chart generation enabled
 quacomp --quick --chart
 
+# Run a quick benchmark with GPU acceleration
+quacomp --quick --gpu
+
 # Run a full incremental stress test starting from 10 qubits with 5 statistical runs
 quacomp --full --runs 5 --chart
 
 # Compare two benchmark JSON files side-by-side with comparison charts
 quacomp --compare results/samples/example_ryzen3_5300u.json results/samples/example_apple_m3.json --chart
-
-# Compare latest benchmark report against a reference profile (apple_m3, ryzen3_5300u, ryzen7_5800h)
-quacomp --compare results/report.json --target apple_m3
-
-# Run live quick benchmark and compare immediately against Apple M3 reference baseline
-quacomp --quick --compare --target apple_m3 --runs 3
-
-# Run a custom 30 qubits simulation using Matrix Product State (MPS) engine for low-entanglement circuits
-quacomp --custom --qubits 30 --method mps --bond-dim 64 --chart
-
-# Run a custom simulation under a synthetic representative noise profile (medium)
-quacomp --custom --qubits 10 --noise-level medium --runs 5 --chart
 ```
 
 > *Tip: You can also execute via `python -m cli` if preferred.*
@@ -215,6 +209,8 @@ quacomp --custom --qubits 10 --noise-level medium --runs 5 --chart
 | `--custom` | N/A | Custom simulation mode with specific qubit parameters. |
 | `--compare` | `[FILE1] [FILE2]` | Side-by-side relative benchmark comparison between two JSON runs or against a live run. |
 | `--target` | `apple_m3`, `ryzen3_5300u`, `ryzen7_5800h`, or `PATH` | Target reference baseline alias or file path for `--compare`. |
+| `--device` | `cpu`, `gpu` (default: `cpu`) | Compute device backend for quantum simulation. |
+| `--gpu` | N/A | Shorthand flag to enable GPU acceleration (`--device gpu`). |
 | `--qubits` | `INT` (default: `10`) | Qubit count for custom simulation run. |
 | `--type` | `shallow`, `deep`, `qft` (default: `qft`) | Quantum circuit workload type. |
 | `--depth` | `INT` (default: `10`) | Depth parameter for deep random circuit workloads. |
@@ -229,7 +225,7 @@ quacomp --custom --qubits 10 --noise-level medium --runs 5 --chart
 
 ## Running Tests
 
-Automated unit tests are written with `pytest`. They cover statevector simulation, multi-run latency statistics, MPS tensor compression, NISQ synthetic noise models, relative benchmark comparison, scoring breakdown, report exporters, and chart generation.
+Automated unit tests are written with `pytest`. They cover statevector simulation, GPU detection & safety, multi-run latency statistics, MPS tensor compression, NISQ synthetic noise models, relative benchmark comparison, scoring breakdown, report exporters, and chart generation.
 
 To execute the full test suite, run:
 ```bash
@@ -241,18 +237,20 @@ Output:
 ============================= test session starts =============================
 platform win32 -- Python 3.13.3, pytest-9.1.1, pluggy-1.6.0
 rootdir: C:\Users\HP\Documents\PROJECT\QuaComp
-collected 38 items
+configfile: pyproject.toml
+collected 47 items
 
-tests\test_charts.py ...                                                 [  7%]
-tests\test_comparator.py .......                                         [ 26%]
-tests\test_engine.py .....                                               [ 39%]
-tests\test_memory.py .....                                               [ 52%]
-tests\test_mps.py ....                                                   [ 63%]
-tests\test_noise.py ....                                                 [ 73%]
-tests\test_reporter.py ....                                              [ 84%]
+tests\test_charts.py ...                                                 [  6%]
+tests\test_comparator.py .......                                         [ 21%]
+tests\test_engine.py .....                                               [ 31%]
+tests\test_gpu.py .........                                              [ 51%]
+tests\test_memory.py .....                                               [ 61%]
+tests\test_mps.py ....                                                   [ 70%]
+tests\test_noise.py ....                                                 [ 78%]
+tests\test_reporter.py ....                                              [ 87%]
 tests\test_scorer.py ......                                              [100%]
 
-============================= 38 passed in 6.42s ==============================
+============================= 47 passed in 14.69s =============================
 ```
 
 ---
@@ -262,7 +260,7 @@ tests\test_scorer.py ......                                              [100%]
 The repository includes committed sample benchmark telemetry files in `results/samples/` representing performance across reference hardware platforms:
 
 | Reference CPU | Total RAM | Max Qubits (SV) | QuaComp Composite Score | Performance Category | Sample JSON File |
-| :--- | :---: | :---: | :---: | :--- | :--- |
+| :--- | :---: | :---: | :---: | :---: | :--- | :--- |
 | **AMD Ryzen 3 5300U** | 11.33 GB | 20 Qubits | `10,486,120.47` | High-Performance | [`example_ryzen3_5300u.json`](results/samples/example_ryzen3_5300u.json) |
 | **AMD Ryzen 7 5800H** | 16.00 GB | 24 Qubits | `167,772,480.00` | Extreme Workstation | [`example_ryzen7_5800h.json`](results/samples/example_ryzen7_5800h.json) |
 | **Apple M3 (8-core)** | 24.00 GB | 25 Qubits | `335,544,830.00` | Extreme Workstation | [`example_apple_m3.json`](results/samples/example_apple_m3.json) |
@@ -317,6 +315,10 @@ QuaComp Composite Score maps directly into performance tiers, reflecting the com
 - [x] **Phase 7: Packaging & CI/CD Pipeline (v1.5.0)**
   - PEP 517/621 `pyproject.toml` build system & `quacomp` executable CLI entry point.
   - Multi-platform GitHub Actions CI matrix running automated `pytest` across Ubuntu, Windows, and macOS on Python 3.10–3.13.
+- [x] **Phase 8: Relative Comparison & GPU Acceleration Support (v1.5.0)**
+  - Relative benchmark differencing engine (`--compare`) with side-by-side tables and verdict.
+  - GPU hardware detection, VRAM safety evaluation, and simulation backend (`--device gpu` / `--gpu`).
+  - Comparison charts (`qubit_latency_comparison.png` and `throughput_comparison.png`).
 
 ---
 

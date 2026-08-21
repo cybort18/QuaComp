@@ -24,26 +24,22 @@ def estimate_qubit_ram(num_qubits: int) -> int:
     
     return (2 ** num_qubits) * 16
 
-def check_memory_safety(num_qubits: int, method: str = 'statevector') -> tuple[bool, str]:
+def check_memory_safety(num_qubits: int, method: str = 'statevector', device: str = 'CPU') -> tuple[bool, str]:
     """
-    Check if simulation is safe to run based on the available physical memory.
+    Check if simulation is safe to run based on available physical memory (system RAM or GPU VRAM).
     
-    Safety Threshold (for statevector):
-        If estimated memory exceeds 85% of available RAM, returns False with a warning.
-        If estimated memory exceeds 100% of available RAM, returns False with a critical error.
-        Otherwise, returns True.
-        
-    Safety Threshold (for mps):
-        Theoretical Statevector check is bypassed since MPS uses tensor networks.
-        Verifies only that system has a baseline available physical RAM of at least 200 MB.
-        
     Args:
         num_qubits (int): Number of qubits.
         method (str): Simulation method ('statevector' or 'mps'/'matrix_product_state').
+        device (str): Compute device ('CPU' or 'GPU').
         
     Returns:
         tuple[bool, str]: (is_safe, message)
     """
+    if device and str(device).upper() == 'GPU':
+        from src.profiler.gpu import check_gpu_vram_safety
+        return check_gpu_vram_safety(num_qubits, method)
+        
     vm = psutil.virtual_memory()
     available_ram = vm.available
     available_gb = available_ram / (1024 ** 3)

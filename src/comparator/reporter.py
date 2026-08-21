@@ -40,6 +40,8 @@ def render_comparison_terminal(diff_data: Dict[str, Any], console: Console) -> N
     spec_table.add_column(f"Target: {lbl_target}", style="white")
     
     spec_table.add_row("Processor / CPU", meta_base.get("cpu_name", "N/A"), meta_target.get("cpu_name", "N/A"))
+    if meta_base.get("gpu_name") or meta_target.get("gpu_name"):
+        spec_table.add_row("GPU Hardware", meta_base.get("gpu_name", "None detected"), meta_target.get("gpu_name", "None detected"))
     spec_table.add_row("Physical RAM", f"{meta_base.get('total_ram_gb', 0.0):.1f} GB", f"{meta_target.get('total_ram_gb', 0.0):.1f} GB")
     spec_table.add_row("Operating System", f"{meta_base.get('os_name', 'N/A')} ({meta_base.get('os_release', '')})", f"{meta_target.get('os_name', 'N/A')} ({meta_target.get('os_release', '')})")
     spec_table.add_row("Python Environment", meta_base.get("python_version", "N/A"), meta_target.get("python_version", "N/A"))
@@ -240,6 +242,7 @@ def export_comparison_to_markdown(
         "| Specification | Base System | Target System |",
         "| :--- | :--- | :--- |",
         f"| **CPU / Processor** | {meta_base.get('cpu_name', 'N/A')} | {meta_target.get('cpu_name', 'N/A')} |",
+        f"| **GPU Hardware** | {meta_base.get('gpu_name', 'None detected')} | {meta_target.get('gpu_name', 'None detected')} |",
         f"| **Physical RAM** | {meta_base.get('total_ram_gb', 0.0):.1f} GB | {meta_target.get('total_ram_gb', 0.0):.1f} GB |",
         f"| **Operating System** | {meta_base.get('os_name', 'N/A')} ({meta_base.get('os_release', '')}) | {meta_target.get('os_name', 'N/A')} ({meta_target.get('os_release', '')}) |",
         f"| **Python Version** | {meta_base.get('python_version', 'N/A')} | {meta_target.get('python_version', 'N/A')} |",
