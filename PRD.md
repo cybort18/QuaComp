@@ -160,4 +160,21 @@ $$\text{QuaComp Composite Score} = (C \times 10) + T = (2^{n_{\text{max}}} \time
     - `--device [cpu|gpu]` (default: `cpu`).
     - `--gpu`: Shorthand flag for `--device gpu`.
 
+### FR-13: Entanglement Entropy Metrics & Simulation Hardness Profiler (`--entropy`)
+- **Description:** The system must calculate bipartite Von Neumann entanglement entropy, Schmidt decomposition rank, and simulation complexity classifications to evaluate circuit entanglement scaling and classical simulation limits.
+- **Specifications & Behavior:**
+  - **Bipartite Entanglement Entropy Formulation:**
+    - Partitions quantum state $|\psi\rangle$ of $n$ qubits into subsystem $A$ ($n_A = \lfloor n/2 \rfloor$) and subsystem $B$ ($n_B = n - n_A$).
+    - Computes Schmidt singular values $\lambda_i$ via Singular Value Decomposition (SVD) on reshaped statevector array ($2^{n_A} \times 2^{n_B}$).
+    - Calculates Von Neumann Entanglement Entropy: $S(\rho_A) = -\sum_i \lambda_i^2 \log_2(\lambda_i^2)$.
+    - Evaluates Schmidt Rank ($r = \text{count}(\lambda_i > 10^{-14})$) and Participation Ratio ($K = 1 / \sum \lambda_i^4$).
+  - **Simulation Complexity Classification:**
+    - Categorizes entanglement regime: `Product State` ($S=0$), `Low (Area-law)` ($S \le 1.0$), `Moderate Entanglement` ($1.0 < S < 0.7 \times S_{max}$), `Volume-law (Maximal)` ($S \ge 0.7 \times S_{max}$).
+    - Evaluates Matrix Product State (MPS) simulation hardness based on bond dimension scaling ($\chi \sim 2^{S(\rho_A)}$): `Trivial (chi=1)`, `Efficient (Low chi <= 16)`, `Challenging (Moderate chi <= 64)`, `Exponentially Hard (Volume-law)`.
+  - **Reporting & Visualizations:**
+    - Adds `--entropy` CLI flag to evaluate and display Entanglement & Hardness Rich tables in terminal output.
+    - Generates `results/entanglement_entropy.png` plotting entropy scaling curves against theoretical maximum bipartite bounds ($S_{max}$).
+    - Records entanglement metrics in exported JSON and Markdown reports.
+
+
 

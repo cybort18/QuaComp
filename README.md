@@ -13,7 +13,7 @@
 
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![CI](https://github.com/cybort18/QuaComp/actions/workflows/ci.yml/badge.svg)](https://github.com/cybort18/QuaComp/actions)
-[![Tests Status](https://img.shields.io/badge/tests-47%20passed-green.svg)](#running-tests)
+[![Tests Status](https://img.shields.io/badge/tests-55%20passed-green.svg)](#running-tests)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 ---
@@ -75,6 +75,12 @@ When executed with the `--chart` flag, QuaComp generates high-DPI visualization 
   - `high`: Heavy noise profile for extreme stress testing ($T_1=20\,\mu\text{s}, T_2=30\,\mu\text{s}$, gate error $2.0\%$).
 - **Fidelity & Overhead Metrics**: Computes classical Hellinger Quantum State Fidelity (%) and CPU Computation Overhead ratio (%).
 
+### Entanglement Entropy & Simulation Hardness Profiler (FR-13)
+- **Bipartite Von Neumann Entanglement Entropy**: Quantifies quantum entanglement by partitioning the system into subsystem $A$ ($n_A = \lfloor n/2 \rfloor$) and subsystem $B$ ($n - n_A$), computing singular values $\lambda_i$ via Singular Value Decomposition (SVD):
+  $$S(\rho_A) = -\text{Tr}(\rho_A \log_2 \rho_A) = -\sum_{i} \lambda_i^2 \log_2(\lambda_i^2)$$
+- **Schmidt Rank & Participation Ratio**: Evaluates the effective number of entangled states ($K = 1 / \sum \lambda_i^4$) and non-zero Schmidt coefficients.
+- **Simulation Hardness Classification**: Quantifies the computational limit for tensor network / MPS simulation ($\chi \sim 2^{S(\rho_A)}$), automatically categorizing states into `Product State`, `Low (Area-law)`, `Moderate Entanglement`, and `Volume-law (Maximal)`.
+
 ### Multi-Run Benchmarking & Telemetry (Methodology Revision)
 - **Statistical Repeatability**: Executes `--runs INT` (default 3) benchmark iterations per circuit to compute Mean ($\mu$), Median, and Standard Deviation ($\sigma$) of execution latency, mitigating CPU governor and background task noise.
 - **Composite Heuristic Scoring**: Computes the **QuaComp Composite Score** (a project-specific heuristic score) that separates state-space capacity from gate throughput:
@@ -84,11 +90,12 @@ When executed with the `--chart` flag, QuaComp generates high-DPI visualization 
   *Note: QuaComp Score is a project-specific composite heuristic prioritizing state-space capacity scaling.*
 
 ### Visualization Engine & Chart Generator (Phase 6)
-- **Automated Plot Generation**: Passing `--chart` automatically generates 4 high-DPI (300 DPI) PNG charts in `results/`:
+- **Automated Plot Generation**: Passing `--chart` automatically generates high-DPI (300 DPI) PNG charts in `results/`:
   - `qubit_vs_latency.png`: Line plot of Qubits vs Mean Latency (seconds) with standard deviation error shading.
   - `qubit_vs_ram.png`: Line plot of Qubits vs Memory Allocation (GB) with physical RAM safety threshold line.
   - `method_comparison.png`: Comparison bar chart between Statevector vs MPS latency & memory.
   - `noise_fidelity_impact.png`: Bar plot comparing NISQ noise profiles vs Quantum State Fidelity (%) & CPU Overhead (%).
+  - `entanglement_entropy.png`: Scaling curve of Entanglement Entropy ($S_{vN}$) vs theoretical maximum bipartite bound ($S_{max}$).
 - **Markdown Report Embedding**: Automatically links and embeds generated chart graphics into `results/report.md`.
 
 ### Relative Benchmark Comparison Engine (v1.5.0)
@@ -116,7 +123,7 @@ QuaComp/
 ├── cli/
 │   ├── __init__.py
 │   ├── __main__.py
-│   └── main.py             # Rich terminal GUI CLI entry point (supports --method, --device, --gpu, --compare, --chart)
+│   └── main.py             # Rich terminal GUI CLI entry point (supports --method, --device, --gpu, --compare, --entropy, --chart)
 ├── src/
 │   ├── comparator/
 │   │   ├── __init__.py
@@ -125,6 +132,7 @@ QuaComp/
 │   ├── engine/
 │   │   ├── __init__.py
 │   │   ├── circuits.py     # Circuit generators (Shallow, Deep, QFT)
+│   │   ├── entanglement.py # Von Neumann Entanglement Entropy & Simulation Hardness profiler
 │   │   ├── mps.py          # MPS configuration & RAM savings profiler
 │   │   ├── noise.py        # NISQ noise presets & state fidelity calculator
 │   │   └── simulator.py    # Aer Simulator wrapper (CPU/GPU, Statevector, MPS, Noise, Multi-run)
@@ -143,6 +151,7 @@ QuaComp/
 │       └── md_exporter.py  # Save reports & chart links in Markdown format
 ├── tests/
 │   ├── test_engine.py      # Circuit and simulation execution tests
+│   ├── test_entanglement.py# Entanglement entropy and Schmidt decomposition tests
 │   ├── test_memory.py      # Memory limits and checker tests
 │   ├── test_gpu.py         # GPU hardware detection, VRAM safety, and device execution tests
 │   ├── test_scorer.py      # Score calculations & breakdown tests
@@ -211,6 +220,7 @@ quacomp --compare results/samples/example_ryzen3_5300u.json results/samples/exam
 | `--target` | `apple_m3`, `ryzen3_5300u`, `ryzen7_5800h`, or `PATH` | Target reference baseline alias or file path for `--compare`. |
 | `--device` | `cpu`, `gpu` (default: `cpu`) | Compute device backend for quantum simulation. |
 | `--gpu` | N/A | Shorthand flag to enable GPU acceleration (`--device gpu`). |
+| `--entropy` | N/A | Calculates bipartite Von Neumann entanglement entropy and simulation hardness. |
 | `--qubits` | `INT` (default: `10`) | Qubit count for custom simulation run. |
 | `--type` | `shallow`, `deep`, `qft` (default: `qft`) | Quantum circuit workload type. |
 | `--depth` | `INT` (default: `10`) | Depth parameter for deep random circuit workloads. |
@@ -225,7 +235,7 @@ quacomp --compare results/samples/example_ryzen3_5300u.json results/samples/exam
 
 ## Running Tests
 
-Automated unit tests are written with `pytest`. They cover statevector simulation, GPU detection & safety, multi-run latency statistics, MPS tensor compression, NISQ synthetic noise models, relative benchmark comparison, scoring breakdown, report exporters, and chart generation.
+Automated unit tests are written with `pytest`. They cover statevector simulation, GPU detection & safety, multi-run latency statistics, MPS tensor compression, NISQ synthetic noise models, bipartite entanglement entropy, relative benchmark comparison, scoring breakdown, report exporters, and chart generation.
 
 To execute the full test suite, run:
 ```bash
@@ -238,19 +248,20 @@ Output:
 platform win32 -- Python 3.13.3, pytest-9.1.1, pluggy-1.6.0
 rootdir: C:\Users\HP\Documents\PROJECT\QuaComp
 configfile: pyproject.toml
-collected 47 items
+collected 55 items
 
-tests\test_charts.py ...                                                 [  6%]
-tests\test_comparator.py .......                                         [ 21%]
-tests\test_engine.py .....                                               [ 31%]
-tests\test_gpu.py .........                                              [ 51%]
-tests\test_memory.py .....                                               [ 61%]
-tests\test_mps.py ....                                                   [ 70%]
-tests\test_noise.py ....                                                 [ 78%]
-tests\test_reporter.py ....                                              [ 87%]
+tests\test_charts.py ....                                                [  7%]
+tests\test_comparator.py .......                                         [ 20%]
+tests\test_engine.py .....                                               [ 29%]
+tests\test_entanglement.py .......                                       [ 41%]
+tests\test_gpu.py .........                                              [ 58%]
+tests\test_memory.py .....                                               [ 67%]
+tests\test_mps.py ....                                                   [ 74%]
+tests\test_noise.py ....                                                 [ 81%]
+tests\test_reporter.py ....                                              [ 89%]
 tests\test_scorer.py ......                                              [100%]
 
-============================= 47 passed in 14.69s =============================
+============================= 55 passed in 8.68s ==============================
 ```
 
 ---
@@ -310,7 +321,7 @@ QuaComp Composite Score maps directly into performance tiers, reflecting the com
   - Softened academic terminology across documentation.
 - [x] **Phase 6: Visualization Engine & Chart Generator**
   - Matplotlib & Seaborn integration (`--chart`).
-  - Automated generation of `qubit_vs_latency.png`, `qubit_vs_ram.png`, `method_comparison.png`, `noise_fidelity_impact.png`.
+  - Automated generation of `qubit_vs_latency.png`, `qubit_vs_ram.png`, `method_comparison.png`, `noise_fidelity_impact.png`, `entanglement_entropy.png`.
   - Chart embedding in Markdown reports (`results/report.md`).
 - [x] **Phase 7: Packaging & CI/CD Pipeline (v1.5.0)**
   - PEP 517/621 `pyproject.toml` build system & `quacomp` executable CLI entry point.
@@ -319,6 +330,10 @@ QuaComp Composite Score maps directly into performance tiers, reflecting the com
   - Relative benchmark differencing engine (`--compare`) with side-by-side tables and verdict.
   - GPU hardware detection, VRAM safety evaluation, and simulation backend (`--device gpu` / `--gpu`).
   - Comparison charts (`qubit_latency_comparison.png` and `throughput_comparison.png`).
+- [x] **Phase 9: Entanglement Entropy & Hardness Profiler (v1.5.0)**
+  - Bipartite Von Neumann Entanglement Entropy calculation via Singular Value Decomposition (SVD).
+  - Schmidt rank, participation ratio, and MPS simulation hardness classification.
+  - Entanglement scaling chart generator (`entanglement_entropy.png`) and `--entropy` CLI flag.
 
 ---
 

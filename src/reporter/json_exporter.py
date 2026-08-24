@@ -73,6 +73,7 @@ def export_to_json(results: List[Dict[str, Any]], system_metadata: Dict[str, Any
         best_noise_level = best_run.get("noise_level", "none")
         best_fidelity = best_run.get("fidelity", 100.0)
         best_overhead_ratio = best_run.get("overhead_ratio", 0.0)
+        best_entanglement_metrics = best_run.get("entanglement_metrics", {})
         
     data = {
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
@@ -91,6 +92,7 @@ def export_to_json(results: List[Dict[str, Any]], system_metadata: Dict[str, Any
         "quantum_state_fidelity": best_fidelity,
         "cpu_overhead_ratio": best_overhead_ratio,
         "ram_savings": best_ram_savings,
+        "entanglement_metrics": best_entanglement_metrics,
         "statistical_summary": {
             "runs_count": best_runs_count,
             "mean_latency_seconds": best_mean_latency,

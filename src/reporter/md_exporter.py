@@ -75,6 +75,7 @@ def export_to_markdown(
         best_noise_level = best_run.get("noise_level", "none")
         best_fidelity = best_run.get("fidelity", 100.0)
         best_overhead_ratio = best_run.get("overhead_ratio", 0.0)
+        best_entanglement = best_run.get("entanglement_metrics", {})
         
     current_time = time.strftime("%Y-%m-%d %H:%M:%S")
     
@@ -101,6 +102,10 @@ def export_to_markdown(
     if ram_savings:
         savings_gb = ram_savings["savings_bytes"] / (1024 ** 3)
         md_content.append(f"> **MPS RAM Efficiency:** `{ram_savings['savings_percent']:.2f}%` savings (Saved ~`{savings_gb:.4f} GB` vs Statevector)")
+        
+    if best_entanglement and "von_neumann_entropy" in best_entanglement:
+        md_content.append(f"> **Entanglement Entropy:** `S_vN = {best_entanglement['von_neumann_entropy']:.4f} bits` (Schmidt Rank: `{best_entanglement['schmidt_rank']}` | `{best_entanglement['entanglement_regime']}`)")
+        md_content.append(f"> **MPS Simulation Complexity:** `{best_entanglement['mps_hardness']}`")
         
     md_content.append(f"> **Statistical Repeatability:** `{best_runs_count} runs` (Mean Latency: `{best_mean_latency:.4f}s`, Std Dev: `{best_std_latency:.4f}s`)")
     md_content.append(f"> **Max Qubits Simulated:** `{best_qubits} qubits` (using `{gates:,}` gates)")
@@ -143,6 +148,19 @@ def export_to_markdown(
         
     md_content.append("\n---\n")
     
+    # Entanglement Entropy Table (if available)
+    entropy_runs = [r for r in results if r.get("success", False) and r.get("entanglement_metrics") and "von_neumann_entropy" in r["entanglement_metrics"]]
+    if entropy_runs:
+        md_content.append("## Entanglement Entropy & Simulation Hardness Analysis")
+        md_content.append("| Qubits | Workload | Von Neumann Entropy (S_vN) | Max Bound | Schmidt Rank | Entanglement Regime | MPS Complexity Tier |")
+        md_content.append("| :---: | :---: | :---: | :---: | :---: | :---: | :---: |")
+        for er in entropy_runs:
+            em = er["entanglement_metrics"]
+            md_content.append(
+                f"| {er['qubits']} | {er.get('workload_label', 'Circuit')} | {em['von_neumann_entropy']:.4f} bits | {em['max_possible_entropy']:.1f} | {em['schmidt_rank']} | {em['entanglement_regime']} | {em['mps_hardness']} |"
+            )
+        md_content.append("\n---\n")
+        
     # Telemetry Visualizations (if charts exist)
     chart_files = []
     if generated_charts:
@@ -154,7 +172,8 @@ def export_to_markdown(
             "qubit_vs_latency.png",
             "qubit_vs_ram.png",
             "method_comparison.png",
-            "noise_fidelity_impact.png"
+            "noise_fidelity_impact.png",
+            "entanglement_entropy.png"
         ]
         for cfile in potential_charts:
             cpath = os.path.join(target_dir, cfile)

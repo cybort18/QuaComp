@@ -183,6 +183,10 @@ def generate_benchmark_charts(
         plt.close(fig)
         generated_chart_paths.append(path_noise)
         
+    # 5. Entanglement Entropy Scaling Chart (if entanglement metrics present)
+    entropy_paths = generate_entanglement_charts(results, output_dir)
+    generated_chart_paths.extend(entropy_paths)
+    
     return generated_chart_paths
 
 def generate_comparison_charts(
@@ -285,4 +289,63 @@ def generate_comparison_charts(
         chart_paths.append(path_tput)
         
     return chart_paths
+
+def generate_entanglement_charts(
+    results: List[Dict[str, Any]], 
+    output_dir: str = 'results'
+) -> List[str]:
+    """
+    Generate clean, high-resolution Entanglement Entropy scaling plots.
+    
+    Produces:
+        results/entanglement_entropy.png: Qubit Count vs Von Neumann Entropy with Area-Law/Volume-Law boundaries.
+        
+    Args:
+        results: Benchmark run results.
+        output_dir: Output directory path.
+        
+    Returns:
+        List of generated PNG chart file paths.
+    """
+    if not isinstance(results, list):
+        raise TypeError("results must be a list of dictionaries.")
+        
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir, exist_ok=True)
+        
+    entropy_runs = [r for r in results if r.get("success", False) and r.get("entanglement_metrics")]
+    if not entropy_runs:
+        return []
+        
+    fig, ax = plt.subplots(figsize=(8, 5))
+    
+    qubits = [r["qubits"] for r in entropy_runs]
+    s_vns = [r["entanglement_metrics"]["von_neumann_entropy"] for r in entropy_runs]
+    s_maxs = [r["entanglement_metrics"]["max_possible_entropy"] for r in entropy_runs]
+    labels = [r.get("workload_label", "Circuit") for r in entropy_runs]
+    
+    # Plot Von Neumann Entropy curve
+    ax.plot(qubits, s_vns, marker='o', linewidth=2.5, color='#e74c3c', label='Von Neumann Entropy $S(\\rho_A)$')
+    # Plot Theoretical Maximum Bipartite Entropy (Volume-law boundary)
+    ax.plot(qubits, s_maxs, linestyle='--', color='#7f8c8d', alpha=0.7, label='Max Bipartite Bound ($n_A = \\lfloor n/2 \\rfloor$)')
+    
+    # Annotate points with Schmidt rank and regime
+    for q, s, r in zip(qubits, s_vns, entropy_runs):
+        em = r["entanglement_metrics"]
+        rank = em.get("schmidt_rank", 1)
+        ax.annotate(f"S={s:.2f}\n(rank {rank})", xy=(q, s), xytext=(0, 8),
+                    textcoords="offset points", ha='center', fontsize=8, fontweight='bold', color='#c0392b')
+                    
+    ax.set_xlabel("Number of Qubits ($n$)")
+    ax.set_ylabel("Entanglement Entropy (bits)")
+    ax.set_title("Bipartite Entanglement Entropy Scaling & Simulation Complexity")
+    ax.legend(loc="upper left")
+    
+    plt.tight_layout()
+    path_entropy = os.path.abspath(os.path.join(output_dir, "entanglement_entropy.png"))
+    plt.savefig(path_entropy)
+    plt.close(fig)
+    
+    return [path_entropy]
+
 

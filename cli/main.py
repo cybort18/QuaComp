@@ -21,6 +21,7 @@ from src.reporter.md_exporter import export_to_markdown
 from src.reporter.charts import generate_benchmark_charts, generate_comparison_charts
 from src.engine.mps import calculate_mps_ram_savings
 from src.engine.noise import get_noise_model, calculate_state_fidelity, calculate_overhead_ratio
+from src.engine.entanglement import calculate_bipartite_entropy
 from src.comparator.differ import load_benchmark_json, compare_benchmarks, resolve_target_profile
 from src.comparator.reporter import (
     render_comparison_terminal,
@@ -71,7 +72,8 @@ def run_single_simulation(
     bond_dimension: int = 64,
     device: str = 'cpu',
     noise_level: str = 'none',
-    runs: int = 3
+    runs: int = 3,
+    compute_entropy: bool = False
 ) -> Dict[str, Any]:
     """Execute a single simulation step with safety checks, multi-run noise options, device selection, and telemetry collection."""
     # 1. Memory safety check (supports RAM and GPU VRAM check)
@@ -96,7 +98,8 @@ def run_single_simulation(
             "cpu_usage": 0.0,
             "ram_status": "UNSAFE",
             "error": msg,
-            "ram_savings": {}
+            "ram_savings": {},
+            "entanglement_metrics": {}
         }
         
     # 2. Circuit generation
@@ -154,6 +157,14 @@ def run_single_simulation(
         if ideal_sim_result["success"]:
             fidelity = calculate_state_fidelity(ideal_sim_result["counts"], sim_result["counts"])
             overhead_ratio = calculate_overhead_ratio(ideal_sim_result["latency"], sim_result["mean_latency"])
+            
+    # 8. Calculate Entanglement Entropy Metrics if requested
+    entanglement_metrics = {}
+    if compute_entropy and sim_result["success"] and circuit is not None:
+        try:
+            entanglement_metrics = calculate_bipartite_entropy(circuit)
+        except Exception as ee:
+            entanglement_metrics = {"error": str(ee)}
     
     mean_lat = sim_result["mean_latency"]
     med_lat = sim_result["median_latency"]
@@ -179,7 +190,8 @@ def run_single_simulation(
         "cpu_usage": cpu_usage,
         "ram_status": "SAFE" if is_safe else "UNSAFE",
         "error": sim_result.get("error"),
-        "ram_savings": ram_savings
+        "ram_savings": ram_savings,
+        "entanglement_metrics": entanglement_metrics
     }
 
 def display_results(results: List[Dict[str, Any]]) -> None:
@@ -246,6 +258,32 @@ def display_results(results: List[Dict[str, Any]]) -> None:
         console.print(Panel("[bold red]No simulations completed successfully. Unable to calculate benchmark score.[/bold red]", title="Score Summary", border_style="red", expand=False))
         return
 
+    # Render Entanglement & Simulation Hardness Table if metrics are present
+    entropy_runs = [r for r in successful_runs if r.get("entanglement_metrics") and "von_neumann_entropy" in r["entanglement_metrics"]]
+    if entropy_runs:
+        ent_table = Table(title="Entanglement Entropy & Simulation Hardness Analysis", show_header=True, header_style="bold magenta", expand=False)
+        ent_table.add_column("Qubits", style="cyan", justify="center")
+        ent_table.add_column("Workload", style="white", justify="center")
+        ent_table.add_column("Von Neumann Entropy (SvN)", style="bold yellow", justify="right")
+        ent_table.add_column("Max Bipartite Bound", style="dim white", justify="right")
+        ent_table.add_column("Schmidt Rank", style="cyan", justify="center")
+        ent_table.add_column("Entanglement Regime", style="green", justify="center")
+        ent_table.add_column("MPS Complexity Tier", style="bold magenta", justify="center")
+        
+        for er in entropy_runs:
+            em = er["entanglement_metrics"]
+            ent_table.add_row(
+                str(er["qubits"]),
+                er["workload_label"],
+                f"{em['von_neumann_entropy']:.4f} bits",
+                f"{em['max_possible_entropy']:.1f}",
+                str(em["schmidt_rank"]),
+                em["entanglement_regime"],
+                em["mps_hardness"]
+            )
+        console.print(ent_table)
+        console.print()
+
     # Calculate final composite heuristic score using best successful run
     best_run = max(successful_runs, key=lambda x: x["qubits"])
     max_qubits = best_run["qubits"]
@@ -289,6 +327,11 @@ def display_results(results: List[Dict[str, Any]]) -> None:
     if ram_savings:
         savings_gb = ram_savings["savings_bytes"] / (1024 ** 3)
         panel_content.append(f"MPS RAM Efficiency: {ram_savings['savings_percent']:.2f}% savings (Saved ~{savings_gb:.4f} GB vs Statevector)\n", style="bold green")
+        
+    if best_run.get("entanglement_metrics") and "von_neumann_entropy" in best_run["entanglement_metrics"]:
+        em = best_run["entanglement_metrics"]
+        panel_content.append(f"Entanglement Entropy: S_vN = {em['von_neumann_entropy']:.4f} bits (Schmidt Rank: {em['schmidt_rank']} | {em['entanglement_regime']})\n", style="bold red")
+        panel_content.append(f"MPS Simulation Complexity: {em['mps_hardness']}\n", style="bold magenta")
         
     runs_cnt = best_run.get("runs_count", 1)
     std_lat = best_run.get("std_latency", 0.0)
@@ -416,6 +459,7 @@ def main():
     param_group.add_argument("--bond-dim", type=int, default=64, help="Max bond dimension for MPS simulation (default 64).")
     param_group.add_argument("--device", choices=["cpu", "gpu"], default="cpu", help="Simulation compute device backend (default cpu).")
     param_group.add_argument("--gpu", action="store_true", help="Shorthand flag to enable GPU acceleration (--device gpu).")
+    param_group.add_argument("--entropy", action="store_true", help="Calculate bipartite Von Neumann entanglement entropy and simulation complexity.")
     param_group.add_argument("--noise-level", choices=["none", "low", "medium", "high"], default="none", help="NISQ noise model preset level (default none).")
     param_group.add_argument("--runs", type=int, default=3, help="Number of benchmark iterations per circuit (default 3).")
     
@@ -437,6 +481,7 @@ def main():
         console.print("[bold yellow]Please select a benchmark mode or comparison mode:[/bold yellow]")
         console.print("  [cyan]quacomp --quick[/cyan]                                                (Quick 10, 15, 20 qubits benchmark)")
         console.print("  [cyan]quacomp --quick --gpu[/cyan]                                          (Quick benchmark with GPU acceleration)")
+        console.print("  [cyan]quacomp --quick --entropy[/cyan]                                      (Quick benchmark with Entanglement Entropy)")
         console.print("  [cyan]quacomp --full[/cyan]                                                 (Incremental stress test)")
         console.print("  [cyan]quacomp --compare <file1.json> <file2.json>[/cyan]                     (Compare two benchmark results)")
         console.print("  [cyan]quacomp --compare results/report.json --target apple_m3[/cyan]         (Compare with reference profile)")
@@ -453,12 +498,12 @@ def main():
         print_system_info()
         
         if args.quick:
-            console.print(f"[bold yellow]Executing Quick Benchmark Suite (Qubits: 10, 15, 20) [Method: {args.method.upper()}, Device: {effective_device.upper()}, Noise: {args.noise_level.upper()}, Runs: {args.runs}]...[/bold yellow]\n")
+            console.print(f"[bold yellow]Executing Quick Benchmark Suite (Qubits: 10, 15, 20) [Method: {args.method.upper()}, Device: {effective_device.upper()}, Noise: {args.noise_level.upper()}, Entropy: {args.entropy}, Runs: {args.runs}]...[/bold yellow]\n")
             qubits_list = [10, 15, 20]
             
             for q in qubits_list:
                 with Status(f"Running simulation for {q} qubits on {effective_device.upper()} ({args.runs} runs)...", console=console) as status:
-                    res = run_single_simulation(q, "qft", 0, args.method, args.bond_dim, effective_device, args.noise_level, args.runs)
+                    res = run_single_simulation(q, "qft", 0, args.method, args.bond_dim, effective_device, args.noise_level, args.runs, compute_entropy=args.entropy)
                     res["workload_label"] = "QFT"
                     results.append(res)
                     if not res["success"]:
@@ -466,12 +511,12 @@ def main():
                         break
                         
         elif args.full:
-            console.print(f"[bold yellow]Executing Full Incremental Stress Test (starting from 10 qubits) [Method: {args.method.upper()}, Device: {effective_device.upper()}, Noise: {args.noise_level.upper()}, Runs: {args.runs}]...[/bold yellow]\n")
+            console.print(f"[bold yellow]Executing Full Incremental Stress Test (starting from 10 qubits) [Method: {args.method.upper()}, Device: {effective_device.upper()}, Noise: {args.noise_level.upper()}, Entropy: {args.entropy}, Runs: {args.runs}]...[/bold yellow]\n")
             q = 10
             max_limit = 35 if args.method == 'mps' else 100
             while q <= max_limit:
                 with Status(f"Running simulation for {q} qubits on {effective_device.upper()} ({args.runs} runs)...", console=console) as status:
-                    res = run_single_simulation(q, "qft", 0, args.method, args.bond_dim, effective_device, args.noise_level, args.runs)
+                    res = run_single_simulation(q, "qft", 0, args.method, args.bond_dim, effective_device, args.noise_level, args.runs, compute_entropy=args.entropy)
                     res["workload_label"] = "QFT"
                     results.append(res)
                     if not res["success"]:
@@ -480,9 +525,9 @@ def main():
                     q += 1
                     
         elif args.custom:
-            console.print(f"[bold yellow]Executing Custom Simulation (Qubits: {args.qubits}, Workload: {args.type.upper()}, Method: {args.method.upper()}, Device: {effective_device.upper()}, Noise: {args.noise_level.upper()}, Runs: {args.runs})...[/bold yellow]\n")
+            console.print(f"[bold yellow]Executing Custom Simulation (Qubits: {args.qubits}, Workload: {args.type.upper()}, Method: {args.method.upper()}, Device: {effective_device.upper()}, Noise: {args.noise_level.upper()}, Entropy: {args.entropy}, Runs: {args.runs})...[/bold yellow]\n")
             with Status(f"Running simulation for {args.qubits} qubits on {effective_device.upper()} ({args.runs} runs)...", console=console) as status:
-                res = run_single_simulation(args.qubits, args.type, args.depth, args.method, args.bond_dim, effective_device, args.noise_level, args.runs)
+                res = run_single_simulation(args.qubits, args.type, args.depth, args.method, args.bond_dim, effective_device, args.noise_level, args.runs, compute_entropy=args.entropy)
                 res["workload_label"] = args.type.upper()
                 if args.type == "deep":
                     res["workload_label"] += f" (d={args.depth})"
