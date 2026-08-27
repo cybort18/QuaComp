@@ -1,4 +1,4 @@
-# QuaComp
+<div align="center">
 
 ```text
    ____             ____                     
@@ -9,12 +9,17 @@
                                        |_|    
 ```
 
-> **Quantum Computer Simulation Benchmark** — A modular Python utility designed to measure, stress-test, and profile quantum computer simulation limits on local hardware environments.
+# QuaComp
+**Quantum Computer Simulation Benchmark**
+
+*A modular Python utility designed to measure, stress-test, and profile quantum computer simulation limits on local hardware environments.*
 
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![CI](https://github.com/cybort18/QuaComp/actions/workflows/ci.yml/badge.svg)](https://github.com/cybort18/QuaComp/actions)
 [![Tests Status](https://img.shields.io/badge/tests-55%20passed-green.svg)](#running-tests)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
+</div>
 
 ---
 
