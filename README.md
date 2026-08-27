@@ -1,25 +1,22 @@
 <div align="center">
-
-```text
+<pre align="center">
    ____             ____                     
   / __ \__  ______ / ___| ___  _ __ ___  _ __ 
  / / / / / / / __ `/ /   / _ \| '_ ` _ \| '_ \
 / /_/ / /_/ / /_/ / |__| (_) | | | | | | |_) |
 \___\_\__,_/\__,_/\____/\___/|_| |_| |_| .__/ 
                                        |_|    
-```
+</pre>
+</div>
 
 # QuaComp
-**Quantum Computer Simulation Benchmark**
 
-*A modular Python utility designed to measure, stress-test, and profile quantum computer simulation limits on local hardware environments.*
+> **Quantum Computer Simulation Benchmark** — A modular Python utility designed to measure, stress-test, and profile quantum computer simulation limits on local hardware environments.
 
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![CI](https://github.com/cybort18/QuaComp/actions/workflows/ci.yml/badge.svg)](https://github.com/cybort18/QuaComp/actions)
 [![Tests Status](https://img.shields.io/badge/tests-55%20passed-green.svg)](#running-tests)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-
-</div>
 
 ---
 
