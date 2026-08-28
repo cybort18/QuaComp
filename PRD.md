@@ -143,29 +143,32 @@ $$\text{QuaComp Composite Score} = (C \times 10) + T = (2^{n_{\text{max}}} \time
     - Automatically exports `results/comparison.json` and `results/comparison_report.md`.
     - Generates grouped bar chart plots (`qubit_latency_comparison.png` and `throughput_comparison.png`) when `--chart` is provided.
 
-### FR-12: GPU Acceleration Support (`--device gpu` / `--gpu`)
-- **Description:** The system must support hardware-accelerated quantum simulation using GPU compute devices (e.g., NVIDIA CUDA, Apple GPU, AMD) via Qiskit Aer GPU backends.
+### FR-12: GPU, Multi-GPU & Distributed Parallel Acceleration (`--device`, `--gpu`, `--multi-gpu`, `--workers`)
+- **Description:** The system must support hardware-accelerated quantum simulation using single-GPU, multi-GPU compute devices (NVIDIA CUDA, Apple GPU, AMD) via Qiskit Aer, and multi-process distributed worker parallelism.
 - **Specifications & Behavior:**
   - **Hardware Discovery & Telemetry:**
-    - Detects GPU device presence and brand/model across Windows (CIM/WMI), Linux (`lspci` / `nvidia-smi`), and macOS (`system_profiler`).
+    - Detects GPU device presence, count, and individual/aggregate VRAM across Windows (CIM/WMI), Linux (`lspci` / `nvidia-smi`), and macOS (`system_profiler`).
     - Queries Qiskit Aer supported devices via `AerSimulator().available_devices()`.
-    - Measures total and available GPU VRAM in GB.
+    - Measures aggregate multi-GPU VRAM in GB.
   - **Memory Safety Pre-flight Check:**
-    - Evaluates theoretical statevector VRAM allocation ($2^n \times 16$ bytes) against available GPU VRAM.
+    - Evaluates theoretical statevector VRAM allocation ($2^n \times 16$ bytes) against available GPU / Multi-GPU VRAM.
     - Emits warnings if statevector allocation exceeds 70% of VRAM, and halts if exceeding 85%.
-  - **Execution & Fallback:**
-    - Configures `AerSimulator(method=method, device='GPU', ...)` when `--device gpu` or `--gpu` is specified.
+  - **Execution & Parallel Workers:**
+    - Configures `AerSimulator(method=method, device='GPU', batched_shots_gpu=True, blocking_enable=True)` when `--multi-gpu` or `--device multi_gpu` is specified.
+    - Supports distributed multi-worker parallel batch simulation (`--workers <INT>`).
     - Provides graceful diagnostic feedback on CPU-only environments without throwing unhandled exceptions.
   - **CLI Integration:**
-    - `--device [cpu|gpu]` (default: `cpu`).
+    - `--device [cpu|gpu|multi_gpu]` (default: `cpu`).
     - `--gpu`: Shorthand flag for `--device gpu`.
+    - `--multi-gpu`: Enables multi-GPU distributed simulation.
+    - `--workers`: Configures parallel distributed worker threads/processes.
 
 ### FR-13: Entanglement Entropy Metrics & Simulation Hardness Profiler (`--entropy`)
-- **Description:** The system must calculate bipartite Von Neumann entanglement entropy, Schmidt decomposition rank, and simulation complexity classifications to evaluate circuit entanglement scaling and classical simulation limits.
+- **Description:** The system must calculate bipartite Von Neumann entanglement entropy, Schmidt decomposition rank, and simulation complexity classifications across both small and large qubit regimes (up to 100+ qubits) without memory exhaustion.
 - **Specifications & Behavior:**
-  - **Bipartite Entanglement Entropy Formulation:**
-    - Partitions quantum state $|\psi\rangle$ of $n$ qubits into subsystem $A$ ($n_A = \lfloor n/2 \rfloor$) and subsystem $B$ ($n_B = n - n_A$).
-    - Computes Schmidt singular values $\lambda_i$ via Singular Value Decomposition (SVD) on reshaped statevector array ($2^{n_A} \times 2^{n_B}$).
+  - **Dual Entanglement Engines (Statevector SVD & Native MPS Tensor SVD):**
+    - For small circuits ($n \le 22$): Computes exact SVD on reshaped statevector array ($2^{n_A} \times 2^{n_B}$).
+    - For large circuits ($n > 22$ or MPS method): Employs a native 1D Matrix Product State (MPS) tensor network contractor that performs local unitary contractions, canonical QR sweeps, and central bond SVD ($O(\chi^3)$ complexity, $< 2\text{ MB}$ RAM overhead for 100 qubits).
     - Calculates Von Neumann Entanglement Entropy: $S(\rho_A) = -\sum_i \lambda_i^2 \log_2(\lambda_i^2)$.
     - Evaluates Schmidt Rank ($r = \text{count}(\lambda_i > 10^{-14})$) and Participation Ratio ($K = 1 / \sum \lambda_i^4$).
   - **Simulation Complexity Classification:**

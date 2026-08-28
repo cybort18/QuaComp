@@ -23,13 +23,16 @@ def test_is_gpu_available_boolean():
     assert isinstance(res, bool)
 
 def test_get_gpu_metadata_schema():
-    """Verify get_gpu_metadata returns all mandatory telemetry keys."""
+    """Verify get_gpu_metadata returns all mandatory telemetry keys including multi-GPU keys."""
     meta = get_gpu_metadata()
     assert isinstance(meta, dict)
     assert "gpu_name" in meta
     assert "has_gpu" in meta
+    assert "gpu_count" in meta
+    assert "gpus" in meta
     assert "aer_gpu_supported" in meta
     assert "total_vram_gb" in meta
+    assert "multi_gpu_supported" in meta
     assert "backend_devices" in meta
     assert isinstance(meta["total_vram_gb"], (int, float))
 
@@ -43,7 +46,7 @@ def test_check_gpu_vram_safety_types():
 def test_check_gpu_vram_safety_mocked_gpu():
     """Verify GPU VRAM safety evaluation under simulated GPU environments."""
     with patch("src.profiler.gpu.is_gpu_available", return_value=True):
-        with patch("src.profiler.gpu.get_gpu_metadata", return_value={"total_vram_gb": 8.0}):
+        with patch("src.profiler.gpu.get_gpu_metadata", return_value={"total_vram_gb": 8.0, "gpu_count": 1}):
             # Small circuit (10 qubits = negligible VRAM)
             safe, msg = check_gpu_vram_safety(10, method="statevector")
             assert safe is True
@@ -59,6 +62,14 @@ def test_check_gpu_vram_safety_mocked_gpu():
             assert safe_big is False
             assert "CRITICAL" in msg_big
 
+def test_check_gpu_vram_safety_multi_gpu():
+    """Verify multi-GPU VRAM aggregation allows higher memory allocations."""
+    with patch("src.profiler.gpu.is_gpu_available", return_value=True):
+        with patch("src.profiler.gpu.get_gpu_metadata", return_value={"total_vram_gb": 32.0, "gpu_count": 4, "multi_gpu_supported": True}):
+            # 30 qubits requires 16 GB VRAM. Safe on 32GB multi-GPU pool.
+            safe, msg = check_gpu_vram_safety(30, method="statevector", multi_gpu=True)
+            assert safe is True
+
 def test_check_memory_safety_with_gpu_device():
     """Verify check_memory_safety delegates to GPU safety when device is GPU."""
     with patch("src.profiler.gpu.is_gpu_available", return_value=False):
@@ -67,14 +78,16 @@ def test_check_memory_safety_with_gpu_device():
         assert "Qiskit Aer does not have GPU/CUDA backend support" in msg
 
 def test_run_simulation_device_cpu():
-    """Verify run_simulation executes correctly on CPU."""
+    """Verify run_simulation executes correctly on CPU with workers."""
     qc = QuantumCircuit(2)
     qc.h(0)
     qc.cx(0, 1)
-    res = run_simulation(qc, device="CPU", runs=1)
+    res = run_simulation(qc, device="CPU", runs=2, workers=2)
     assert res["success"] is True
     assert res["device"] == "CPU"
+    assert res["workers"] == 2
     assert res["latency"] > 0
+    assert len(res["latencies"]) == 2
 
 def test_run_simulation_device_gpu_fallback_on_cpu_env():
     """Verify run_simulation gracefully reports lack of GPU backend on CPU-only environment."""
@@ -89,6 +102,18 @@ def test_run_simulation_device_gpu_fallback_on_cpu_env():
             assert "GPU" in res["error"]
         else:
             assert res["device"] == "GPU"
+
+def test_run_simulation_multi_gpu_fallback_on_cpu_env():
+    """Verify run_simulation multi_gpu device option handles environments gracefully."""
+    qc = QuantumCircuit(2)
+    qc.h(0)
+    qc.cx(0, 1)
+    
+    with patch("src.profiler.gpu.get_available_aer_devices", return_value=["CPU"]):
+        res = run_simulation(qc, device="MULTI_GPU", runs=1)
+        if not is_gpu_available():
+            assert res["success"] is False
+            assert res["device"] == "MULTI_GPU"
 
 def test_run_simulation_invalid_device():
     """Verify run_simulation raises ValueError on unsupported device name."""

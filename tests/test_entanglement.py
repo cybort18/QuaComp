@@ -1,6 +1,6 @@
 import pytest
 from qiskit import QuantumCircuit
-from src.engine.entanglement import calculate_bipartite_entropy
+from src.engine.entanglement import calculate_bipartite_entropy, _calculate_mps_bipartite_entropy
 from src.engine.circuits import generate_shallow_circuit, generate_deep_circuit, generate_qft_circuit
 
 def test_calculate_bipartite_entropy_product_state():
@@ -36,15 +36,15 @@ def test_calculate_bipartite_entropy_ghz_state():
     """Verify 4-qubit GHZ state has S_vN = 1.0 regardless of equal bipartition size."""
     qc = QuantumCircuit(4)
     qc.h(0)
-    qc.cx(0, 1)
-    qc.cx(0, 2)
-    qc.cx(0, 3)
-    
-    metrics = calculate_bipartite_entropy(qc, subsystem_size=2)
+    for i in range(3):
+        qc.cx(i, i + 1)
+        
+    metrics = calculate_bipartite_entropy(qc)
     assert metrics["num_qubits"] == 4
     assert metrics["subsystem_a_size"] == 2
     assert pytest.approx(metrics["von_neumann_entropy"], 0.001) == 1.0
     assert metrics["schmidt_rank"] == 2
+    assert metrics["entanglement_regime"] == "Low (Area-law)"
 
 def test_calculate_bipartite_entropy_deep_circuit():
     """Verify Deep random circuits generate high volume-law entanglement entropy."""
@@ -74,6 +74,45 @@ def test_calculate_bipartite_entropy_single_qubit():
     assert metrics["von_neumann_entropy"] == 0.0
     assert metrics["schmidt_rank"] == 1
 
+def test_calculate_mps_bipartite_entropy_bell_and_ghz():
+    """Verify native MPS tensor contraction produces identical results on Bell and GHZ states."""
+    bell_qc = QuantumCircuit(2)
+    bell_qc.h(0)
+    bell_qc.cx(0, 1)
+    bell_mps = _calculate_mps_bipartite_entropy(bell_qc, subsystem_size=1)
+    assert pytest.approx(bell_mps["von_neumann_entropy"], 0.001) == 1.0
+    assert bell_mps["schmidt_rank"] == 2
+    assert bell_mps["computation_engine"] == "MPS Native Tensor Bond SVD"
+    
+    ghz_qc = QuantumCircuit(4)
+    ghz_qc.h(0)
+    for i in range(3):
+        ghz_qc.cx(i, i + 1)
+    ghz_mps = _calculate_mps_bipartite_entropy(ghz_qc, subsystem_size=2)
+    assert pytest.approx(ghz_mps["von_neumann_entropy"], 0.001) == 1.0
+    assert ghz_mps["schmidt_rank"] == 2
+
+def test_calculate_mps_bipartite_entropy_large_scale_qubits():
+    """Verify 35-qubit and 50-qubit circuits calculate entanglement without RAM exhaustion."""
+    qc_35 = generate_qft_circuit(35)
+    metrics = calculate_bipartite_entropy(qc_35, method="mps")
+    assert metrics["num_qubits"] == 35
+    assert metrics["subsystem_a_size"] == 17
+    assert metrics["computation_engine"] == "MPS Native Tensor Bond SVD"
+    assert metrics["schmidt_rank"] >= 1
+
+def test_calculate_bipartite_entropy_auto_mode_scaling():
+    """Verify auto mode selects Statevector SVD for small systems and MPS for large systems."""
+    small_qc = QuantumCircuit(4)
+    small_qc.h(0)
+    small_metrics = calculate_bipartite_entropy(small_qc, method="auto")
+    assert small_metrics["computation_engine"] == "Exact Statevector SVD"
+    
+    large_qc = QuantumCircuit(30)
+    large_qc.h(0)
+    large_metrics = calculate_bipartite_entropy(large_qc, method="auto")
+    assert large_metrics["computation_engine"] == "MPS Native Tensor Bond SVD"
+
 def test_calculate_bipartite_entropy_input_validation():
     """Verify invalid argument types and subsystem sizes raise appropriate exceptions."""
     with pytest.raises(TypeError):
@@ -88,12 +127,3 @@ def test_calculate_bipartite_entropy_input_validation():
         
     with pytest.raises(ValueError):
         calculate_bipartite_entropy(qc, subsystem_size=0)
-
-def test_calculate_bipartite_entropy_large_qubit_guard(monkeypatch):
-    """Verify circuits with excessive qubits (e.g. 35) trigger memory guard gracefully."""
-    qc = QuantumCircuit(35)
-    metrics = calculate_bipartite_entropy(qc)
-    assert metrics["num_qubits"] == 35
-    assert metrics["von_neumann_entropy"] == 0.0
-    assert "Memory Limit" in metrics["entanglement_regime"]
-

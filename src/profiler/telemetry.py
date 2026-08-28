@@ -60,8 +60,12 @@ def get_system_metadata() -> Dict[str, Any]:
     
     return {
         "cpu_name": get_cpu_name(),
+        "cpu_count_physical": psutil.cpu_count(logical=False) or 1,
+        "cpu_count_logical": psutil.cpu_count(logical=True) or 1,
         "gpu_name": gpu_meta.get("gpu_name", "None detected"),
         "has_gpu": gpu_meta.get("has_gpu", False),
+        "gpu_count": gpu_meta.get("gpu_count", 1 if gpu_meta.get("has_gpu") else 0),
+        "multi_gpu_supported": gpu_meta.get("multi_gpu_supported", False),
         "aer_gpu_supported": gpu_meta.get("aer_gpu_supported", False),
         "total_vram_gb": gpu_meta.get("total_vram_gb", 0.0),
         "total_ram_bytes": vm.total,

@@ -22,10 +22,11 @@ def run_single_simulation(
     device: str = 'cpu',
     noise_level: str = 'none',
     runs: int = 3,
+    workers: int = 1,
     compute_entropy: bool = False
 ) -> Dict[str, Any]:
-    """Execute a single simulation step with safety checks, multi-run noise options, device selection, and telemetry collection."""
-    # 1. Memory safety check (supports RAM and GPU VRAM check)
+    """Execute a single simulation step with safety checks, multi-run noise options, multi-GPU/workers device selection, and telemetry collection."""
+    # 1. Memory safety check (supports RAM, GPU, and Multi-GPU VRAM check)
     is_safe, msg = check_memory_safety(qubits, method, device=device)
     if not is_safe:
         return {
@@ -33,6 +34,7 @@ def run_single_simulation(
             "method": method,
             "bond_dimension": bond_dimension if method in ('mps', 'matrix_product_state') else None,
             "device": device.upper(),
+            "workers": workers,
             "noise_level": noise_level,
             "fidelity": 0.0,
             "overhead_ratio": 0.0,
@@ -65,7 +67,7 @@ def run_single_simulation(
     # 3. CPU measurement start
     get_cpu_utilization()
     
-    # 4. Simulation run with noise, device, and method support (multiple runs)
+    # 4. Simulation run with noise, multi-GPU/device, workers, and method support (multiple runs)
     noise_model = get_noise_model(noise_level)
     sim_result = run_simulation(
         circuit, 
@@ -74,7 +76,8 @@ def run_single_simulation(
         device=device,
         noise_model=noise_model,
         noise_level=noise_level,
-        runs=runs
+        runs=runs,
+        workers=workers
     )
     
     # 5. CPU measurement end
@@ -99,17 +102,23 @@ def run_single_simulation(
             device=device,
             noise_model=None, 
             noise_level="none",
-            runs=1
+            runs=1,
+            workers=workers
         )
         if ideal_sim_result["success"]:
             fidelity = calculate_state_fidelity(ideal_sim_result["counts"], sim_result["counts"])
             overhead_ratio = calculate_overhead_ratio(ideal_sim_result["latency"], sim_result["mean_latency"])
             
-    # 8. Calculate Entanglement Entropy Metrics if requested
+    # 8. Calculate Entanglement Entropy Metrics if requested (Supports Native MPS Tensor for large qubits!)
     entanglement_metrics = {}
     if compute_entropy and sim_result["success"] and circuit is not None:
         try:
-            entanglement_metrics = calculate_bipartite_entropy(circuit)
+            ent_method = "mps" if method in ('mps', 'matrix_product_state') else "auto"
+            entanglement_metrics = calculate_bipartite_entropy(
+                circuit, 
+                method=ent_method, 
+                max_bond_dimension=bond_dimension
+            )
         except Exception as ee:
             entanglement_metrics = {"error": str(ee)}
     
@@ -123,6 +132,7 @@ def run_single_simulation(
         "method": method,
         "bond_dimension": bond_dimension if method in ('mps', 'matrix_product_state') else None,
         "device": device.upper(),
+        "workers": workers,
         "noise_level": noise_level,
         "fidelity": fidelity,
         "overhead_ratio": overhead_ratio,
@@ -148,13 +158,17 @@ def run_quick_benchmark(
 ) -> List[Dict[str, Any]]:
     """Execute Quick Benchmark Suite (Qubits: 10, 15, 20)."""
     c = console or default_console
-    c.print(f"[bold yellow]Executing Quick Benchmark Suite (Qubits: 10, 15, 20) [Method: {args.method.upper()}, Device: {effective_device.upper()}, Noise: {args.noise_level.upper()}, Entropy: {args.entropy}, Runs: {args.runs}]...[/bold yellow]\n")
+    workers = getattr(args, 'workers', 1)
+    c.print(f"[bold yellow]Executing Quick Benchmark Suite (Qubits: 10, 15, 20) [Method: {args.method.upper()}, Device: {effective_device.upper()}, Workers: {workers}, Noise: {args.noise_level.upper()}, Entropy: {args.entropy}, Runs: {args.runs}]...[/bold yellow]\n")
     qubits_list = [10, 15, 20]
     results = []
     
     for q in qubits_list:
-        with Status(f"Running simulation for {q} qubits on {effective_device.upper()} ({args.runs} runs)...", console=c):
-            res = run_single_simulation(q, "qft", 0, args.method, args.bond_dim, effective_device, args.noise_level, args.runs, compute_entropy=args.entropy)
+        with Status(f"Running simulation for {q} qubits on {effective_device.upper()} ({args.runs} runs, {workers} workers)...", console=c):
+            res = run_single_simulation(
+                q, "qft", 0, args.method, args.bond_dim, effective_device, 
+                args.noise_level, args.runs, workers=workers, compute_entropy=args.entropy
+            )
             res["workload_label"] = "QFT"
             results.append(res)
             if not res["success"]:
@@ -169,14 +183,18 @@ def run_full_stress_test(
 ) -> List[Dict[str, Any]]:
     """Execute Full Incremental Stress Test starting from 10 qubits."""
     c = console or default_console
-    c.print(f"[bold yellow]Executing Full Incremental Stress Test (starting from 10 qubits) [Method: {args.method.upper()}, Device: {effective_device.upper()}, Noise: {args.noise_level.upper()}, Entropy: {args.entropy}, Runs: {args.runs}]...[/bold yellow]\n")
+    workers = getattr(args, 'workers', 1)
+    c.print(f"[bold yellow]Executing Full Incremental Stress Test (starting from 10 qubits) [Method: {args.method.upper()}, Device: {effective_device.upper()}, Workers: {workers}, Noise: {args.noise_level.upper()}, Entropy: {args.entropy}, Runs: {args.runs}]...[/bold yellow]\n")
     q = 10
-    max_limit = 35 if args.method == 'mps' else 100
+    max_limit = 50 if args.method == 'mps' else 100
     results = []
     
     while q <= max_limit:
-        with Status(f"Running simulation for {q} qubits on {effective_device.upper()} ({args.runs} runs)...", console=c):
-            res = run_single_simulation(q, "qft", 0, args.method, args.bond_dim, effective_device, args.noise_level, args.runs, compute_entropy=args.entropy)
+        with Status(f"Running simulation for {q} qubits on {effective_device.upper()} ({args.runs} runs, {workers} workers)...", console=c):
+            res = run_single_simulation(
+                q, "qft", 0, args.method, args.bond_dim, effective_device, 
+                args.noise_level, args.runs, workers=workers, compute_entropy=args.entropy
+            )
             res["workload_label"] = "QFT"
             results.append(res)
             if not res["success"]:
@@ -192,11 +210,15 @@ def run_custom_simulation(
 ) -> List[Dict[str, Any]]:
     """Execute Custom Simulation configuration."""
     c = console or default_console
-    c.print(f"[bold yellow]Executing Custom Simulation (Qubits: {args.qubits}, Workload: {args.type.upper()}, Method: {args.method.upper()}, Device: {effective_device.upper()}, Noise: {args.noise_level.upper()}, Entropy: {args.entropy}, Runs: {args.runs})...[/bold yellow]\n")
+    workers = getattr(args, 'workers', 1)
+    c.print(f"[bold yellow]Executing Custom Simulation (Qubits: {args.qubits}, Workload: {args.type.upper()}, Method: {args.method.upper()}, Device: {effective_device.upper()}, Workers: {workers}, Noise: {args.noise_level.upper()}, Entropy: {args.entropy}, Runs: {args.runs})...[/bold yellow]\n")
     results = []
     
-    with Status(f"Running simulation for {args.qubits} qubits on {effective_device.upper()} ({args.runs} runs)...", console=c):
-        res = run_single_simulation(args.qubits, args.type, args.depth, args.method, args.bond_dim, effective_device, args.noise_level, args.runs, compute_entropy=args.entropy)
+    with Status(f"Running simulation for {args.qubits} qubits on {effective_device.upper()} ({args.runs} runs, {workers} workers)...", console=c):
+        res = run_single_simulation(
+            args.qubits, args.type, args.depth, args.method, args.bond_dim, effective_device, 
+            args.noise_level, args.runs, workers=workers, compute_entropy=args.entropy
+        )
         res["workload_label"] = args.type.upper()
         if args.type == "deep":
             res["workload_label"] += f" (d={args.depth})"

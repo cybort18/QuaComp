@@ -1,5 +1,6 @@
 import time
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import numpy as np
 from qiskit import QuantumCircuit, transpile
 from qiskit_aer import AerSimulator
@@ -12,10 +13,12 @@ def run_simulation(
     noise_model: Any = None,
     noise_level: str = 'none',
     shots: int = 1024,
-    runs: int = 3
+    runs: int = 3,
+    workers: int = 1
 ) -> Dict[str, Any]:
     """
-    Execute a Qiskit quantum circuit using AerSimulator across multiple benchmark runs for statistical repeatability.
+    Execute a Qiskit quantum circuit using AerSimulator across multiple benchmark runs for statistical repeatability,
+    with multi-GPU and parallel distributed worker pool support.
     
     Measures execution latency across `runs` iterations and calculates Mean, Median, and Standard Deviation.
     
@@ -23,11 +26,12 @@ def run_simulation(
         circuit (QuantumCircuit): The Qiskit quantum circuit to execute.
         method (str): The simulation method ('statevector' or 'mps'/'matrix_product_state').
         bond_dimension (int): Max bond dimension for MPS.
-        device (str): Compute device ('CPU' or 'GPU').
+        device (str): Compute device ('CPU', 'GPU', 'MULTI_GPU', or 'GPU:ALL').
         noise_model (Optional[NoiseModel]): Optional Qiskit Aer NoiseModel instance.
         noise_level (str): Label of the noise level ('none', 'low', 'medium', 'high').
         shots (int): Number of measurement shots (default 1024).
         runs (int): Number of benchmark iterations (default 3).
+        workers (int): Number of parallel distributed worker processes/threads (default 1).
         
     Returns:
         dict: A dictionary containing execution telemetry and statistical metrics:
@@ -38,7 +42,8 @@ def run_simulation(
             - "median_latency" (float): Sample median latency.
             - "std_latency" (float): Sample standard deviation of latency.
             - "runs_count" (int): Number of successful runs completed.
-            - "device" (str): Device used ('CPU' or 'GPU').
+            - "device" (str): Device used ('CPU', 'GPU', or 'MULTI_GPU').
+            - "workers" (int): Worker pool parallelism level used.
             - "error" (str or None): Error message if failed, None if succeeded.
             - "counts" (dict): Measurement counts dictionary from final run.
             - "metadata" (dict): Simulator execution metadata if succeeded, empty dict otherwise.
@@ -53,15 +58,23 @@ def run_simulation(
     if not isinstance(runs, int) or runs < 1:
         raise ValueError("Number of runs must be an integer >= 1.")
         
+    if not isinstance(workers, int) or workers < 1:
+        raise ValueError("Number of workers must be an integer >= 1.")
+        
     dev_clean = str(device).upper()
-    if dev_clean not in ("CPU", "GPU"):
-        raise ValueError(f"Invalid device '{device}'. Must be 'CPU' or 'GPU'.")
+    is_multi_gpu = dev_clean in ("MULTI_GPU", "GPU:ALL", "MULTI-GPU")
+    is_gpu_req = dev_clean.startswith("GPU") or is_multi_gpu
+    
+    valid_devices = ("CPU", "GPU", "MULTI_GPU", "GPU:ALL", "MULTI-GPU")
+    if dev_clean not in valid_devices:
+        raise ValueError(f"Invalid device '{device}'. Must be one of {valid_devices}.")
         
     try:
         # Check available devices in AerSimulator
         temp_sim = AerSimulator()
         avail_devices = [str(d).upper() for d in temp_sim.available_devices()]
-        if dev_clean == "GPU" and "GPU" not in avail_devices:
+        
+        if is_gpu_req and "GPU" not in avail_devices:
             return {
                 "success": False,
                 "latency": 0.0,
@@ -71,7 +84,8 @@ def run_simulation(
                 "std_latency": 0.0,
                 "runs_count": 0,
                 "counts": {},
-                "device": dev_clean,
+                "device": "MULTI_GPU" if is_multi_gpu else "GPU",
+                "workers": workers,
                 "error": f"GPU device requested, but Qiskit Aer on this system does not have GPU/CUDA backend support enabled. Available devices: {avail_devices}",
                 "metadata": {}
             }
@@ -81,8 +95,15 @@ def run_simulation(
         if len(circ_to_run.cregs) == 0:
             circ_to_run.measure_all()
             
-        # Initialize AerSimulator based on simulation method, device & noise model
-        sim_kwargs: Dict[str, Any] = {"device": dev_clean}
+        # Initialize AerSimulator based on simulation method, device, multi-GPU options & noise model
+        aer_device_target = "GPU" if is_gpu_req else "CPU"
+        sim_kwargs: Dict[str, Any] = {"device": aer_device_target}
+        
+        # Configure multi-device / parallel cluster options
+        if is_multi_gpu:
+            sim_kwargs["batched_shots_gpu"] = True
+            sim_kwargs["blocking_enable"] = True
+            
         if method in ('mps', 'matrix_product_state'):
             sim_kwargs['method'] = 'matrix_product_state'
             sim_kwargs['matrix_product_state_max_bond_dimension'] = bond_dimension
@@ -93,19 +114,32 @@ def run_simulation(
             sim_kwargs['noise_model'] = noise_model
             
         simulator = AerSimulator(**sim_kwargs)
+        transpiled_circuit = transpile(circ_to_run, simulator)
         
         latencies: List[float] = []
         last_counts: Dict[str, int] = {}
         last_result = None
         
-        # Execute multi-run benchmark loop for statistical reproducibility
-        for _ in range(runs):
-            run_start = time.perf_counter()
-            transpiled_circuit = transpile(circ_to_run, simulator)
+        def _execute_single_run(_):
+            t0 = time.perf_counter()
             job = simulator.run(transpiled_circuit, shots=shots)
-            last_result = job.result()
-            run_lat = time.perf_counter() - run_start
-            latencies.append(run_lat)
+            res = job.result()
+            lat = time.perf_counter() - t0
+            return lat, res
+            
+        # Multi-worker parallel execution vs serial execution
+        if workers > 1 and runs > 1:
+            with ThreadPoolExecutor(max_workers=min(workers, runs)) as executor:
+                futures = [executor.submit(_execute_single_run, i) for i in range(runs)]
+                for fut in as_completed(futures):
+                    run_lat, res = fut.result()
+                    latencies.append(run_lat)
+                    last_result = res
+        else:
+            for _ in range(runs):
+                run_lat, res = _execute_single_run(_)
+                latencies.append(run_lat)
+                last_result = res
             
         if last_result is not None:
             last_counts = last_result.get_counts()
@@ -113,6 +147,8 @@ def run_simulation(
         mean_latency = float(np.mean(latencies))
         median_latency = float(np.median(latencies))
         std_latency = float(np.std(latencies, ddof=1)) if len(latencies) > 1 else 0.0
+        
+        device_label = "MULTI_GPU" if is_multi_gpu else aer_device_target
         
         # Extract metadata from result
         metadata = {
@@ -122,7 +158,8 @@ def run_simulation(
             "success": last_result.success if last_result else True,
             "method": method,
             "bond_dimension": bond_dimension if method in ('mps', 'matrix_product_state') else None,
-            "device": dev_clean,
+            "device": device_label,
+            "workers": workers,
             "noise_level": noise_level,
             "runs_count": runs,
             "counts": last_counts
@@ -137,7 +174,8 @@ def run_simulation(
             "std_latency": std_latency,
             "runs_count": len(latencies),
             "counts": last_counts,
-            "device": dev_clean,
+            "device": device_label,
+            "workers": workers,
             "error": None,
             "metadata": metadata
         }
@@ -152,6 +190,8 @@ def run_simulation(
             "std_latency": 0.0,
             "runs_count": 0,
             "counts": {},
+            "device": "MULTI_GPU" if is_multi_gpu else dev_clean,
+            "workers": workers,
             "error": str(e),
             "metadata": {}
         }

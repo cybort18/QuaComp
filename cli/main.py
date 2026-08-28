@@ -37,8 +37,10 @@ def build_argument_parser() -> argparse.ArgumentParser:
     param_group.add_argument("--depth", type=int, default=10, help="Depth for deep workload (default 10).")
     param_group.add_argument("--method", choices=["statevector", "mps"], default="statevector", help="Simulation method (default statevector).")
     param_group.add_argument("--bond-dim", type=int, default=64, help="Max bond dimension for MPS simulation (default 64).")
-    param_group.add_argument("--device", choices=["cpu", "gpu"], default="cpu", help="Simulation compute device backend (default cpu).")
+    param_group.add_argument("--device", choices=["cpu", "gpu", "multi_gpu"], default="cpu", help="Simulation compute device backend (default cpu).")
     param_group.add_argument("--gpu", action="store_true", help="Shorthand flag to enable GPU acceleration (--device gpu).")
+    param_group.add_argument("--multi-gpu", action="store_true", help="Enable multi-GPU distributed simulation backend.")
+    param_group.add_argument("--workers", type=int, default=1, help="Parallel distributed worker threads/processes for batch execution (default 1).")
     param_group.add_argument("--entropy", action="store_true", help="Calculate bipartite Von Neumann entanglement entropy and simulation complexity.")
     param_group.add_argument("--noise-level", choices=["none", "low", "medium", "high"], default="none", help="NISQ noise model preset level (default none).")
     param_group.add_argument("--runs", type=int, default=3, help="Number of benchmark iterations per circuit (default 3).")
@@ -68,7 +70,13 @@ def main():
     console.print(BANNER)
     
     results: List[Dict[str, Any]] = []
-    effective_device = "gpu" if args.gpu else args.device
+    
+    if args.multi_gpu or args.device == "multi_gpu":
+        effective_device = "multi_gpu"
+    elif args.gpu or args.device == "gpu":
+        effective_device = "gpu"
+    else:
+        effective_device = args.device
     
     if args.quick or args.full or args.custom:
         print_system_info(console=console)

@@ -30,13 +30,17 @@ def print_system_info(console: Optional[Console] = None) -> None:
     table.add_column("System Value", style="green")
     
     table.add_row("CPU Name", metadata["cpu_name"])
+    table.add_row("CPU Physical / Logical Cores", f"{metadata['cpu_count_physical']} cores / {metadata['cpu_count_logical']} threads")
     table.add_row("Total Physical RAM", f"{metadata['total_ram_gb']:.2f} GB")
     
     if gpu_meta["has_gpu"]:
         aer_status = "Available (CUDA)" if gpu_meta["aer_gpu_supported"] else "CPU-only Backend"
-        table.add_row("GPU Hardware", f"{gpu_meta['gpu_name']} [dim](Aer: {aer_status})[/dim]")
+        gpu_label = gpu_meta["gpu_name"]
+        if gpu_meta.get("gpu_count", 1) > 1:
+            gpu_label = f"{gpu_meta['gpu_count']}x GPUs ({gpu_meta['gpu_name']})"
+        table.add_row("GPU Hardware", f"{gpu_label} [dim](Aer: {aer_status})[/dim]")
         if gpu_meta["total_vram_gb"] > 0:
-            table.add_row("GPU VRAM", f"{gpu_meta['total_vram_gb']:.2f} GB")
+            table.add_row("Total GPU VRAM", f"{gpu_meta['total_vram_gb']:.2f} GB" + (" (Aggregated)" if gpu_meta.get("multi_gpu_supported") else ""))
             
     table.add_row("Operating System", f"{metadata['os_name']} ({metadata['os_release']})")
     table.add_row("Python Version", metadata["python_version"])

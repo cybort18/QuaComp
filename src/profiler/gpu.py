@@ -30,14 +30,18 @@ def is_gpu_available() -> bool:
 
 def get_gpu_metadata() -> Dict[str, Any]:
     """
-    Probe the local hardware to identify any GPU (NVIDIA, AMD, Apple, Intel) and VRAM capacity.
+    Probe the local hardware to identify all available GPUs (NVIDIA, AMD, Apple, Intel),
+    multi-GPU inventory, and aggregate VRAM capacity.
     
     Returns:
         Dictionary containing GPU metadata:
-            - 'gpu_name' (str): Brand and model of detected GPU.
-            - 'has_gpu' (bool): Whether a GPU is physically present.
+            - 'gpu_name' (str): Primary brand and model of detected GPU.
+            - 'has_gpu' (bool): Whether at least one GPU is physically present.
+            - 'gpu_count' (int): Total number of detected GPU cards.
+            - 'gpus' (list): List of detailed GPU device descriptors.
             - 'aer_gpu_supported' (bool): Whether Qiskit Aer has GPU runtime enabled.
-            - 'total_vram_gb' (float): Total VRAM in GB if detectable, else 0.0.
+            - 'total_vram_gb' (float): Aggregate VRAM across all detected GPUs in GB.
+            - 'multi_gpu_supported' (bool): True if more than 1 GPU is present.
             - 'backend_devices' (list): Available Qiskit Aer devices.
     """
     aer_devices = get_available_aer_devices()
@@ -45,22 +49,36 @@ def get_gpu_metadata() -> Dict[str, Any]:
     gpu_name = "None detected"
     total_vram_gb = 0.0
     has_gpu = False
+    gpus_list: List[Dict[str, Any]] = []
     
     # 1. Try NVIDIA-SMI if available (NVIDIA CUDA cards)
     try:
         res = subprocess.run(
-            ["nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader,nounits"],
+            ["nvidia-smi", "--query-gpu=index,name,memory.total", "--format=csv,noheader,nounits"],
             capture_output=True,
             text=True,
             timeout=2
         )
         if res.returncode == 0 and res.stdout.strip():
-            lines = res.stdout.strip().split("\n")
-            first = lines[0].split(",")
-            gpu_name = first[0].strip()
-            if len(first) > 1:
-                total_vram_gb = float(first[1].strip()) / 1024.0
-            has_gpu = True
+            lines = [l.strip() for l in res.stdout.strip().split("\n") if l.strip()]
+            for line in lines:
+                parts = [p.strip() for p in line.split(",")]
+                if len(parts) >= 2:
+                    idx = int(parts[0]) if parts[0].isdigit() else len(gpus_list)
+                    g_name = parts[1]
+                    vram_mb = float(parts[2]) if len(parts) > 2 and parts[2].replace('.', '', 1).isdigit() else 0.0
+                    vram_gb = vram_mb / 1024.0
+                    gpus_list.append({
+                        "index": idx,
+                        "name": g_name,
+                        "vram_gb": round(vram_gb, 2)
+                    })
+                    total_vram_gb += vram_gb
+            if gpus_list:
+                has_gpu = True
+                gpu_name = gpus_list[0]["name"]
+                if len(gpus_list) > 1:
+                    gpu_name = f"{len(gpus_list)}x {gpus_list[0]['name']}"
     except Exception:
         pass
         
@@ -77,6 +95,12 @@ def get_gpu_metadata() -> Dict[str, Any]:
                 )
                 if res.returncode == 0 and res.stdout.strip():
                     names = [n.strip() for n in res.stdout.strip().split("\n") if n.strip()]
+                    for i, name in enumerate(names):
+                        gpus_list.append({
+                            "index": i,
+                            "name": name,
+                            "vram_gb": 0.0
+                        })
                     if names:
                         gpu_name = ", ".join(names)
                         has_gpu = True
@@ -91,11 +115,19 @@ def get_gpu_metadata() -> Dict[str, Any]:
                     timeout=3
                 )
                 if res.returncode == 0 and res.stdout:
+                    names = []
                     for line in res.stdout.split("\n"):
                         if "Chipset Model:" in line:
-                            gpu_name = line.split(":", 1)[1].strip()
-                            has_gpu = True
-                            break
+                            nm = line.split(":", 1)[1].strip()
+                            names.append(nm)
+                            gpus_list.append({
+                                "index": len(gpus_list),
+                                "name": nm,
+                                "vram_gb": 0.0
+                            })
+                    if names:
+                        gpu_name = ", ".join(names)
+                        has_gpu = True
             except Exception:
                 pass
         elif sys_os == "Linux":
@@ -107,29 +139,47 @@ def get_gpu_metadata() -> Dict[str, Any]:
                     timeout=2
                 )
                 if res.returncode == 0 and res.stdout:
+                    names = []
                     for line in res.stdout.split("\n"):
                         if "VGA compatible controller" in line or "3D controller" in line:
-                            gpu_name = line.split(":", 2)[-1].strip()
-                            has_gpu = True
-                            break
+                            nm = line.split(":", 2)[-1].strip()
+                            names.append(nm)
+                            gpus_list.append({
+                                "index": len(gpus_list),
+                                "name": nm,
+                                "vram_gb": 0.0
+                            })
+                    if names:
+                        gpu_name = ", ".join(names)
+                        has_gpu = True
             except Exception:
                 pass
 
     return {
         "gpu_name": gpu_name,
         "has_gpu": has_gpu,
+        "gpu_count": len(gpus_list) if gpus_list else (1 if has_gpu else 0),
+        "gpus": gpus_list,
         "aer_gpu_supported": aer_gpu,
-        "total_vram_gb": total_vram_gb,
+        "total_vram_gb": round(total_vram_gb, 2),
+        "multi_gpu_supported": len(gpus_list) > 1,
         "backend_devices": aer_devices
     }
 
-def check_gpu_vram_safety(qubits: int, method: str = 'statevector') -> Tuple[bool, str]:
+def check_gpu_vram_safety(
+    qubits: int, 
+    method: str = 'statevector', 
+    device: str = 'GPU',
+    multi_gpu: bool = False
+) -> Tuple[bool, str]:
     """
-    Check if the GPU VRAM capacity is safe for the requested qubit simulation.
+    Check if the GPU / Multi-GPU VRAM capacity is safe for the requested qubit simulation.
     
     Args:
         qubits: Number of qubits.
         method: Simulation method ('statevector' or 'mps').
+        device: Device backend ('GPU', 'MULTI_GPU', etc.).
+        multi_gpu: Whether multi-GPU VRAM pooling is active.
         
     Returns:
         Tuple[bool, str]: (is_safe, message)
@@ -152,15 +202,19 @@ def check_gpu_vram_safety(qubits: int, method: str = 'statevector') -> Tuple[boo
     
     gpu_meta = get_gpu_metadata()
     total_vram = gpu_meta.get("total_vram_gb", 0.0)
+    gpu_count = gpu_meta.get("gpu_count", 1)
     
-    if total_vram > 0.0:
-        if req_gb > (total_vram * 0.85):
-            return False, f"CRITICAL: {qubits} qubits requires ~{req_gb:.2f} GB VRAM, exceeding 85% of GPU VRAM ({total_vram:.2f} GB)."
-        if req_gb > (total_vram * 0.70):
-            return True, f"WARNING: {qubits} qubits requires ~{req_gb:.2f} GB VRAM (GPU VRAM: {total_vram:.2f} GB)."
+    effective_vram = total_vram if (multi_gpu and gpu_count > 1) else (total_vram / max(1, gpu_count) if total_vram > 0 else 0.0)
+    
+    if effective_vram > 0.0:
+        if req_gb > (effective_vram * 0.85):
+            target_lbl = "Multi-GPU Aggregate VRAM" if multi_gpu else "GPU VRAM"
+            return False, f"CRITICAL: {qubits} qubits requires ~{req_gb:.2f} GB VRAM, exceeding 85% of {target_lbl} ({effective_vram:.2f} GB)."
+        if req_gb > (effective_vram * 0.70):
+            return True, f"WARNING: {qubits} qubits requires ~{req_gb:.2f} GB VRAM (Effective VRAM: {effective_vram:.2f} GB)."
             
     # For large statevector on GPU (>28 qubits is >4GB VRAM)
-    if qubits >= 30:
-        return False, f"CRITICAL: {qubits} qubits requires ~{req_gb:.2f} GB VRAM, which typically exceeds standard GPU VRAM capacity."
+    if qubits >= 30 and not multi_gpu:
+        return False, f"CRITICAL: {qubits} qubits requires ~{req_gb:.2f} GB VRAM, which exceeds standard single-GPU VRAM capacity."
         
     return True, f"SAFE: {qubits} qubits statevector requires ~{req_gb:.4f} GB VRAM on GPU."
