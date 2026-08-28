@@ -100,7 +100,7 @@ When executed with the `--chart` flag, QuaComp generates high-DPI visualization 
   - `entanglement_entropy.png`: Scaling curve of Entanglement Entropy ($S_{vN}$) vs theoretical maximum bipartite bound ($S_{max}$).
 - **Markdown Report Embedding**: Automatically links and embeds generated chart graphics into `results/report.md`.
 
-### Relative Benchmark Comparison Engine (v1.5.0)
+### Relative Benchmark Comparison Engine
 - **Side-by-Side Differencing**: Compares two benchmark JSON runs (or live benchmark against a target reference baseline) using `quacomp --compare`.
 - **Metrics Evaluated**:
   - **Composite Score Ratio & Delta**: Relative speed and capacity gain percentage.
@@ -125,7 +125,10 @@ QuaComp/
 ├── cli/
 │   ├── __init__.py
 │   ├── __main__.py
-│   └── main.py             # Rich terminal GUI CLI entry point (supports --method, --device, --gpu, --compare, --entropy, --chart)
+│   ├── comparison.py       # Comparison mode CLI handler & workflow
+│   ├── main.py             # Main CLI dispatcher & argument parser
+│   ├── runner.py           # Simulation runners (Quick, Full, Custom)
+│   └── ui.py               # Rich terminal tables, banners, & score panels
 ├── src/
 │   ├── comparator/
 │   │   ├── __init__.py
@@ -162,10 +165,10 @@ QuaComp/
 │   ├── test_noise.py       # NISQ noise models and state fidelity tests
 │   ├── test_charts.py      # Visualization engine and PNG plot tests
 │   └── test_comparator.py  # Relative benchmark comparison & differencing tests
-├── pyproject.toml          # PEP 517/621 Modern build configuration & executable entry point (v1.5.0)
+├── pyproject.toml          # PEP 517/621 Modern build configuration & executable entry point (v1.0.0)
 ├── setup.py                # Setuptools compatibility shim
 ├── requirements.txt        # Package dependencies (psutil, qiskit, rich, matplotlib, seaborn)
-├── PRD.md                  # Product Requirement Document (v1.5.0)
+├── PRD.md                  # Product Requirement Document (v1.0.0)
 ├── README.md               # Project documentation
 └── .gitignore              # Git ignore file
 ```
@@ -325,14 +328,14 @@ QuaComp Composite Score maps directly into performance tiers, reflecting the com
   - Matplotlib & Seaborn integration (`--chart`).
   - Automated generation of `qubit_vs_latency.png`, `qubit_vs_ram.png`, `method_comparison.png`, `noise_fidelity_impact.png`, `entanglement_entropy.png`.
   - Chart embedding in Markdown reports (`results/report.md`).
-- [x] **Phase 7: Packaging & CI/CD Pipeline (v1.5.0)**
+- [x] **Phase 7: Packaging & CI/CD Pipeline**
   - PEP 517/621 `pyproject.toml` build system & `quacomp` executable CLI entry point.
   - Multi-platform GitHub Actions CI matrix running automated `pytest` across Ubuntu, Windows, and macOS on Python 3.10–3.13.
-- [x] **Phase 8: Relative Comparison & GPU Acceleration Support (v1.5.0)**
+- [x] **Phase 8: Relative Comparison & GPU Acceleration Support**
   - Relative benchmark differencing engine (`--compare`) with side-by-side tables and verdict.
   - GPU hardware detection, VRAM safety evaluation, and simulation backend (`--device gpu` / `--gpu`).
   - Comparison charts (`qubit_latency_comparison.png` and `throughput_comparison.png`).
-- [x] **Phase 9: Entanglement Entropy & Hardness Profiler (v1.5.0)**
+- [x] **Phase 9: Entanglement Entropy & Hardness Profiler**
   - Bipartite Von Neumann Entanglement Entropy calculation via Singular Value Decomposition (SVD).
   - Schmidt rank, participation ratio, and MPS simulation hardness classification.
   - Entanglement scaling chart generator (`entanglement_entropy.png`) and `--entropy` CLI flag.

@@ -88,3 +88,12 @@ def test_calculate_bipartite_entropy_input_validation():
         
     with pytest.raises(ValueError):
         calculate_bipartite_entropy(qc, subsystem_size=0)
+
+def test_calculate_bipartite_entropy_large_qubit_guard(monkeypatch):
+    """Verify circuits with excessive qubits (e.g. 35) trigger memory guard gracefully."""
+    qc = QuantumCircuit(35)
+    metrics = calculate_bipartite_entropy(qc)
+    assert metrics["num_qubits"] == 35
+    assert metrics["von_neumann_entropy"] == 0.0
+    assert "Memory Limit" in metrics["entanglement_regime"]
+

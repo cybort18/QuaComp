@@ -74,6 +74,26 @@ def calculate_bipartite_entropy(
     n_b = n - n_a
     s_max = float(min(n_a, n_b))
     
+    # Pre-flight memory safety check for large statevector representations (n > 22)
+    if n > 22:
+        from src.profiler.memory import check_memory_safety
+        is_safe, msg = check_memory_safety(n, method='statevector')
+        if not is_safe:
+            return {
+                "num_qubits": n,
+                "subsystem_a_size": n_a,
+                "subsystem_b_size": n_b,
+                "von_neumann_entropy": 0.0,
+                "max_possible_entropy": s_max,
+                "entanglement_ratio": 0.0,
+                "schmidt_rank": 1,
+                "participation_ratio": 1.0,
+                "entanglement_regime": "Not Computed (Memory Limit)",
+                "mps_hardness": "High Qubit Scaled",
+                "singular_values": [],
+                "note": f"Exact statevector SVD skipped for {n} qubits to prevent memory exhaustion ({msg})."
+            }
+            
     # Remove any measurement operations to obtain pure statevector
     circ_clean = circuit.copy()
     circ_clean.remove_final_measurements(inplace=True)
