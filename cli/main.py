@@ -11,7 +11,6 @@ from src.reporter.charts import generate_benchmark_charts
 
 from cli.ui import BANNER, print_system_info, display_results, display_help_notice
 from cli.runner import (
-    run_single_simulation,
     run_quick_benchmark,
     run_full_stress_test,
     run_custom_simulation

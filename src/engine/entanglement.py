@@ -1,5 +1,4 @@
-import math
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Tuple
 import numpy as np
 from qiskit import QuantumCircuit
 from qiskit.quantum_info import Statevector, Operator
@@ -14,7 +13,7 @@ def _apply_2q_gate_adjacent(
     u_gate_4x4: np.ndarray, 
     reverse_qubits: bool = False,
     max_bond: int = 64
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Apply a 2-qubit unitary matrix (4x4) to two adjacent MPS tensors.
     tensor_a is at site j, tensor_b is at site j + 1.

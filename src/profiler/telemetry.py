@@ -1,6 +1,5 @@
 import platform
 import os
-import sys
 import subprocess
 from typing import Any, Dict
 import psutil
