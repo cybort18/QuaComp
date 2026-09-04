@@ -85,3 +85,25 @@ def test_run_simulation_type_error():
         run_simulation("not a circuit")  # type: ignore
     with pytest.raises(ValueError):
         run_simulation(generate_shallow_circuit(2), runs=0)
+
+def test_validate_cli_arguments():
+    import argparse
+    from cli.main import validate_cli_arguments
+    
+    valid_args = argparse.Namespace(qubits=10, depth=5, bond_dim=64, workers=2, runs=3)
+    validate_cli_arguments(valid_args)
+    
+    with pytest.raises(ValueError, match="--qubits"):
+        validate_cli_arguments(argparse.Namespace(qubits=0, depth=5, bond_dim=64, workers=2, runs=3))
+        
+    with pytest.raises(ValueError, match="--depth"):
+        validate_cli_arguments(argparse.Namespace(qubits=5, depth=-1, bond_dim=64, workers=2, runs=3))
+        
+    with pytest.raises(ValueError, match="--bond-dim"):
+        validate_cli_arguments(argparse.Namespace(qubits=5, depth=5, bond_dim=0, workers=2, runs=3))
+        
+    with pytest.raises(ValueError, match="--workers"):
+        validate_cli_arguments(argparse.Namespace(qubits=5, depth=5, bond_dim=64, workers=0, runs=3))
+        
+    with pytest.raises(ValueError, match="--runs"):
+        validate_cli_arguments(argparse.Namespace(qubits=5, depth=5, bond_dim=64, workers=1, runs=0))

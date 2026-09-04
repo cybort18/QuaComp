@@ -50,6 +50,7 @@ def export_to_json(results: List[Dict[str, Any]], system_metadata: Dict[str, Any
     best_runs_count = 0
     capacity_metric = 0.0
     throughput_metric = 0.0
+    best_entanglement_metrics = {}
     
     if successful_runs:
         from src.scorer.calculator import calculate_scoring_breakdown, categorize_score

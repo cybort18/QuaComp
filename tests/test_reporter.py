@@ -107,3 +107,57 @@ def test_export_to_markdown_type_errors():
         export_to_markdown("not a list", {})  # type: ignore
     with pytest.raises(TypeError):
         export_to_markdown([], "not a dict")  # type: ignore
+
+def test_export_to_json_all_failed_runs(tmp_path):
+    failed_results = [
+        {
+            "qubits": 35,
+            "success": False,
+            "latency": 0.0,
+            "mean_latency": 0.0,
+            "median_latency": 0.0,
+            "std_latency": 0.0,
+            "runs_count": 0,
+            "latencies": [],
+            "gates": 0,
+            "cpu_usage": 0.0,
+            "ram_status": "UNSAFE",
+            "error": "CRITICAL: Out of Memory"
+        }
+    ]
+    metadata = {"cpu_name": "Test CPU", "total_ram_gb": 8.0}
+    out_dir = tmp_path / "results"
+    
+    file_path = export_to_json(failed_results, metadata, output_dir=str(out_dir))
+    assert os.path.exists(file_path)
+    with open(file_path, "r") as f:
+        data = json.load(f)
+    assert data["final_score"] == 0.0
+    assert data["entanglement_metrics"] == {}
+    assert data["max_qubits_simulated"] == 0
+
+def test_export_to_markdown_all_failed_runs(tmp_path):
+    failed_results = [
+        {
+            "qubits": 35,
+            "success": False,
+            "latency": 0.0,
+            "mean_latency": 0.0,
+            "std_latency": 0.0,
+            "runs_count": 0,
+            "gates": 0,
+            "cpu_usage": 0.0,
+            "ram_status": "UNSAFE",
+            "error": "CRITICAL: Out of Memory"
+        }
+    ]
+    metadata = {"cpu_name": "Test CPU", "total_ram_gb": 8.0}
+    out_path = tmp_path / "results" / "report.md"
+    
+    file_path = export_to_markdown(failed_results, metadata, output_path=str(out_path))
+    assert os.path.exists(file_path)
+    with open(file_path, "r", encoding="utf-8") as f:
+        content = f.read()
+    assert "# QuaComp Benchmark Report" in content
+    assert "UNSAFE" in content
+    assert "FAILED" in content

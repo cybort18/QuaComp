@@ -53,6 +53,7 @@ def export_to_markdown(
     best_runs_count = 0
     capacity_metric = 0.0
     throughput_metric = 0.0
+    best_entanglement = {}
     
     if successful_runs:
         from src.scorer.calculator import calculate_scoring_breakdown, categorize_score

@@ -127,3 +127,15 @@ def test_calculate_bipartite_entropy_input_validation():
         
     with pytest.raises(ValueError):
         calculate_bipartite_entropy(qc, subsystem_size=0)
+
+def test_calculate_bipartite_entropy_ratio_clamping():
+    """Verify entanglement ratio is strictly bounded within [0.0, 1.0]."""
+    qc = QuantumCircuit(2)
+    qc.h(0)
+    qc.cx(0, 1)
+    
+    metrics = calculate_bipartite_entropy(qc)
+    assert 0.0 <= metrics["entanglement_ratio"] <= 1.0
+    
+    mps_metrics = _calculate_mps_bipartite_entropy(qc, subsystem_size=1)
+    assert 0.0 <= mps_metrics["entanglement_ratio"] <= 1.0

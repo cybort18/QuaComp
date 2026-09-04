@@ -15,7 +15,7 @@
 
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![CI](https://github.com/cybort18/QuaComp/actions/workflows/ci.yml/badge.svg)](https://github.com/cybort18/QuaComp/actions)
-[![Tests Status](https://img.shields.io/badge/tests-60%20passed-green.svg)](#running-tests)
+[![Tests Status](https://img.shields.io/badge/tests-66%20passed-green.svg)](#running-tests)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 ---
@@ -44,14 +44,15 @@
 ## Key Features
 
 ### Pre-flight Safety Guard & Memory Threshold Estimation
-- Estimates statevector memory requirement: $\text{RAM} = 2^n \times 16 \text{ bytes}$.
-- Evaluates available physical RAM before execution.
-- Evaluates GPU and Multi-GPU aggregate VRAM capacity before execution.
-- Dynamically skips oversized runs to prevent Out-Of-Memory (OOM) fatal crashes and system freezing.
+- Estimates statevector memory requirements prior to simulation runs using:
+  $$\text{RAM Bytes} = 2^n \times 16 \text{ bytes (for complex128 representation)}$$
+- Evaluates available physical RAM and GPU/Multi-GPU aggregate VRAM using `psutil` and device telemetry.
+- Dynamically blocks and warns on workloads exceeding 85% of available RAM or GPU VRAM, preventing Out-Of-Memory (OOM) fatal crashes and system freezing.
 
 ### Dual Simulation Engines (Statevector & Matrix Product State)
-- **Statevector Simulation**: Full exact quantum statevector representation ($2^n$ complex amplitudes) for high-accuracy circuit analysis.
-- **Matrix Product State (MPS)**: Tensor network compression with configurable bond dimension ($\chi \le 64, 128$) to simulate large-scale quantum circuits ($30\text{--}100+$ qubits) with up to **99.9% RAM savings** on memory-constrained hardware.
+- **Statevector Simulation Engine**: Full exact quantum statevector representation ($2^n$ complex amplitudes) for high-accuracy circuit analysis.
+- **Matrix Product State (MPS) Engine**: Tensor network compression with configurable bond dimension ($\chi \le 64, 128$) to simulate large-scale quantum circuits ($30\text{--}100+$ qubits) with up to **99.9% RAM savings** on memory-constrained hardware.
+- **RAM Efficiency Profiling**: Measures actual physical RAM allocation and benchmarks against theoretical statevector memory footprint ($2^n \times 16$ bytes).
 
 ### Hardware Acceleration (Single-GPU, Multi-GPU & Distributed Workers)
 - Automatically detects GPU hardware (NVIDIA, AMD, Apple, Intel) and queryable VRAM limits.
@@ -60,43 +61,12 @@
 - Supports Distributed Multi-Worker parallel simulation execution (`quacomp --workers <INT>`) across multi-core CPUs and GPU compute backends.
 - Graceful, informative diagnostics and fallback if GPU execution is requested on a CPU-only environment.
 
-### Entanglement Entropy & Simulation Hardness Profiler (`--entropy`)
-- **Native MPS Tensor Bond SVD & Statevector SVD**: Seamlessly switches between full Statevector SVD ($n \le 22$) and local 1D Tensor Network MPS Central Bond SVD ($n > 22$), enabling exact Entanglement Entropy analysis for **30 to 100+ qubit circuits** in under 0.2 seconds with $< 2\text{ MB}$ RAM consumption.
-- **Bipartite Von Neumann Entanglement Entropy**:
-  $$S(\rho_A) = -\text{Tr}(\rho_A \log_2 \rho_A) = -\sum_{i} \lambda_i^2 \log_2(\lambda_i^2)$$
-- **Schmidt Rank & Participation Ratio**: Quantifies the effective number of entangled states ($K = 1 / \sum \lambda_i^4$) and Schmidt spectrum rank.
-- **Simulation Complexity Classification**: Classifies entanglement regimes into `Product State`, `Low (Area-law)`, `Moderate`, and `Volume-law (Maximal)` alongside MPS simulation hardness tiers (`Trivial`, `Efficient`, `Challenging`, `Exponentially Hard`).
-
-### Benchmark Telemetry Showcase
-
-When executed with the `--chart` flag, QuaComp generates high-DPI visualization plots of execution telemetry:
-
-| Execution Latency Scaling (Mean ± Std Dev) | Memory Footprint & RAM Safety Threshold |
-| :---: | :---: |
-| ![Qubit vs Latency](docs/images/qubit_vs_latency.png) | ![Qubit vs RAM](docs/images/qubit_vs_ram.png) |
-
----
-
-## Key Features
-
-### Pre-flight Memory & VRAM Safety (Phase 1 & Phase 8)
-- Computes estimated memory requirements prior to statevector simulation runs using:
-  $$\text{RAM Bytes} = 2^n \times 16 \text{ bytes (for complex128 representation)}$$
-- Integrates with `psutil` and GPU telemetry to dynamically inspect physical system memory and GPU VRAM.
-- Blocks and warns simulations exceeding 85% of available RAM or GPU VRAM to prevent OS crashes and Out-Of-Memory (OOM) situations.
-
-### Quantum Workload Generators (Phase 1)
+### Quantum Workload Generators
 - **Shallow Workloads**: Initial state allocations using Hadamard gates coupled with 1D entanglement (CNOT chains).
 - **Deep Workloads**: Intensive random rotation matrices ($R_x, R_y, R_z$) and multi-layered entanglement chains designed to stress memory bandwidth.
 - **Quantum Fourier Transform (QFT)**: Standard implementation representing realistic quantum algorithms.
 
-### Multi-Engine Simulator Core (Phase 1, Phase 4 & Phase 8)
-- **Statevector Simulation Engine**: Exact statevector simulation method (`AerSimulator(method='statevector')`).
-- **Matrix Product State (MPS) Engine**: Tensor network simulation engine (`AerSimulator(method='matrix_product_state')`) enabling high-qubit simulation ($30\text{--}100+$ qubits) specifically for circuits with low-to-moderate entanglement using custom bond dimensions (`--bond-dim`, default 64).
-- **GPU Acceleration Engine**: Hardware-accelerated quantum simulation using GPU compute devices (`--device gpu` / `--gpu`) with automatic VRAM safety validation and graceful fallback.
-- **RAM Efficiency Profiling**: Calculates exact memory savings achieved by MPS compared to theoretical statevector memory footprint ($2^n \times 16$ bytes).
-
-### NISQ Noise & Fidelity Profiler (Phase 5)
+### NISQ Noise & State Fidelity Profiler
 - **Synthetic Parameterized Noise Channels**: Incorporates Thermal Relaxation ($T_1, T_2$) and Depolarizing Errors using `qiskit_aer.noise`.
 - **Preset Noise Profiles**: Configurable noise presets via `--noise-level [none|low|medium|high]`:
   - `none`: Ideal noise-free simulation.
@@ -105,13 +75,14 @@ When executed with the `--chart` flag, QuaComp generates high-DPI visualization 
   - `high`: Heavy noise profile for extreme stress testing ($T_1=20\,\mu\text{s}, T_2=30\,\mu\text{s}$, gate error $2.0\%$).
 - **Fidelity & Overhead Metrics**: Computes classical Hellinger Quantum State Fidelity (%) and CPU Computation Overhead ratio (%).
 
-### Entanglement Entropy & Simulation Hardness Profiler (FR-13)
-- **Bipartite Von Neumann Entanglement Entropy**: Quantifies quantum entanglement by partitioning the system into subsystem $A$ ($n_A = \lfloor n/2 \rfloor$) and subsystem $B$ ($n - n_A$), computing singular values $\lambda_i$ via Singular Value Decomposition (SVD):
+### Entanglement Entropy & Simulation Hardness Profiler (`--entropy`)
+- **Native MPS Tensor Bond SVD & Statevector SVD**: Seamlessly switches between full Statevector SVD ($n \le 22$) and local 1D Tensor Network MPS Central Bond SVD ($n > 22$), enabling exact Entanglement Entropy analysis for **30 to 100+ qubit circuits** in under 0.2 seconds with $< 2\text{ MB}$ RAM consumption.
+- **Bipartite Von Neumann Entanglement Entropy**:
   $$S(\rho_A) = -\text{Tr}(\rho_A \log_2 \rho_A) = -\sum_{i} \lambda_i^2 \log_2(\lambda_i^2)$$
-- **Schmidt Rank & Participation Ratio**: Evaluates the effective number of entangled states ($K = 1 / \sum \lambda_i^4$) and non-zero Schmidt coefficients.
-- **Simulation Hardness Classification**: Quantifies the computational limit for tensor network / MPS simulation ($\chi \sim 2^{S(\rho_A)}$), automatically categorizing states into `Product State`, `Low (Area-law)`, `Moderate Entanglement`, and `Volume-law (Maximal)`.
+- **Schmidt Rank & Participation Ratio**: Quantifies the effective number of entangled states ($K = 1 / \sum \lambda_i^4$) and Schmidt spectrum rank.
+- **Simulation Complexity Classification**: Classifies entanglement regimes into `Product State`, `Low (Area-law)`, `Moderate`, and `Volume-law (Maximal)` alongside MPS simulation hardness tiers (`Trivial`, `Efficient`, `Challenging`, `Exponentially Hard`).
 
-### Multi-Run Benchmarking & Telemetry (Methodology Revision)
+### Multi-Run Benchmarking & Telemetry
 - **Statistical Repeatability**: Executes `--runs INT` (default 3) benchmark iterations per circuit to compute Mean ($\mu$), Median, and Standard Deviation ($\sigma$) of execution latency, mitigating CPU governor and background task noise.
 - **Composite Heuristic Scoring**: Computes the **QuaComp Composite Score** (a project-specific heuristic score) that separates state-space capacity from gate throughput:
   $$\text{Score} = (C \times 10) + T = (2^{\text{max qubits}} \times 10) + \left(\frac{\text{Total Gates}}{\mu_{\text{latency}}}\right)$$
@@ -119,14 +90,18 @@ When executed with the `--chart` flag, QuaComp generates high-DPI visualization 
   - **Throughput Metric ($T = \frac{\text{Total Gates}}{\mu_{\text{latency}}}$)**: Gate processing throughput metric (gates/second).
   *Note: QuaComp Score is a project-specific composite heuristic prioritizing state-space capacity scaling.*
 
-### Visualization Engine & Chart Generator (Phase 6)
-- **Automated Plot Generation**: Passing `--chart` automatically generates high-DPI (300 DPI) PNG charts in `results/`:
+### Visualization Engine & Chart Generator
+- Passing `--chart` automatically generates high-DPI (300 DPI) PNG charts in `results/`:
   - `qubit_vs_latency.png`: Line plot of Qubits vs Mean Latency (seconds) with standard deviation error shading.
   - `qubit_vs_ram.png`: Line plot of Qubits vs Memory Allocation (GB) with physical RAM safety threshold line.
   - `method_comparison.png`: Comparison bar chart between Statevector vs MPS latency & memory.
   - `noise_fidelity_impact.png`: Bar plot comparing NISQ noise profiles vs Quantum State Fidelity (%) & CPU Overhead (%).
   - `entanglement_entropy.png`: Scaling curve of Entanglement Entropy ($S_{vN}$) vs theoretical maximum bipartite bound ($S_{max}$).
-- **Markdown Report Embedding**: Automatically links and embeds generated chart graphics into `results/report.md`.
+- Automatically links and embeds generated chart graphics into `results/report.md`.
+
+| Execution Latency Scaling (Mean ± Std Dev) | Memory Footprint & RAM Safety Threshold |
+| :---: | :---: |
+| ![Qubit vs Latency](docs/images/qubit_vs_latency.png) | ![Qubit vs RAM](docs/images/qubit_vs_ram.png) |
 
 ### Relative Benchmark Comparison Engine
 - **Side-by-Side Differencing**: Compares two benchmark JSON runs (or live benchmark against a target reference baseline) using `quacomp --compare`.
@@ -137,7 +112,7 @@ When executed with the `--chart` flag, QuaComp generates high-DPI visualization 
   - **Per-Qubit Latency Differencing**: Execution latency speedup multipliers and percentage savings.
 - **Rich Terminal Comparison & Exporters**: Displays side-by-side colorized Rich tables and an academic verdict in terminal, while exporting `results/comparison.json`, `results/comparison_report.md`, and comparison plots (`qubit_latency_comparison.png`, `throughput_comparison.png`).
 
-### JSON & Markdown Exporters (Phase 3)
+### JSON & Markdown Exporters
 - Automatically serializes run telemetry and statistical summaries to `results/benchmark_<timestamp>.json`.
 - Exports readable summary reports to `results/report.md` formatted for GitHub issues or discussions.
 
@@ -283,20 +258,20 @@ Output:
 platform win32 -- Python 3.13.3, pytest-9.1.1, pluggy-1.6.0
 rootdir: C:\Users\HP\Documents\PROJECT\QuaComp
 configfile: pyproject.toml
-collected 60 items
+collected 66 items
 
-tests\test_charts.py ....                                                [  7%]
-tests\test_comparator.py .......                                         [ 20%]
-tests\test_engine.py .....                                               [ 29%]
-tests\test_entanglement.py .......                                       [ 41%]
-tests\test_gpu.py .........                                              [ 58%]
-tests\test_memory.py .....                                               [ 67%]
-tests\test_mps.py ....                                                   [ 74%]
+tests\test_charts.py ....                                                [  6%]
+tests\test_comparator.py .......                                         [ 16%]
+tests\test_engine.py ......                                              [ 25%]
+tests\test_entanglement.py ...........                                   [ 42%]
+tests\test_gpu.py ...........                                            [ 59%]
+tests\test_memory.py .......                                             [ 69%]
+tests\test_mps.py ....                                                   [ 75%]
 tests\test_noise.py ....                                                 [ 81%]
-tests\test_reporter.py ....                                              [ 89%]
+tests\test_reporter.py ......                                            [ 90%]
 tests\test_scorer.py ......                                              [100%]
 
-============================= 55 passed in 8.68s ==============================
+============================= 66 passed in 11.13s =============================
 ```
 
 ---

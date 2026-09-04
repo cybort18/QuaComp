@@ -64,3 +64,19 @@ def test_check_memory_safety_invalid_input():
     is_safe, message = check_memory_safety(-5)
     assert is_safe is False
     assert "Number of qubits must be non-negative" in message
+
+def test_check_memory_safety_multi_gpu():
+    with patch("src.profiler.gpu.is_gpu_available", return_value=True):
+        with patch("src.profiler.gpu.get_gpu_metadata", return_value={"total_vram_gb": 32.0, "gpu_count": 2, "multi_gpu_supported": True}):
+            is_safe, message = check_memory_safety(25, method="statevector", device="MULTI_GPU")
+            assert is_safe is True
+            assert "SAFE" in message
+
+@patch("psutil.virtual_memory")
+def test_check_memory_safety_mps_low_ram(mock_vm):
+    # Available RAM less than 200MB baseline
+    mock_vm.return_value = MockVirtualMemory(available=50 * 1024 * 1024)
+    is_safe, message = check_memory_safety(40, method="mps")
+    assert is_safe is False
+    assert "CRITICAL" in message
+    assert "lower than the baseline threshold required for MPS" in message

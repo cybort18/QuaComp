@@ -188,7 +188,7 @@ def _calculate_mps_bipartite_entropy(
     if s_vn < 1e-10:
         s_vn = 0.0
         
-    entanglement_ratio = (s_vn / s_max) if s_max > 0 else 0.0
+    entanglement_ratio = float(np.clip(s_vn / s_max, 0.0, 1.0)) if s_max > 0 else 0.0
     
     # Classify Entanglement Regime & MPS Hardness
     if s_vn < 1e-6:
@@ -312,7 +312,7 @@ def calculate_bipartite_entropy(
     if s_vn < 1e-10:
         s_vn = 0.0
         
-    entanglement_ratio = (s_vn / s_max) if s_max > 0 else 0.0
+    entanglement_ratio = float(np.clip(s_vn / s_max, 0.0, 1.0)) if s_max > 0 else 0.0
     
     if s_vn < 1e-6:
         regime = "Product State"

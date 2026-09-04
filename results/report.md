@@ -1,17 +1,17 @@
 # QuaComp Benchmark Report
-Generated on: `2026-08-28 15:47:59`
+Generated on: `2026-09-04 22:30:28`
 
 ---
 
 ## Benchmark Summary
-> **QuaComp Composite Score:** `10,486,398.90` *(Project-Specific Heuristic Score)*
+> **QuaComp Composite Score:** `10,486,714.96` *(Project-Specific Heuristic Score)*
 > - **Capacity Metric (2^n):** `1,048,576`
-> - **Throughput Metric:** `638.90 gates/sec`
+> - **Throughput Metric:** `954.96 gates/sec`
 > **Performance Category:** `High-Performance`
 > **Simulation Method:** `Statevector`
 > **Entanglement Entropy:** `S_vN = 0.0000 bits` (Schmidt Rank: `1` | `Product State`)
 > **MPS Simulation Complexity:** `Trivial (chi=1)`
-> **Statistical Repeatability:** `3 runs` (Mean Latency: `0.3443s`, Std Dev: `0.0859s`)
+> **Statistical Repeatability:** `3 runs` (Mean Latency: `0.2304s`, Std Dev: `0.0252s`)
 > **Max Qubits Simulated:** `20 qubits` (using `220` gates)
 
 ---
@@ -29,9 +29,9 @@ Generated on: `2026-08-28 15:47:59`
 ## Detailed Simulation Runs
 | Qubits | Method | Noise Profile | Workload | Total Gates | Latency (Mean ± Std Dev) | Fidelity % | Avg CPU % | RAM Status | Success |
 | :---: | :--- | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| 10 | statevector | none | QFT | 60 | 0.0260 ± 0.0062s | 100.00% | 87.5% | SAFE | SUCCESS |
-| 15 | statevector | none | QFT | 127 | 0.0274 ± 0.0138s | 100.00% | 89.1% | SAFE | SUCCESS |
-| 20 | statevector | none | QFT | 220 | 0.3443 ± 0.0859s | 100.00% | 92.2% | SAFE | SUCCESS |
+| 10 | statevector | none | QFT | 60 | 0.0175 ± 0.0101s | 100.00% | 83.3% | SAFE | SUCCESS |
+| 15 | statevector | none | QFT | 127 | 0.0210 ± 0.0017s | 100.00% | 88.0% | SAFE | SUCCESS |
+| 20 | statevector | none | QFT | 220 | 0.2304 ± 0.0252s | 100.00% | 87.5% | SAFE | SUCCESS |
 
 ---
 

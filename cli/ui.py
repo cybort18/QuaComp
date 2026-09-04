@@ -13,7 +13,7 @@ default_console = Console()
 BANNER = r"""
  [bold cyan]  ____             ____                     [/bold cyan]
  [bold cyan] / __ \__  ______ / ___| ___  _ __ ___  _ __ [/bold cyan]
- [bold cyan]/ / / / / / / __ `/ /   / _ \| '_ ` _ \| '_ \[/bold cyan]
+ [bold cyan]/ / / / / / / __ `/ /   / _ \| '_ ` _ \| '_ \ [/bold cyan]
  [bold cyan]/ /_/ / /_/ / /_/ / |__| (_) | | | | | | |_) |[/bold cyan]
  [bold cyan]\___\_\__,_/\__,_/\____/\___/|_| |_| |_| .__/ [/bold cyan]
  [bold cyan]                                       |_|    [/bold cyan]
@@ -56,12 +56,12 @@ def display_results(results: List[Dict[str, Any]], console: Optional[Console] = 
     table.add_column("Workload", style="white", justify="center")
     table.add_column("Method", style="magenta", justify="center")
     table.add_column("Device", style="bold cyan", justify="center")
-    table.add_column("Noise Profile", style="yellow", justify="center")
+    table.add_column("Noise", style="yellow", justify="center")
     table.add_column("Gates", style="white", justify="right")
-    table.add_column("Latency (Mean +/- Std Dev)", style="yellow", justify="right")
-    table.add_column("CPU Usage", style="cyan", justify="right")
+    table.add_column("Latency (Mean +/- Std)", style="yellow", justify="right")
+    table.add_column("CPU", style="cyan", justify="right")
     table.add_column("Fidelity", style="green", justify="right")
-    table.add_column("RAM Status", style="bold", justify="center")
+    table.add_column("RAM", style="bold", justify="center")
     table.add_column("Outcome", style="bold", justify="center")
     
     successful_runs = [r for r in results if r["success"]]

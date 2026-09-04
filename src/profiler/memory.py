@@ -36,9 +36,11 @@ def check_memory_safety(num_qubits: int, method: str = 'statevector', device: st
     Returns:
         tuple[bool, str]: (is_safe, message)
     """
-    if device and str(device).upper() == 'GPU':
+    dev_clean = str(device).upper() if device else 'CPU'
+    if dev_clean.startswith('GPU') or dev_clean in ('MULTI_GPU', 'GPU:ALL', 'MULTI-GPU'):
         from src.profiler.gpu import check_gpu_vram_safety
-        return check_gpu_vram_safety(num_qubits, method)
+        is_multi = dev_clean in ('MULTI_GPU', 'GPU:ALL', 'MULTI-GPU')
+        return check_gpu_vram_safety(num_qubits, method=method, device=dev_clean, multi_gpu=is_multi)
         
     vm = psutil.virtual_memory()
     available_ram = vm.available

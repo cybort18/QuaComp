@@ -56,6 +56,19 @@ def build_argument_parser() -> argparse.ArgumentParser:
     
     return parser
 
+def validate_cli_arguments(args: argparse.Namespace) -> None:
+    """Validate numerical boundary conditions for CLI simulation arguments."""
+    if getattr(args, 'qubits', None) is not None and args.qubits < 1:
+        raise ValueError("Argument --qubits must be a positive integer >= 1.")
+    if getattr(args, 'depth', None) is not None and args.depth < 0:
+        raise ValueError("Argument --depth must be a non-negative integer >= 0.")
+    if getattr(args, 'bond_dim', None) is not None and args.bond_dim < 1:
+        raise ValueError("Argument --bond-dim must be a positive integer >= 1.")
+    if getattr(args, 'workers', None) is not None and args.workers < 1:
+        raise ValueError("Argument --workers must be a positive integer >= 1.")
+    if getattr(args, 'runs', None) is not None and args.runs < 1:
+        raise ValueError("Argument --runs must be a positive integer >= 1.")
+
 def main():
     """Main CLI entrypoint for QuaComp."""
     parser = build_argument_parser()
@@ -65,6 +78,12 @@ def main():
     if not (args.quick or args.full or args.custom or args.compare is not None):
         display_help_notice(console=console)
         return
+        
+    try:
+        validate_cli_arguments(args)
+    except ValueError as ve:
+        console.print(f"[bold red]Argument Validation Error:[/bold red] {str(ve)}")
+        sys.exit(1)
         
     console.print(BANNER)
     
