@@ -12,9 +12,9 @@
 Melanjutkan direktif audit sistem mandiri tanpa kompromi, seluruh 5 batas teknis dan akademik utama pada repository QuaComp telah diselesaikan melalui refactoring arsitektural komprehensif:
 
 1. **Multi-GPU Model Parallelism**: Implementasi Distributed Statevector Slicing (`--state-slicing`, `--blocking-qubits`) untuk streaming chunk statevector melintasi agregat memori VRAM multi-GPU.
-2. **Optimasi Topologi MPS Entanglement**: Dynamic Permutation Tracking dengan `_PermutedMPSChain`, deferred unswapping untuk menekan kompleksitas kontraksi tensor 2-qubit, pelacakan kumulatif truncation error SVD $\epsilon_{trunc}$, serta hierarchical bipartite cut alignment.
-3. **Ekspansi Workload Diversity**: Implementasi generator sirkuit parametrik VQE (`--vqe`) lengkap dengan profiling latensi parameter binding, QAOA Max-Cut (`--qaoa`), serta Quantum Volume square model circuits (`--qv`) lengkap dengan evaluasi Heavy Output Generation Probability ($h_{prob} > 2/3$) dan sertifikasi confidence $2\sigma$.
-4. **Telemetri Konsumsi Daya & Energi**: Modul `src/profiler/energy.py` dengan interface cross-platform (Linux RAPL, macOS, dan continuous dynamic TDP integration model pada Windows), menghasilkan metrik Energy per Quantum Operation (EQO) dalam Joules/gate ($\mu\text{J}/\text{Gate}$).
+2. **Optimasi Topologi MPS Entanglement**: Dynamic Permutation Tracking dengan `_PermutedMPSChain`, deferred unswapping untuk menekan kompleksitas kontraksi tensor 2-qubit, pelacakan kumulatif truncation error SVD $\epsilon_{\text{trunc}}$, serta hierarchical bipartite cut alignment.
+3. **Ekspansi Workload Diversity**: Implementasi generator sirkuit parametrik VQE (`--vqe`) lengkap dengan profiling latensi parameter binding, QAOA Max-Cut (`--qaoa`), serta Quantum Volume square model circuits (`--qv`) lengkap dengan evaluasi Heavy Output Generation Probability dengan $h_{\text{prob}} > 2/3$ dan sertifikasi confidence $2\sigma$.
+4. **Telemetri Konsumsi Daya & Energi**: Modul `src/profiler/energy.py` dengan interface cross-platform (Linux RAPL, macOS, dan continuous dynamic TDP integration model pada Windows), menghasilkan metrik Energy per Quantum Operation (EQO) dalam Joules/gate (µJ/Gate).
 5. **Dynamic Comparator Registry**: Sinkronisasi remote baseline enterprise (`--fetch-baselines`) ke dalam `results/registry/` dengan toleransi network failure melalui graceful offline fallback untuk arsitektur seperti Apple M4 Max, AWS Graviton4, dan NVIDIA H100.
 
 Seluruh suite pengujian otomatis telah diekspansi dari **66 menjadi 89 tests** dengan tingkat kelulusan **100% (89 passed)** tanpa memory leak, tanpa UnboundLocalError, dan tetap mempertahankan versi baseline `v1.0.0`.
@@ -37,7 +37,7 @@ Seluruh suite pengujian otomatis telah diekspansi dari **66 menjadi 89 tests** d
   - Mengimplementasikan `_PermutedMPSChain` yang melacak pemetaan dua arah antara indeks virtual (posisi tensor pada rantai 1D) dan indeks fisik qubit logis (`qubit_at` dan `pos`).
   - Mengeliminasi naive SWAP ping-pong dengan menunda unswap (deferred unswapping) saat gerbang non-adjacent dieksekusi.
   - Memperbaiki pemetaan indeks tensor einsum pada gerbang 2-qubit adjacent dan SWAP gate basis.
-  - Menghitung akumulasi truncation error SVD secara real-time: $\epsilon_{trunc} = \sum_{k \ge \chi} \lambda_k^2 / \sum \lambda_k^2$.
+  - Menghitung akumulasi truncation error SVD secara real-time: $\epsilon_{\text{trunc}} = \sum_{k \ge \chi} \lambda_k^2 / \sum \lambda_k^2$.
   - Menerapkan hierarchical bipartite cut alignment sebelum canonical QR sweep dan central bond SVD.
 - **Verifikasi Unit Test:** [`tests/test_mps_topology.py`](file:///c:/Users/HP/Documents/PROJECT/QuadComp/tests/test_mps_topology.py) & [`tests/test_entanglement.py`](file:///c:/Users/HP/Documents/PROJECT/QuadComp/tests/test_entanglement.py) (16 tests passed).
 
@@ -46,17 +46,18 @@ Seluruh suite pengujian otomatis telah diekspansi dari **66 menjadi 89 tests** d
 - **Mekanika Teknis:**
   - `generate_vqe_circuit`: Ansatz TwoLocal/RealAmplitudes dengan parameter simbolik `ParameterVector`.
   - `profile_parameter_binding`: Mengukur latensi rerata, deviasi standar, dan throughput pengikatan parameter (bindings/sec) menggunakan `assign_parameters`.
-  - `generate_qaoa_circuit`: Ansatz Max-Cut berulang $p$-steps dengan Hamiltonian biaya ($ZZ$) dan mixer ($X$).
-  - `generate_quantum_volume_circuit`: Sirkuit model $SU(4)$ Haar-random berukuran bujur sangkar ($d = n$) pada permutasi acak qubit.
-  - `calculate_heavy_output_probability`: Membandingkan distribusi ideal dan hasil sampling untuk menghitung $h_{prob}$, standar error binomial $\sigma$, serta batas keyakinan $2\sigma > 2/3$.
+  - `generate_qaoa_circuit`: Ansatz Max-Cut berulang $p$-steps dengan Hamiltonian biaya $ZZ$ dan mixer $X$.
+  - `generate_quantum_volume_circuit`: Sirkuit model $SU(4)$ Haar-random berukuran bujur sangkar $d = n$ pada permutasi acak qubit.
+  - `calculate_heavy_output_probability`: Membandingkan distribusi ideal dan hasil sampling untuk menghitung $h_{\text{prob}}$, standar error binomial $\sigma$, serta batas keyakinan $2\sigma > 2/3$.
 - **Verifikasi Unit Test:** [`tests/test_variational_qv.py`](file:///c:/Users/HP/Documents/PROJECT/QuadComp/tests/test_variational_qv.py) (5 tests passed).
 
 ### 4. Telemetri Konsumsi Daya & Energi (EQO: Joules per Gate)
 - **Modul Terkait:** [`src/profiler/energy.py`](file:///c:/Users/HP/Documents/PROJECT/QuadComp/src/profiler/energy.py), [`cli/runner.py`](file:///c:/Users/HP/Documents/PROJECT/QuadComp/cli/runner.py), [`cli/ui.py`](file:///c:/Users/HP/Documents/PROJECT/QuadComp/cli/ui.py).
 - **Mekanika Teknis:**
   - `estimate_cpu_tdp`: Mengestimasi TDP prosesor secara adaptif melalui heuristik token CPU (Ryzen U/H series, Threadripper, Apple Silicon M-series, Xeon, Intel Core).
-  - `EnergyProfiler`: Context manager multi-platform yang memanfaatkan Linux RAPL microjoule counter jika tersedia, atau continuous dynamic sampling model ($P(t) = P_{idle} + U_{cpu}(t) \times (TDP - P_{idle})$).
-  - Menghitung `total_energy_joules`, `average_power_watts`, serta metrik Energy per Quantum Operation (EQO) dalam $\mu\text{J}/\text{Gate}$ dan Joules/Gate.
+  - `EnergyProfiler`: Context manager multi-platform yang memanfaatkan Linux RAPL microjoule counter jika tersedia, atau continuous dynamic sampling model:
+    $$P(t) = P_{\text{idle}} + U_{\text{cpu}}(t) \times (P_{\text{TDP}} - P_{\text{idle}})$$
+  - Menghitung `total_energy_joules`, `average_power_watts`, serta metrik Energy per Quantum Operation (EQO) dalam µJ/Gate dan Joules/Gate.
   - Menampilkan tabel Rich *Hardware Power & Energy Telemetry (EQO)* pada terminal output.
 - **Verifikasi Unit Test:** [`tests/test_energy.py`](file:///c:/Users/HP/Documents/PROJECT/QuadComp/tests/test_energy.py) (3 tests passed).
 

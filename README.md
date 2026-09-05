@@ -50,54 +50,57 @@
 - Dynamically blocks and warns on workloads exceeding 85% of available RAM or GPU VRAM, preventing Out-Of-Memory (OOM) fatal crashes and system freezing.
 
 ### Dual Simulation Engines (Statevector & Matrix Product State)
-- **Statevector Simulation Engine**: Full exact quantum statevector representation ($2^n$ complex amplitudes) for high-accuracy circuit analysis.
-- **Matrix Product State (MPS) Engine**: Tensor network compression with configurable bond dimension ($\chi \le 64, 128$) to simulate large-scale quantum circuits ($30\text{--}100+$ qubits) with up to **99.9% RAM savings** on memory-constrained hardware.
-- **RAM Efficiency Profiling**: Measures actual physical RAM allocation and benchmarks against theoretical statevector memory footprint ($2^n \times 16$ bytes).
+- **Statevector Simulation Engine**: Full exact quantum statevector representation of $2^n$ complex amplitudes for high-accuracy circuit analysis.
+- **Matrix Product State (MPS) Engine**: Tensor network compression with configurable bond dimension $\chi \le 64, 128$ to simulate large-scale quantum circuits (30 to 100+ qubits) with up to **99.9% RAM savings** on memory-constrained hardware.
+- **RAM Efficiency Profiling**: Measures actual physical RAM allocation and benchmarks against theoretical statevector memory footprint of $2^n \times 16$ bytes.
 
 ### Hardware Acceleration & Distributed Model Parallelism
 - Automatically detects GPU hardware (NVIDIA, AMD, Apple, Intel) and queryable VRAM limits.
 - Supports Qiskit Aer GPU/CUDA acceleration (`quacomp --gpu` or `quacomp --device gpu`).
 - Supports Multi-GPU acceleration pooling (`quacomp --multi-gpu` / `--device multi_gpu`) with batched shot memory distribution and aggregate VRAM scaling.
-- **Distributed Statevector Slicing (Model Parallelism)**: Combines VRAM from multiple GPUs via distributed chunk streaming (`--state-slicing`, `--blocking-qubits <INT>`), enabling large statevectors ($n > 28$) that exceed single-card VRAM limits.
+- **Distributed Statevector Slicing (Model Parallelism)**: Combines VRAM from multiple GPUs via distributed chunk streaming (`--state-slicing`, `--blocking-qubits <INT>`), enabling large statevectors with $n > 28$ qubits that exceed single-card VRAM limits.
 - Supports Distributed Multi-Worker parallel simulation execution (`quacomp --workers <INT>`) across multi-core CPUs and GPU compute backends.
 - Graceful, informative diagnostics and fallback if GPU execution is requested on a CPU-only environment.
 
 ### Diverse Quantum Workload Generators
 - **Shallow Workloads**: Initial state allocations using Hadamard gates coupled with 1D entanglement (CNOT chains).
-- **Deep Workloads**: Intensive random rotation matrices ($R_x, R_y, R_z$) and multi-layered entanglement chains designed to stress memory bandwidth.
+- **Deep Workloads**: Intensive random rotation matrices $R_x, R_y, R_z$ and multi-layered entanglement chains designed to stress memory bandwidth.
 - **Quantum Fourier Transform (QFT)**: Standard implementation representing realistic quantum algorithms.
 - **Variational Quantum Eigensolver (VQE)**: Parametric ansatz (`quacomp --vqe`) with alternating $R_y$ layers and linear/full entanglement, featuring automatic Parameter Binding latency and throughput profiling.
 - **Quantum Approximate Optimization Algorithm (QAOA)**: Max-Cut parametric ansatz (`quacomp --qaoa`) parameterized by cost $\gamma$ and mixer $\beta$ Hamiltonians.
-- **Quantum Volume (QV)**: Square model circuits (`quacomp --qv`) with Haar-random $SU(4)$ 2-qubit unitaries on random qubit permutations per layer, accompanied by Heavy Output Generation Probability analysis ($h_{\text{prob}} > 2/3$) and $2\sigma$ confidence certification.
+- **Quantum Volume (QV)**: Square model circuits (`quacomp --qv`) with Haar-random $SU(4)$ 2-qubit unitaries on random qubit permutations per layer, accompanied by Heavy Output Generation Probability analysis where $h_{\text{prob}} > 2/3$ and $2\sigma$ confidence certification.
 
 ### NISQ Noise & State Fidelity Profiler
-- **Synthetic Parameterized Noise Channels**: Incorporates Thermal Relaxation ($T_1, T_2$) and Depolarizing Errors using `qiskit_aer.noise`.
+- **Synthetic Parameterized Noise Channels**: Incorporates Thermal Relaxation $T_1, T_2$ and Depolarizing Errors using `qiskit_aer.noise`.
 - **Preset Noise Profiles**: Configurable noise presets via `--noise-level [none|low|medium|high]`:
   - `none`: Ideal noise-free simulation.
-  - `low`: Mild decoherence ($T_1=100\,\mu\text{s}, T_2=120\,\mu\text{s}$, gate error $0.1\%$).
-  - `medium`: Synthetic representative noise profile ($T_1=50\,\mu\text{s}, T_2=70\,\mu\text{s}$, gate error $0.5\%$).
-  - `high`: Heavy noise profile for extreme stress testing ($T_1=20\,\mu\text{s}, T_2=30\,\mu\text{s}$, gate error $2.0\%$).
+  - `low`: Mild decoherence: $T_1 = 100\,\mu\text{s}, T_2 = 120\,\mu\text{s}$, gate error rate 0.1%.
+  - `medium`: Representative synthetic noise: $T_1 = 50\,\mu\text{s}, T_2 = 70\,\mu\text{s}$, gate error rate 0.5%.
+  - `high`: Heavy noise profile for extreme stress testing: $T_1 = 20\,\mu\text{s}, T_2 = 30\,\mu\text{s}$, gate error rate 2.0%.
 - **Fidelity & Overhead Metrics**: Computes classical Hellinger Quantum State Fidelity (%) and CPU Computation Overhead ratio (%).
 
 ### Entanglement Entropy & MPS Topology Optimization (`--entropy`)
-- **Native MPS Tensor Bond SVD & Statevector SVD**: Seamlessly switches between full Statevector SVD ($n \le 22$) and local 1D Tensor Network MPS Central Bond SVD ($n > 22$), enabling exact Entanglement Entropy analysis for **30 to 100+ qubit circuits** in under 0.2 seconds with $< 2\text{ MB}$ RAM consumption.
+- **Native MPS Tensor Bond SVD & Statevector SVD**: Seamlessly switches between full Statevector SVD for $n \le 22$ and local 1D Tensor Network MPS Central Bond SVD for $n > 22$, enabling exact Entanglement Entropy analysis for **30 to 100+ qubit circuits** in under 0.2 seconds with under 2 MB RAM consumption.
 - **Dynamic Permutation Tracking & Deferred Routing**: Optimizes MPS topological routing with `_PermutedMPSChain`, tracking virtual-to-physical qubit locations to eliminate naive SWAP ping-pong and minimize 2-qubit tensor contractions.
-- **SVD Truncation Error Monitoring**: Dynamically tracks cumulative truncation error ($\epsilon_{\text{trunc}} = \sum (1 - \sum_{i \le \chi} \lambda_i^2)$) to ensure simulation fidelity bounds.
+- **SVD Truncation Error Monitoring**: Dynamically tracks cumulative truncation error to ensure simulation fidelity bounds:
+  $$\epsilon_{\text{trunc}} = \sum \left(1 - \sum_{i \le \chi} \lambda_i^2\right)$$
 - **Bipartite Von Neumann Entanglement Entropy**:
   $$S(\rho_A) = -\text{Tr}(\rho_A \log_2 \rho_A) = -\sum_{i} \lambda_i^2 \log_2(\lambda_i^2)$$
-- **Schmidt Rank & Participation Ratio**: Quantifies the effective number of entangled states ($K = 1 / \sum \lambda_i^4$) and Schmidt spectrum rank.
+- **Schmidt Rank & Participation Ratio**: Quantifies the effective number of entangled states $K$ and Schmidt spectrum rank:
+  $$K = \frac{1}{\sum_i \lambda_i^4}$$
 - **Simulation Complexity Classification**: Classifies entanglement regimes into `Product State`, `Low (Area-law)`, `Moderate`, and `Volume-law (Maximal)` alongside MPS simulation hardness tiers (`Trivial`, `Efficient`, `Challenging`, `Exponentially Hard`).
 
 ### Hardware Power & Energy Telemetry (EQO)
-- **Cross-Platform Energy Profiling**: Automatically interfaces with Linux RAPL (`/sys/class/powercap/intel-rapl`), macOS power counters, or continuous Windows/generic dynamic TDP integration models ($P(t) = P_{\text{idle}} + U(t) \times (\text{TDP} - P_{\text{idle}})$).
-- **Energy per Quantum Operation (EQO)**: Quantifies the energetic efficiency of simulation backends in Joules per gate ($\mu\text{J}/\text{Gate}$), providing sustainability metrics alongside raw latency.
+- **Cross-Platform Energy Profiling**: Automatically interfaces with Linux RAPL (`/sys/class/powercap/intel-rapl`), macOS power counters, or continuous Windows/generic dynamic TDP integration models:
+  $$P(t) = P_{\text{idle}} + U(t) \times (P_{\text{TDP}} - P_{\text{idle}})$$
+- **Energy per Quantum Operation (EQO)**: Quantifies the energetic efficiency of simulation backends in Joules per gate (µJ/Gate), providing sustainability metrics alongside raw latency.
 
 ### Multi-Run Benchmarking & Telemetry
-- **Statistical Repeatability**: Executes `--runs INT` (default 3) benchmark iterations per circuit to compute Mean ($\mu$), Median, and Standard Deviation ($\sigma$) of execution latency, mitigating CPU governor and background task noise.
+- **Statistical Repeatability**: Executes `--runs INT` (default 3) benchmark iterations per circuit to compute Mean (μ), Median, and Standard Deviation (σ) of execution latency, mitigating CPU governor and background task noise.
 - **Composite Heuristic Scoring**: Computes the **QuaComp Composite Score** (a project-specific heuristic score) that separates state-space capacity from gate throughput:
   $$\text{Score} = (C \times 10) + T = (2^{\text{max qubits}} \times 10) + \left(\frac{\text{Total Gates}}{\mu_{\text{latency}}}\right)$$
-  - **Capacity Metric ($C = 2^{\text{max qubits}}$)**: Qubit state-space capacity metric.
-  - **Throughput Metric ($T = \frac{\text{Total Gates}}{\mu_{\text{latency}}}$)**: Gate processing throughput metric (gates/second).
+  - **Capacity Metric**: $C = 2^{\text{max qubits}}$ (qubit state-space capacity metric).
+  - **Throughput Metric**: $T = \frac{\text{Total Gates}}{\mu_{\text{latency}}}$ (gate processing throughput in gates/second).
   *Note: QuaComp Score is a project-specific composite heuristic prioritizing state-space capacity scaling.*
 
 ### Visualization Engine & Chart Generator
@@ -106,7 +109,7 @@
   - `qubit_vs_ram.png`: Line plot of Qubits vs Memory Allocation (GB) with physical RAM safety threshold line.
   - `method_comparison.png`: Comparison bar chart between Statevector vs MPS latency & memory.
   - `noise_fidelity_impact.png`: Bar plot comparing NISQ noise profiles vs Quantum State Fidelity (%) & CPU Overhead (%).
-  - `entanglement_entropy.png`: Scaling curve of Entanglement Entropy ($S_{vN}$) vs theoretical maximum bipartite bound ($S_{max}$).
+  - `entanglement_entropy.png`: Scaling curve of Entanglement Entropy $S_{\text{vN}}$ vs theoretical maximum bipartite bound $S_{\max}$.
 - Automatically links and embeds generated chart graphics into `results/report.md`.
 
 | Execution Latency Scaling (Mean ± Std Dev) | Memory Footprint & RAM Safety Threshold |
@@ -117,8 +120,8 @@
 - **Side-by-Side Differencing**: Compares two benchmark JSON runs (or live benchmark against a target reference baseline) using `quacomp --compare`.
 - **Metrics Evaluated**:
   - **Composite Score Ratio & Delta**: Relative speed and capacity gain percentage.
-  - **Throughput Speedup Factor**: Direct gate simulation throughput ratio ($T_{target} / T_{base}$).
-  - **Qubit Capacity Gap**: Physical qubit scaling difference ($2^{\Delta n}\times$ statevector space).
+  - **Throughput Speedup Factor**: Direct gate simulation throughput ratio: $T_{\text{target}} / T_{\text{base}}$.
+  - **Qubit Capacity Gap**: Physical qubit scaling difference of $2^{\Delta n}\times$ statevector space.
   - **Per-Qubit Latency Differencing**: Execution latency speedup multipliers and percentage savings.
 - **Rich Terminal Comparison & Exporters**: Displays side-by-side colorized Rich tables and an academic verdict in terminal, while exporting `results/comparison.json`, `results/comparison_report.md`, and comparison plots (`qubit_latency_comparison.png`, `throughput_comparison.png`).
 
@@ -263,7 +266,7 @@ quacomp --quick --compare --target apple_m4_max
 | `--type` | `shallow`, `deep`, `qft`, `vqe`, `qaoa`, `qv` | Quantum circuit workload type. |
 | `--vqe` | N/A | Shorthand for VQE variational ansatz with parameter binding latency measurement. |
 | `--qaoa` | N/A | Shorthand for QAOA Max-Cut variational workload. |
-| `--qv` | N/A | Shorthand for Quantum Volume square model benchmark ($h_{\text{prob}} > 2/3$). |
+| `--qv` | N/A | Shorthand for Quantum Volume square model benchmark with $h_{\text{prob}} > 2/3$. |
 | `--depth` | `INT` (default: `10`) | Depth parameter for deep random circuit workloads. |
 | `--method` | `statevector`, `mps` (default: `statevector`) | Simulation engine method. |
 | `--bond-dim` | `INT` (default: `64`) | Maximum bond dimension for MPS tensor network engine. |
@@ -331,13 +334,13 @@ QuaComp Composite Score maps directly into performance tiers, reflecting the com
 
 | Tier Category | Score Range (Points) | Max Qubits Simulation Range |
 | :--- | :--- | :--- |
-| **Entry-Level** | $< 100,000$ | Up to 18-20 Qubits |
-| **Mid-Range** | $100,000$ to $1,000,000$ | Up to 22-25 Qubits |
-| **High-Performance** | $1,000,000$ to $50,000,000$ | Up to 26-28 Qubits |
-| **Extreme Workstation** | $> 50,000,000$ | $29+$ Qubits |
+| **Entry-Level** | < 100,000 | Up to 18-20 Qubits |
+| **Mid-Range** | 100,000 to 1,000,000 | Up to 22-25 Qubits |
+| **High-Performance** | 1,000,000 to 50,000,000 | Up to 26-28 Qubits |
+| **Extreme Workstation** | > 50,000,000 | 29+ Qubits |
 
 > **Methodology Note on Capacity Dominance:**  
-> Because state-vector memory allocation scales exponentially ($2^n$), the Capacity Metric ($10 \times 2^n$) exponentially dominates the Throughput Metric ($T = \text{gates}/\mu$). A system simulating 30 qubits will score higher than a system simulating 28 qubits with faster gate throughput, reflecting QuaComp's deliberate design choice to prioritize state-space memory capacity scaling over execution speed.
+> Because state-vector memory allocation scales exponentially with $2^n$, the Capacity Metric of $10 \times 2^n$ exponentially dominates the Throughput Metric $T = \text{gates}/\mu_{\text{latency}}$. A system simulating 30 qubits will score higher than a system simulating 28 qubits with faster gate throughput, reflecting QuaComp's deliberate design choice to prioritize state-space memory capacity scaling over execution speed.
 
 ---
 
@@ -355,11 +358,11 @@ QuaComp Composite Score maps directly into performance tiers, reflecting the com
   - Add JSON / Markdown export features.
   - Publish documentation.
 - [x] **Phase 4: Matrix Product State (MPS) Engine**
-  - High-qubit simulation capabilities ($30\text{--}100+$ qubits for low-to-moderate entanglement).
+  - High-qubit simulation capabilities (30–100+ qubits for low-to-moderate entanglement).
   - Parameterizable bond dimension (`--bond-dim`).
   - Memory efficiency savings profiler.
 - [x] **Phase 5: NISQ Noise & Fidelity Benchmarking**
-  - Qiskit Aer synthetic noise channel integration ($T_1/T_2$ relaxation & depolarizing error).
+  - Qiskit Aer synthetic noise channel integration (Thermal $T_1/T_2$ relaxation & depolarizing error).
   - Customizable noise presets (`--noise-level [none|low|medium|high]`).
   - Quantum State Fidelity (%) & CPU Computation Overhead (%) tracking.
 - [x] **Methodological Revision Phase**
