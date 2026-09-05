@@ -1,0 +1,72 @@
+{
+  "timestamp": "2026-08-15T12:00:00",
+  "final_score": 671089200.0,
+  "final_composite_score": 671089200.0,
+  "score_type": "project-specific composite heuristic score",
+  "scoring_breakdown": {
+    "capacity_metric": 67108864.0,
+    "throughput_metric": 1200.0
+  },
+  "performance_category": "Extreme Workstation",
+  "max_qubits_simulated": 26,
+  "system_metadata": {
+    "cpu_name": "Apple M4 Max (16-core CPU)",
+    "total_ram_gb": 128.0,
+    "os_name": "Darwin",
+    "os_release": "24.0.0",
+    "python_version": "3.13.0"
+  },
+  "results": [
+    {
+      "qubits": 10,
+      "success": true,
+      "latency": 0.042,
+      "mean_latency": 0.042,
+      "median_latency": 0.041,
+      "std_latency": 0.003,
+      "runs_count": 3,
+      "gates": 60,
+      "cpu_usage": 85.0,
+      "ram_status": "SAFE",
+      "workload_label": "QFT",
+      "method": "statevector",
+      "noise_level": "none",
+      "fidelity": 100.0,
+      "overhead_ratio": 0.0
+    },
+    {
+      "qubits": 20,
+      "success": true,
+      "latency": 0.125,
+      "mean_latency": 0.125,
+      "median_latency": 0.124,
+      "std_latency": 0.005,
+      "runs_count": 3,
+      "gates": 220,
+      "cpu_usage": 91.0,
+      "ram_status": "SAFE",
+      "workload_label": "QFT",
+      "method": "statevector",
+      "noise_level": "none",
+      "fidelity": 100.0,
+      "overhead_ratio": 0.0
+    },
+    {
+      "qubits": 26,
+      "success": true,
+      "latency": 0.89,
+      "mean_latency": 0.89,
+      "median_latency": 0.885,
+      "std_latency": 0.015,
+      "runs_count": 3,
+      "gates": 360,
+      "cpu_usage": 96.0,
+      "ram_status": "SAFE",
+      "workload_label": "QFT",
+      "method": "statevector",
+      "noise_level": "none",
+      "fidelity": 100.0,
+      "overhead_ratio": 0.0
+    }
+  ]
+}

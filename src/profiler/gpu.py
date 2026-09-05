@@ -170,7 +170,8 @@ def check_gpu_vram_safety(
     qubits: int, 
     method: str = 'statevector', 
     device: str = 'GPU',
-    multi_gpu: bool = False
+    multi_gpu: bool = False,
+    state_slicing: bool = False
 ) -> Tuple[bool, str]:
     """
     Check if the GPU / Multi-GPU VRAM capacity is safe for the requested qubit simulation.
@@ -180,6 +181,7 @@ def check_gpu_vram_safety(
         method: Simulation method ('statevector' or 'mps').
         device: Device backend ('GPU', 'MULTI_GPU', etc.).
         multi_gpu: Whether multi-GPU VRAM pooling is active.
+        state_slicing: Whether distributed statevector slicing model parallelism is active.
         
     Returns:
         Tuple[bool, str]: (is_safe, message)
@@ -204,17 +206,18 @@ def check_gpu_vram_safety(
     total_vram = gpu_meta.get("total_vram_gb", 0.0)
     gpu_count = gpu_meta.get("gpu_count", 1)
     
-    effective_vram = total_vram if (multi_gpu and gpu_count > 1) else (total_vram / max(1, gpu_count) if total_vram > 0 else 0.0)
+    is_pooling = multi_gpu or state_slicing
+    effective_vram = total_vram if (is_pooling and gpu_count > 1) else (total_vram / max(1, gpu_count) if total_vram > 0 else 0.0)
     
     if effective_vram > 0.0:
         if req_gb > (effective_vram * 0.85):
-            target_lbl = "Multi-GPU Aggregate VRAM" if multi_gpu else "GPU VRAM"
+            target_lbl = "Multi-GPU Aggregate VRAM (Distributed Slicing)" if is_pooling else "GPU VRAM"
             return False, f"CRITICAL: {qubits} qubits requires ~{req_gb:.2f} GB VRAM, exceeding 85% of {target_lbl} ({effective_vram:.2f} GB)."
         if req_gb > (effective_vram * 0.70):
             return True, f"WARNING: {qubits} qubits requires ~{req_gb:.2f} GB VRAM (Effective VRAM: {effective_vram:.2f} GB)."
             
     # For large statevector on GPU (>28 qubits is >4GB VRAM)
-    if qubits >= 30 and not multi_gpu:
-        return False, f"CRITICAL: {qubits} qubits requires ~{req_gb:.2f} GB VRAM, which exceeds standard single-GPU VRAM capacity."
+    if qubits >= 30 and not is_pooling:
+        return False, f"CRITICAL: {qubits} qubits requires ~{req_gb:.2f} GB VRAM, which exceeds standard single-GPU VRAM capacity without Distributed Statevector Slicing."
         
     return True, f"SAFE: {qubits} qubits statevector requires ~{req_gb:.4f} GB VRAM on GPU."

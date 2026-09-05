@@ -1,0 +1,72 @@
+{
+  "timestamp": "2026-08-18T08:00:00",
+  "final_score": 536872000.0,
+  "final_composite_score": 536872000.0,
+  "score_type": "project-specific composite heuristic score",
+  "scoring_breakdown": {
+    "capacity_metric": 53687091.0,
+    "throughput_metric": 1850.0
+  },
+  "performance_category": "Cloud Server",
+  "max_qubits_simulated": 26,
+  "system_metadata": {
+    "cpu_name": "AWS Graviton4",
+    "total_ram_gb": 768.0,
+    "os_name": "Linux",
+    "os_release": "6.1.0-amazonlinux",
+    "python_version": "3.12.4"
+  },
+  "results": [
+    {
+      "qubits": 10,
+      "success": true,
+      "latency": 0.035,
+      "mean_latency": 0.035,
+      "median_latency": 0.034,
+      "std_latency": 0.002,
+      "runs_count": 3,
+      "gates": 60,
+      "cpu_usage": 70.0,
+      "ram_status": "SAFE",
+      "workload_label": "QFT",
+      "method": "statevector",
+      "noise_level": "none",
+      "fidelity": 100.0,
+      "overhead_ratio": 0.0
+    },
+    {
+      "qubits": 20,
+      "success": true,
+      "latency": 0.095,
+      "mean_latency": 0.095,
+      "median_latency": 0.094,
+      "std_latency": 0.004,
+      "runs_count": 3,
+      "gates": 220,
+      "cpu_usage": 80.0,
+      "ram_status": "SAFE",
+      "workload_label": "QFT",
+      "method": "statevector",
+      "noise_level": "none",
+      "fidelity": 100.0,
+      "overhead_ratio": 0.0
+    },
+    {
+      "qubits": 26,
+      "success": true,
+      "latency": 0.72,
+      "mean_latency": 0.72,
+      "median_latency": 0.715,
+      "std_latency": 0.012,
+      "runs_count": 3,
+      "gates": 360,
+      "cpu_usage": 92.0,
+      "ram_status": "SAFE",
+      "workload_label": "QFT",
+      "method": "statevector",
+      "noise_level": "none",
+      "fidelity": 100.0,
+      "overhead_ratio": 0.0
+    }
+  ]
+}

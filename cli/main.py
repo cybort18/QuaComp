@@ -32,13 +32,18 @@ def build_argument_parser() -> argparse.ArgumentParser:
     # Benchmark parameters
     param_group = parser.add_argument_group("Simulation Parameters")
     param_group.add_argument("--qubits", type=int, default=10, help="Number of qubits for custom run (default 10).")
-    param_group.add_argument("--type", choices=["shallow", "deep", "qft"], default="qft", help="Workload type (default qft).")
+    param_group.add_argument("--type", choices=["shallow", "deep", "qft", "vqe", "qaoa", "qv"], default="qft", help="Workload type (default qft).")
+    param_group.add_argument("--vqe", action="store_true", help="Shorthand for VQE variational ansatz workload (--type vqe).")
+    param_group.add_argument("--qaoa", action="store_true", help="Shorthand for QAOA Max-Cut variational workload (--type qaoa).")
+    param_group.add_argument("--qv", action="store_true", help="Shorthand for Quantum Volume square model benchmark (--type qv).")
     param_group.add_argument("--depth", type=int, default=10, help="Depth for deep workload (default 10).")
     param_group.add_argument("--method", choices=["statevector", "mps"], default="statevector", help="Simulation method (default statevector).")
     param_group.add_argument("--bond-dim", type=int, default=64, help="Max bond dimension for MPS simulation (default 64).")
     param_group.add_argument("--device", choices=["cpu", "gpu", "multi_gpu"], default="cpu", help="Simulation compute device backend (default cpu).")
     param_group.add_argument("--gpu", action="store_true", help="Shorthand flag to enable GPU acceleration (--device gpu).")
     param_group.add_argument("--multi-gpu", action="store_true", help="Enable multi-GPU distributed simulation backend.")
+    param_group.add_argument("--state-slicing", action="store_true", help="Enable distributed statevector slicing model parallelism across VRAM.")
+    param_group.add_argument("--blocking-qubits", type=int, default=None, help="Statevector chunk slice size in qubits for distributed model parallelism.")
     param_group.add_argument("--workers", type=int, default=1, help="Parallel distributed worker threads/processes for batch execution (default 1).")
     param_group.add_argument("--entropy", action="store_true", help="Calculate bipartite Von Neumann entanglement entropy and simulation complexity.")
     param_group.add_argument("--noise-level", choices=["none", "low", "medium", "high"], default="none", help="NISQ noise model preset level (default none).")
@@ -48,6 +53,7 @@ def build_argument_parser() -> argparse.ArgumentParser:
     comp_group = parser.add_argument_group("Comparison Options")
     comp_group.add_argument("--compare", nargs="*", metavar="FILE", help="Compare two benchmark JSON result files, or compare live run with a target JSON.")
     comp_group.add_argument("--target", type=str, default=None, help="Target reference preset alias (apple_m3, ryzen3_5300u, ryzen7_5800h) or path.")
+    comp_group.add_argument("--fetch-baselines", action="store_true", help="Synchronize enterprise comparison baselines from QuaComp remote registry.")
     
     # Reporting options
     report_group = parser.add_argument_group("Reporting Options")
@@ -68,14 +74,52 @@ def validate_cli_arguments(args: argparse.Namespace) -> None:
         raise ValueError("Argument --workers must be a positive integer >= 1.")
     if getattr(args, 'runs', None) is not None and args.runs < 1:
         raise ValueError("Argument --runs must be a positive integer >= 1.")
+    if getattr(args, 'blocking_qubits', None) is not None and args.blocking_qubits < 1:
+        raise ValueError("Argument --blocking-qubits must be a positive integer >= 1.")
 
 def main():
     """Main CLI entrypoint for QuaComp."""
     parser = build_argument_parser()
     args = parser.parse_args()
     
+    # Resolve baseline synchronization
+    if getattr(args, 'fetch_baselines', False):
+        from src.comparator.registry import fetch_remote_baselines, list_available_baselines
+        from rich.table import Table
+        console.print(BANNER)
+        console.print("[bold yellow]Synchronizing QuaComp Enterprise Baseline Registry...[/bold yellow]\n")
+        sync_report = fetch_remote_baselines()
+        baselines = list_available_baselines()
+        
+        reg_table = Table(title="QuaComp Enterprise Baseline Registry", show_header=True, header_style="bold cyan")
+        reg_table.add_column("Alias", style="bold yellow", justify="left")
+        reg_table.add_column("Hardware Platform", style="white", justify="left")
+        reg_table.add_column("Device", style="cyan", justify="center")
+        reg_table.add_column("Category", style="magenta", justify="center")
+        reg_table.add_column("Status", style="green", justify="center")
+        
+        for b in baselines:
+            status_str = "[bold green]Available (Ready)[/bold green]" if b["is_available"] else "[dim]Remote Only[/dim]"
+            reg_table.add_row(b["alias"], b["description"], b["device"], b["category"], status_str)
+            
+        console.print(reg_table)
+        mode_note = "Offline Fallback Cache" if sync_report["offline_mode"] else "Remote Cloud Synchronized"
+        console.print(f"\n[bold green]Synchronization Complete:[/bold green] {sync_report['total_available']} baseline profiles active ({mode_note}).\n")
+        return
+
+    # Resolve workload shorthands
+    if args.vqe:
+        args.type = "vqe"
+    elif args.qaoa:
+        args.type = "qaoa"
+    elif args.qv:
+        args.type = "qv"
+        
+    if (args.vqe or args.qaoa or args.qv) and not (args.quick or args.full):
+        args.custom = True
+        
     # Validate arguments: Must specify at least one benchmark mode OR --compare
-    if not (args.quick or args.full or args.custom or args.compare is not None):
+    if not (args.quick or args.full or args.custom or args.compare is not None or args.fetch_baselines):
         display_help_notice(console=console)
         return
         

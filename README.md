@@ -15,7 +15,7 @@
 
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![CI](https://github.com/cybort18/QuaComp/actions/workflows/ci.yml/badge.svg)](https://github.com/cybort18/QuaComp/actions)
-[![Tests Status](https://img.shields.io/badge/tests-66%20passed-green.svg)](#running-tests)
+[![Tests Status](https://img.shields.io/badge/tests-89%20passed-green.svg)](#running-tests)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 ---
@@ -54,17 +54,21 @@
 - **Matrix Product State (MPS) Engine**: Tensor network compression with configurable bond dimension ($\chi \le 64, 128$) to simulate large-scale quantum circuits ($30\text{--}100+$ qubits) with up to **99.9% RAM savings** on memory-constrained hardware.
 - **RAM Efficiency Profiling**: Measures actual physical RAM allocation and benchmarks against theoretical statevector memory footprint ($2^n \times 16$ bytes).
 
-### Hardware Acceleration (Single-GPU, Multi-GPU & Distributed Workers)
+### Hardware Acceleration & Distributed Model Parallelism
 - Automatically detects GPU hardware (NVIDIA, AMD, Apple, Intel) and queryable VRAM limits.
 - Supports Qiskit Aer GPU/CUDA acceleration (`quacomp --gpu` or `quacomp --device gpu`).
 - Supports Multi-GPU acceleration pooling (`quacomp --multi-gpu` / `--device multi_gpu`) with batched shot memory distribution and aggregate VRAM scaling.
+- **Distributed Statevector Slicing (Model Parallelism)**: Combines VRAM from multiple GPUs via distributed chunk streaming (`--state-slicing`, `--blocking-qubits <INT>`), enabling large statevectors ($n > 28$) that exceed single-card VRAM limits.
 - Supports Distributed Multi-Worker parallel simulation execution (`quacomp --workers <INT>`) across multi-core CPUs and GPU compute backends.
 - Graceful, informative diagnostics and fallback if GPU execution is requested on a CPU-only environment.
 
-### Quantum Workload Generators
+### Diverse Quantum Workload Generators
 - **Shallow Workloads**: Initial state allocations using Hadamard gates coupled with 1D entanglement (CNOT chains).
 - **Deep Workloads**: Intensive random rotation matrices ($R_x, R_y, R_z$) and multi-layered entanglement chains designed to stress memory bandwidth.
 - **Quantum Fourier Transform (QFT)**: Standard implementation representing realistic quantum algorithms.
+- **Variational Quantum Eigensolver (VQE)**: Parametric ansatz (`quacomp --vqe`) with alternating $R_y$ layers and linear/full entanglement, featuring automatic Parameter Binding latency and throughput profiling.
+- **Quantum Approximate Optimization Algorithm (QAOA)**: Max-Cut parametric ansatz (`quacomp --qaoa`) parameterized by cost $\gamma$ and mixer $\beta$ Hamiltonians.
+- **Quantum Volume (QV)**: Square model circuits (`quacomp --qv`) with Haar-random $SU(4)$ 2-qubit unitaries on random qubit permutations per layer, accompanied by Heavy Output Generation Probability analysis ($h_{\text{prob}} > 2/3$) and $2\sigma$ confidence certification.
 
 ### NISQ Noise & State Fidelity Profiler
 - **Synthetic Parameterized Noise Channels**: Incorporates Thermal Relaxation ($T_1, T_2$) and Depolarizing Errors using `qiskit_aer.noise`.
@@ -75,12 +79,18 @@
   - `high`: Heavy noise profile for extreme stress testing ($T_1=20\,\mu\text{s}, T_2=30\,\mu\text{s}$, gate error $2.0\%$).
 - **Fidelity & Overhead Metrics**: Computes classical Hellinger Quantum State Fidelity (%) and CPU Computation Overhead ratio (%).
 
-### Entanglement Entropy & Simulation Hardness Profiler (`--entropy`)
+### Entanglement Entropy & MPS Topology Optimization (`--entropy`)
 - **Native MPS Tensor Bond SVD & Statevector SVD**: Seamlessly switches between full Statevector SVD ($n \le 22$) and local 1D Tensor Network MPS Central Bond SVD ($n > 22$), enabling exact Entanglement Entropy analysis for **30 to 100+ qubit circuits** in under 0.2 seconds with $< 2\text{ MB}$ RAM consumption.
+- **Dynamic Permutation Tracking & Deferred Routing**: Optimizes MPS topological routing with `_PermutedMPSChain`, tracking virtual-to-physical qubit locations to eliminate naive SWAP ping-pong and minimize 2-qubit tensor contractions.
+- **SVD Truncation Error Monitoring**: Dynamically tracks cumulative truncation error ($\epsilon_{\text{trunc}} = \sum (1 - \sum_{i \le \chi} \lambda_i^2)$) to ensure simulation fidelity bounds.
 - **Bipartite Von Neumann Entanglement Entropy**:
   $$S(\rho_A) = -\text{Tr}(\rho_A \log_2 \rho_A) = -\sum_{i} \lambda_i^2 \log_2(\lambda_i^2)$$
 - **Schmidt Rank & Participation Ratio**: Quantifies the effective number of entangled states ($K = 1 / \sum \lambda_i^4$) and Schmidt spectrum rank.
 - **Simulation Complexity Classification**: Classifies entanglement regimes into `Product State`, `Low (Area-law)`, `Moderate`, and `Volume-law (Maximal)` alongside MPS simulation hardness tiers (`Trivial`, `Efficient`, `Challenging`, `Exponentially Hard`).
+
+### Hardware Power & Energy Telemetry (EQO)
+- **Cross-Platform Energy Profiling**: Automatically interfaces with Linux RAPL (`/sys/class/powercap/intel-rapl`), macOS power counters, or continuous Windows/generic dynamic TDP integration models ($P(t) = P_{\text{idle}} + U(t) \times (\text{TDP} - P_{\text{idle}})$).
+- **Energy per Quantum Operation (EQO)**: Quantifies the energetic efficiency of simulation backends in Joules per gate ($\mu\text{J}/\text{Gate}$), providing sustainability metrics alongside raw latency.
 
 ### Multi-Run Benchmarking & Telemetry
 - **Statistical Repeatability**: Executes `--runs INT` (default 3) benchmark iterations per circuit to compute Mean ($\mu$), Median, and Standard Deviation ($\sigma$) of execution latency, mitigating CPU governor and background task noise.
@@ -130,22 +140,23 @@ QuaComp/
 │   ├── __main__.py
 │   ├── comparison.py       # Comparison mode CLI handler & workflow
 │   ├── main.py             # Main CLI dispatcher & argument parser
-│   ├── runner.py           # Simulation runners (Quick, Full, Custom)
-│   └── ui.py               # Rich terminal tables, banners, & score panels
+│   └── runner.py           # Simulation runners (Quick, Full, Custom)
 ├── src/
 │   ├── comparator/
 │   │   ├── __init__.py
 │   │   ├── differ.py       # Relative mathematical comparison engine & target resolver
+│   │   ├── registry.py     # Dynamic enterprise baseline registry & offline caching
 │   │   └── reporter.py     # Comparison Rich tables, Markdown & JSON exporters
 │   ├── engine/
 │   │   ├── __init__.py
-│   │   ├── circuits.py     # Circuit generators (Shallow, Deep, QFT)
-│   │   ├── entanglement.py # Von Neumann Entanglement Entropy & Simulation Hardness profiler
+│   │   ├── circuits.py     # Circuit generators (Shallow, Deep, QFT, VQE, QAOA, QV)
+│   │   ├── entanglement.py # Von Neumann Entanglement Entropy, MPS topology router, & SVD bounds
 │   │   ├── mps.py          # MPS configuration & RAM savings profiler
 │   │   ├── noise.py        # NISQ noise presets & state fidelity calculator
-│   │   └── simulator.py    # Aer Simulator wrapper (CPU/GPU, Statevector, MPS, Noise, Multi-run)
+│   │   └── simulator.py    # Aer Simulator wrapper (CPU/GPU, State Slicing, MPS, Noise, Multi-run)
 │   ├── profiler/
 │   │   ├── __init__.py
+│   │   ├── energy.py       # Cross-platform hardware power, energy & EQO profiler
 │   │   ├── memory.py       # Pre-flight RAM & VRAM memory safety estimator
 │   │   ├── gpu.py          # GPU hardware discovery, VRAM telemetry, & Aer device probe
 │   │   └── telemetry.py    # CPU, OS, and platform hardware telemetry profiler
@@ -158,16 +169,21 @@ QuaComp/
 │       ├── json_exporter.py# Save results & statistics in JSON format
 │       └── md_exporter.py  # Save reports & chart links in Markdown format
 ├── tests/
+│   ├── test_charts.py      # Visualization engine and PNG plot tests
+│   ├── test_comparator.py  # Relative benchmark comparison & differencing tests
+│   ├── test_energy.py      # Hardware energy telemetry & EQO calculation tests
 │   ├── test_engine.py      # Circuit and simulation execution tests
 │   ├── test_entanglement.py# Entanglement entropy and Schmidt decomposition tests
+│   ├── test_gpu.py         # GPU hardware discovery, VRAM safety, and device execution tests
 │   ├── test_memory.py      # Memory limits and checker tests
-│   ├── test_gpu.py         # GPU hardware detection, VRAM safety, and device execution tests
-│   ├── test_scorer.py      # Score calculations & breakdown tests
-│   ├── test_reporter.py    # Exporters files creation tests
+│   ├── test_model_parallelism.py # Multi-GPU distributed statevector slicing tests
 │   ├── test_mps.py         # Matrix Product State (MPS) logic tests
+│   ├── test_mps_topology.py# MPS dynamic permutation routing and truncation tests
 │   ├── test_noise.py       # NISQ noise models and state fidelity tests
-│   ├── test_charts.py      # Visualization engine and PNG plot tests
-│   └── test_comparator.py  # Relative benchmark comparison & differencing tests
+│   ├── test_registry.py    # Dynamic baseline registry & offline caching tests
+│   ├── test_reporter.py    # Exporters files creation tests
+│   ├── test_scorer.py      # Score calculations & breakdown tests
+│   └── test_variational_qv.py # VQE, QAOA, and Quantum Volume verification tests
 ├── pyproject.toml          # PEP 517/621 Modern build configuration & executable entry point (v1.0.0)
 ├── setup.py                # Setuptools compatibility shim
 ├── requirements.txt        # Package dependencies (psutil, qiskit, rich, matplotlib, seaborn)
@@ -208,11 +224,20 @@ quacomp --quick --chart
 # Run a quick benchmark with GPU acceleration
 quacomp --quick --gpu
 
-# Run a full incremental stress test starting from 10 qubits with 5 statistical runs
-quacomp --full --runs 5 --chart
+# Run distributed statevector slicing (model parallelism) across aggregated VRAM
+quacomp --custom --qubits 28 --gpu --state-slicing --blocking-qubits 16
 
-# Compare two benchmark JSON files side-by-side with comparison charts
-quacomp --compare results/samples/example_ryzen3_5300u.json results/samples/example_apple_m3.json --chart
+# Run variational VQE benchmark with parameter binding latency measurement
+quacomp --custom --qubits 6 --vqe
+
+# Run Quantum Volume benchmark with heavy output probability analysis
+quacomp --custom --qubits 4 --qv
+
+# Synchronize enterprise baseline profiles from remote registry
+quacomp --fetch-baselines
+
+# Compare local live run against authoritative enterprise baseline
+quacomp --quick --compare --target apple_m4_max
 ```
 
 > *Tip: You can also execute via `python -m cli` if preferred.*
@@ -225,14 +250,20 @@ quacomp --compare results/samples/example_ryzen3_5300u.json results/samples/exam
 | `--full` | N/A | Incremental stress test starting from 10 qubits. |
 | `--custom` | N/A | Custom simulation mode with specific qubit parameters. |
 | `--compare` | `[FILE1] [FILE2]` | Side-by-side relative benchmark comparison between two JSON runs or against a live run. |
-| `--target` | `apple_m3`, `ryzen3_5300u`, `ryzen7_5800h`, or `PATH` | Target reference baseline alias or file path for `--compare`. |
+| `--target` | `apple_m3`, `apple_m4_max`, `nvidia_h100`, `aws_graviton4`, etc. | Target reference baseline alias or file path for `--compare`. |
+| `--fetch-baselines` | N/A | Synchronize enterprise comparison baselines from QuaComp remote registry. |
 | `--device` | `cpu`, `gpu`, `multi_gpu` (default: `cpu`) | Compute device backend for quantum simulation. |
 | `--gpu` | N/A | Shorthand flag to enable GPU acceleration (`--device gpu`). |
 | `--multi-gpu` | N/A | Enable multi-GPU distributed simulation backend (`--device multi_gpu`). |
+| `--state-slicing` | N/A | Enable distributed statevector slicing model parallelism across VRAM pools. |
+| `--blocking-qubits` | `INT` | Statevector chunk slice size in qubits for distributed model parallelism. |
 | `--workers` | `INT` (default: `1`) | Parallel distributed worker threads/processes for batch execution. |
 | `--entropy` | N/A | Calculates bipartite Von Neumann entanglement entropy (supports Native MPS up to 100+ qubits). |
 | `--qubits` | `INT` (default: `10`) | Qubit count for custom simulation run. |
-| `--type` | `shallow`, `deep`, `qft` (default: `qft`) | Quantum circuit workload type. |
+| `--type` | `shallow`, `deep`, `qft`, `vqe`, `qaoa`, `qv` | Quantum circuit workload type. |
+| `--vqe` | N/A | Shorthand for VQE variational ansatz with parameter binding latency measurement. |
+| `--qaoa` | N/A | Shorthand for QAOA Max-Cut variational workload. |
+| `--qv` | N/A | Shorthand for Quantum Volume square model benchmark ($h_{\text{prob}} > 2/3$). |
 | `--depth` | `INT` (default: `10`) | Depth parameter for deep random circuit workloads. |
 | `--method` | `statevector`, `mps` (default: `statevector`) | Simulation engine method. |
 | `--bond-dim` | `INT` (default: `64`) | Maximum bond dimension for MPS tensor network engine. |
@@ -245,7 +276,7 @@ quacomp --compare results/samples/example_ryzen3_5300u.json results/samples/exam
 
 ## Running Tests
 
-Automated unit tests are written with `pytest`. They cover statevector simulation, GPU and multi-GPU detection & safety, multi-run latency statistics, MPS tensor compression, NISQ synthetic noise models, bipartite entanglement entropy (Statevector & Native MPS Tensor), relative benchmark comparison, scoring breakdown, report exporters, and chart generation.
+Automated unit tests are written with `pytest`. They cover statevector simulation, GPU and multi-GPU detection & safety, multi-GPU model parallelism, dynamic MPS topology routing & truncation bounds, NISQ synthetic noise models, bipartite entanglement entropy, VQE/QAOA parameter binding latency, Quantum Volume heavy output probability analysis, cross-platform power/energy telemetry, remote registry synchronization, and report exporters.
 
 To execute the full test suite, run:
 ```bash
@@ -258,20 +289,26 @@ Output:
 platform win32 -- Python 3.13.3, pytest-9.1.1, pluggy-1.6.0
 rootdir: C:\Users\HP\Documents\PROJECT\QuaComp
 configfile: pyproject.toml
-collected 66 items
+plugins: anyio-4.14.2
+collected 89 items
 
-tests\test_charts.py ....                                                [  6%]
-tests\test_comparator.py .......                                         [ 16%]
-tests\test_engine.py ......                                              [ 25%]
-tests\test_entanglement.py ...........                                   [ 42%]
-tests\test_gpu.py ...........                                            [ 59%]
-tests\test_memory.py .......                                             [ 69%]
-tests\test_mps.py ....                                                   [ 75%]
-tests\test_noise.py ....                                                 [ 81%]
-tests\test_reporter.py ......                                            [ 90%]
-tests\test_scorer.py ......                                              [100%]
+tests\test_charts.py ....                                                [  4%]
+tests\test_comparator.py .......                                         [ 12%]
+tests\test_energy.py ...                                                 [ 15%]
+tests\test_engine.py ......                                              [ 22%]
+tests\test_entanglement.py ...........                                   [ 34%]
+tests\test_gpu.py ...........                                            [ 47%]
+tests\test_memory.py .......                                             [ 55%]
+tests\test_model_parallelism.py .....                                    [ 60%]
+tests\test_mps.py ....                                                   [ 65%]
+tests\test_mps_topology.py .....                                         [ 70%]
+tests\test_noise.py ....                                                 [ 75%]
+tests\test_registry.py .....                                             [ 80%]
+tests\test_reporter.py ......                                            [ 87%]
+tests\test_scorer.py ......                                              [ 94%]
+tests\test_variational_qv.py .....                                       [100%]
 
-============================= 66 passed in 11.13s =============================
+============================= 89 passed in 8.80s ==============================
 ```
 
 ---

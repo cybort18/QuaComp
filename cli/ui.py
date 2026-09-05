@@ -139,6 +139,52 @@ def display_results(results: List[Dict[str, Any]], console: Optional[Console] = 
         c.print(ent_table)
         c.print()
 
+    # Render Hardware Energy & Power Telemetry Table if present
+    energy_runs = [r for r in successful_runs if r.get("energy_metrics") and "total_energy_joules" in r["energy_metrics"]]
+    if energy_runs:
+        en_table = Table(title="Hardware Power & Energy Telemetry (EQO)", show_header=True, header_style="bold green", expand=False)
+        en_table.add_column("Qubits", style="cyan", justify="center")
+        en_table.add_column("Workload", style="white", justify="center")
+        en_table.add_column("Avg Power", style="yellow", justify="right")
+        en_table.add_column("Total Energy", style="bold yellow", justify="right")
+        en_table.add_column("EQO (uJ/Gate)", style="bold green", justify="right")
+        en_table.add_column("Telemetry Backend", style="dim cyan", justify="center")
+        
+        for enr in energy_runs:
+            enm = enr["energy_metrics"]
+            en_table.add_row(
+                str(enr["qubits"]),
+                enr["workload_label"],
+                f"{enm.get('average_power_watts', 0.0):.2f} W",
+                f"{enm.get('total_energy_joules', 0.0):.4f} J",
+                f"{enm.get('eqo_microjoules', 0.0):.2f} uJ",
+                str(enm.get("energy_backend", "Generic Model"))
+            )
+        c.print(en_table)
+        c.print()
+
+    # Render Quantum Volume Certification Table if present
+    qv_runs = [r for r in successful_runs if r.get("qv_metrics") and "heavy_output_probability" in r["qv_metrics"]]
+    if qv_runs:
+        qv_table = Table(title="Quantum Volume (QV) Verification", show_header=True, header_style="bold blue", expand=False)
+        qv_table.add_column("Qubits", style="cyan", justify="center")
+        qv_table.add_column("Heavy Prob (h_prob)", style="bold yellow", justify="right")
+        qv_table.add_column("2-Sigma Lower Bound", style="white", justify="right")
+        qv_table.add_column("Threshold", style="dim white", justify="center")
+        qv_table.add_column("Status", style="bold green", justify="center")
+        for qvr in qv_runs:
+            qvm = qvr["qv_metrics"]
+            status_str = "[bold green]CERTIFIED (PASSED)[/bold green]" if qvm["qv_certified"] else "[bold red]FAILED[/bold red]"
+            qv_table.add_row(
+                str(qvr["qubits"]),
+                f"{qvm['heavy_output_probability']:.4f}",
+                f"{qvm['lower_confidence_bound_2sigma']:.4f}",
+                "> 0.6667",
+                status_str
+            )
+        c.print(qv_table)
+        c.print()
+
     # Calculate final composite heuristic score using best successful run
     best_run = max(successful_runs, key=lambda x: x["qubits"])
     max_qubits = best_run["qubits"]

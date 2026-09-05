@@ -1,0 +1,74 @@
+{
+  "timestamp": "2026-08-16T14:00:00",
+  "final_score": 1342178000.0,
+  "final_composite_score": 1342178000.0,
+  "score_type": "project-specific composite heuristic score",
+  "scoring_breakdown": {
+    "capacity_metric": 134217728.0,
+    "throughput_metric": 3800.0
+  },
+  "performance_category": "Data Center GPU",
+  "max_qubits_simulated": 27,
+  "system_metadata": {
+    "cpu_name": "Intel Xeon Platinum 8480+",
+    "gpu_name": "NVIDIA H100 80GB HBM3",
+    "total_vram_gb": 80.0,
+    "total_ram_gb": 512.0,
+    "os_name": "Linux",
+    "os_release": "6.5.0-generic",
+    "python_version": "3.12.3"
+  },
+  "results": [
+    {
+      "qubits": 10,
+      "success": true,
+      "latency": 0.015,
+      "mean_latency": 0.015,
+      "median_latency": 0.014,
+      "std_latency": 0.001,
+      "runs_count": 3,
+      "gates": 60,
+      "cpu_usage": 30.0,
+      "ram_status": "SAFE",
+      "workload_label": "QFT",
+      "method": "statevector",
+      "noise_level": "none",
+      "fidelity": 100.0,
+      "overhead_ratio": 0.0
+    },
+    {
+      "qubits": 20,
+      "success": true,
+      "latency": 0.038,
+      "mean_latency": 0.038,
+      "median_latency": 0.037,
+      "std_latency": 0.002,
+      "runs_count": 3,
+      "gates": 220,
+      "cpu_usage": 45.0,
+      "ram_status": "SAFE",
+      "workload_label": "QFT",
+      "method": "statevector",
+      "noise_level": "none",
+      "fidelity": 100.0,
+      "overhead_ratio": 0.0
+    },
+    {
+      "qubits": 27,
+      "success": true,
+      "latency": 0.45,
+      "mean_latency": 0.45,
+      "median_latency": 0.448,
+      "std_latency": 0.008,
+      "runs_count": 3,
+      "gates": 390,
+      "cpu_usage": 60.0,
+      "ram_status": "SAFE",
+      "workload_label": "QFT",
+      "method": "statevector",
+      "noise_level": "none",
+      "fidelity": 100.0,
+      "overhead_ratio": 0.0
+    }
+  ]
+}

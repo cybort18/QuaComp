@@ -37,6 +37,18 @@ def resolve_target_profile(target_alias_or_path: str) -> str:
         if os.path.exists(resolved):
             return os.path.abspath(resolved)
             
+    # Check registry lookup and auto-fetch
+    from src.comparator.registry import get_baseline_path, fetch_remote_baselines, ENTERPRISE_BASELINES
+    reg_path = get_baseline_path(clean_alias)
+    if reg_path and os.path.exists(reg_path):
+        return os.path.abspath(reg_path)
+        
+    if clean_alias in ENTERPRISE_BASELINES:
+        fetch_remote_baselines(clean_alias)
+        refetched = get_baseline_path(clean_alias)
+        if refetched and os.path.exists(refetched):
+            return os.path.abspath(refetched)
+            
     # Check if file exists inside results/ or results/samples/
     candidates = [
         os.path.join(SAMPLE_PROFILES_DIR, f"{clean_alias}.json"),
@@ -48,9 +60,10 @@ def resolve_target_profile(target_alias_or_path: str) -> str:
         if os.path.exists(c) and os.path.isfile(c):
             return os.path.abspath(c)
             
+    all_presets = sorted(set(list(KNOWN_ALIASES.keys()) + list(ENTERPRISE_BASELINES.keys())))
     raise FileNotFoundError(
         f"Could not resolve benchmark comparison target '{target_alias_or_path}'. "
-        f"Available preset aliases: {', '.join(sorted(KNOWN_ALIASES.keys()))} or provide a valid JSON path."
+        f"Available preset aliases: {', '.join(all_presets)} or provide a valid JSON path."
     )
 
 def load_benchmark_json(file_path: str) -> Dict[str, Any]:

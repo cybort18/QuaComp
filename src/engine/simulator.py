@@ -14,7 +14,9 @@ def run_simulation(
     noise_level: str = 'none',
     shots: int = 1024,
     runs: int = 3,
-    workers: int = 1
+    workers: int = 1,
+    state_slicing: bool = False,
+    blocking_qubits: Optional[int] = None
 ) -> Dict[str, Any]:
     """
     Execute a Qiskit quantum circuit using AerSimulator across multiple benchmark runs for statistical repeatability,
@@ -99,10 +101,23 @@ def run_simulation(
         aer_device_target = "GPU" if is_gpu_req else "CPU"
         sim_kwargs: Dict[str, Any] = {"device": aer_device_target}
         
-        # Configure multi-device / parallel cluster options
-        if is_multi_gpu:
+        # Configure multi-device / parallel cluster options & distributed statevector slicing
+        num_q = circ_to_run.num_qubits
+        use_slicing = is_multi_gpu or state_slicing
+        effective_blocking = None
+        chunk_count = 1
+        
+        if use_slicing:
             sim_kwargs["batched_shots_gpu"] = True
             sim_kwargs["blocking_enable"] = True
+            if blocking_qubits is not None:
+                effective_blocking = max(1, min(blocking_qubits, num_q - 1))
+            else:
+                # Optimal statevector chunk size: chunk into slices if num_q > 12
+                effective_blocking = max(10, min(num_q - 2, 20)) if num_q > 12 else max(1, num_q - 1)
+            sim_kwargs["blocking_qubits"] = effective_blocking
+            if num_q > effective_blocking:
+                chunk_count = 2 ** (num_q - effective_blocking)
             
         if method in ('mps', 'matrix_product_state'):
             sim_kwargs['method'] = 'matrix_product_state'
@@ -162,6 +177,10 @@ def run_simulation(
             "workers": workers,
             "noise_level": noise_level,
             "runs_count": runs,
+            "model_parallelism": "Distributed Statevector Slicing" if use_slicing else "None",
+            "blocking_qubits": effective_blocking,
+            "chunk_count": chunk_count,
+            "state_slicing": use_slicing,
             "counts": last_counts
         }
         

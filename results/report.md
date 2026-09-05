@@ -1,17 +1,15 @@
 # QuaComp Benchmark Report
-Generated on: `2026-09-04 22:30:28`
+Generated on: `2026-09-05 14:53:08`
 
 ---
 
 ## Benchmark Summary
-> **QuaComp Composite Score:** `10,486,714.96` *(Project-Specific Heuristic Score)*
+> **QuaComp Composite Score:** `10,487,219.28` *(Project-Specific Heuristic Score)*
 > - **Capacity Metric (2^n):** `1,048,576`
-> - **Throughput Metric:** `954.96 gates/sec`
+> - **Throughput Metric:** `1,459.28 gates/sec`
 > **Performance Category:** `High-Performance`
 > **Simulation Method:** `Statevector`
-> **Entanglement Entropy:** `S_vN = 0.0000 bits` (Schmidt Rank: `1` | `Product State`)
-> **MPS Simulation Complexity:** `Trivial (chi=1)`
-> **Statistical Repeatability:** `3 runs` (Mean Latency: `0.2304s`, Std Dev: `0.0252s`)
+> **Statistical Repeatability:** `1 runs` (Mean Latency: `0.1508s`, Std Dev: `0.0000s`)
 > **Max Qubits Simulated:** `20 qubits` (using `220` gates)
 
 ---
@@ -29,18 +27,9 @@ Generated on: `2026-09-04 22:30:28`
 ## Detailed Simulation Runs
 | Qubits | Method | Noise Profile | Workload | Total Gates | Latency (Mean ± Std Dev) | Fidelity % | Avg CPU % | RAM Status | Success |
 | :---: | :--- | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| 10 | statevector | none | QFT | 60 | 0.0175 ± 0.0101s | 100.00% | 83.3% | SAFE | SUCCESS |
-| 15 | statevector | none | QFT | 127 | 0.0210 ± 0.0017s | 100.00% | 88.0% | SAFE | SUCCESS |
-| 20 | statevector | none | QFT | 220 | 0.2304 ± 0.0252s | 100.00% | 87.5% | SAFE | SUCCESS |
-
----
-
-## Entanglement Entropy & Simulation Hardness Analysis
-| Qubits | Workload | Von Neumann Entropy (S_vN) | Max Bound | Schmidt Rank | Entanglement Regime | MPS Complexity Tier |
-| :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| 10 | QFT | 0.0000 bits | 5.0 | 1 | Product State | Trivial (chi=1) |
-| 15 | QFT | 0.0000 bits | 7.0 | 1 | Product State | Trivial (chi=1) |
-| 20 | QFT | 0.0000 bits | 10.0 | 1 | Product State | Trivial (chi=1) |
+| 10 | statevector | none | QFT | 60 | 0.0211 ± 0.0000s | 100.00% | 47.9% | SAFE | SUCCESS |
+| 15 | statevector | none | QFT | 127 | 0.0184 ± 0.0000s | 100.00% | 80.0% | SAFE | SUCCESS |
+| 20 | statevector | none | QFT | 220 | 0.1508 ± 0.0000s | 100.00% | 45.8% | SAFE | SUCCESS |
 
 ---
 

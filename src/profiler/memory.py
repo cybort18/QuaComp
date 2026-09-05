@@ -24,7 +24,13 @@ def estimate_qubit_ram(num_qubits: int) -> int:
     
     return (2 ** num_qubits) * 16
 
-def check_memory_safety(num_qubits: int, method: str = 'statevector', device: str = 'CPU') -> tuple[bool, str]:
+def check_memory_safety(
+    num_qubits: int, 
+    method: str = 'statevector', 
+    device: str = 'CPU',
+    state_slicing: bool = False,
+    bond_dimension: int = 64
+) -> tuple[bool, str]:
     """
     Check if simulation is safe to run based on available physical memory (system RAM or GPU VRAM).
     
@@ -32,6 +38,7 @@ def check_memory_safety(num_qubits: int, method: str = 'statevector', device: st
         num_qubits (int): Number of qubits.
         method (str): Simulation method ('statevector' or 'mps'/'matrix_product_state').
         device (str): Compute device ('CPU' or 'GPU').
+        state_slicing (bool): Whether distributed statevector slicing is active.
         
     Returns:
         tuple[bool, str]: (is_safe, message)
@@ -40,7 +47,7 @@ def check_memory_safety(num_qubits: int, method: str = 'statevector', device: st
     if dev_clean.startswith('GPU') or dev_clean in ('MULTI_GPU', 'GPU:ALL', 'MULTI-GPU'):
         from src.profiler.gpu import check_gpu_vram_safety
         is_multi = dev_clean in ('MULTI_GPU', 'GPU:ALL', 'MULTI-GPU')
-        return check_gpu_vram_safety(num_qubits, method=method, device=dev_clean, multi_gpu=is_multi)
+        return check_gpu_vram_safety(num_qubits, method=method, device=dev_clean, multi_gpu=is_multi, state_slicing=state_slicing)
         
     vm = psutil.virtual_memory()
     available_ram = vm.available
