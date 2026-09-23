@@ -15,7 +15,7 @@
 
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![CI](https://github.com/cybort18/QuaComp/actions/workflows/ci.yml/badge.svg)](https://github.com/cybort18/QuaComp/actions)
-[![Tests Status](https://img.shields.io/badge/tests-89%20passed-green.svg)](#running-tests)
+[![Tests Status](https://img.shields.io/badge/tests-102%20passed-green.svg)](#running-tests)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 ---
@@ -29,6 +29,7 @@
 - [Running Tests](#running-tests)
 - [Reference Hardware Benchmarks](#reference-hardware-benchmarks)
 - [Scoring Categories](#scoring-categories)
+- [Technical Limitations & Architecture Transparency](#technical-limitations--architecture-transparency)
 - [Roadmap](#roadmap)
 - [Contribution Guide](#contribution-guide)
 - [License](#license)
@@ -58,7 +59,7 @@
 - Automatically detects GPU hardware (NVIDIA, AMD, Apple, Intel) and queryable VRAM limits.
 - Supports Qiskit Aer GPU/CUDA acceleration (`quacomp --gpu` or `quacomp --device gpu`).
 - Supports Multi-GPU acceleration pooling (`quacomp --multi-gpu` / `--device multi_gpu`) with batched shot memory distribution and aggregate VRAM scaling.
-- **Distributed Statevector Slicing (Model Parallelism)**: Combines VRAM from multiple GPUs via distributed chunk streaming (`--state-slicing`, `--blocking-qubits <INT>`), enabling large statevectors with $n > 28$ qubits that exceed single-card VRAM limits.
+- **Distributed Statevector Slicing (Model Parallelism)**: Combines VRAM from multiple GPUs via distributed chunk streaming (`--state-slicing`, `--blocking-qubits <INT>`), enabling large statevectors with $n > 28$ qubits that exceed single-card VRAM limits. *(Note: Slicing is coordinated at the Python process level through Qiskit Aer chunk streaming; inter-chunk operations transfer data over PCIe/NVLink buses without bare-metal MPI kernel fusion).*
 - Supports Distributed Multi-Worker parallel simulation execution (`quacomp --workers <INT>`) across multi-core CPUs and GPU compute backends.
 - Graceful, informative diagnostics and fallback if GPU execution is requested on a CPU-only environment.
 
@@ -93,6 +94,7 @@
 ### Hardware Power & Energy Telemetry (EQO)
 - **Cross-Platform Energy Profiling**: Automatically interfaces with Linux RAPL (`/sys/class/powercap/intel-rapl`), macOS power counters, or continuous Windows/generic dynamic TDP integration models:
   $$P(t) = P_{\text{idle}} + U(t) \times (P_{\text{TDP}} - P_{\text{idle}})$$
+- **Sensor Transparency Badges**: Clearly identifies the origin of power data via CLI and Markdown report tags: `[Sensor: RAPL]` for direct hardware counters vs `[Sensor: TDP Estimate]` for dynamic TDP mathematical estimations. *(Note: Linux RAPL sysfs counters require root or read privileges; QuaComp automatically and gracefully falls back to dynamic TDP modeling on unprivileged user accounts).*
 - **Energy per Quantum Operation (EQO)**: Quantifies the energetic efficiency of simulation backends in Joules per gate (µJ/Gate), providing sustainability metrics alongside raw latency.
 
 ### Multi-Run Benchmarking & Telemetry
@@ -293,38 +295,39 @@ platform win32 -- Python 3.13.3, pytest-9.1.1, pluggy-1.6.0
 rootdir: C:\Users\HP\Documents\PROJECT\QuaComp
 configfile: pyproject.toml
 plugins: anyio-4.14.2
-collected 89 items
+collected 102 items
 
-tests\test_charts.py ....                                                [  4%]
-tests\test_comparator.py .......                                         [ 12%]
-tests\test_energy.py ...                                                 [ 15%]
-tests\test_engine.py ......                                              [ 22%]
-tests\test_entanglement.py ...........                                   [ 34%]
-tests\test_gpu.py ...........                                            [ 47%]
-tests\test_memory.py .......                                             [ 55%]
-tests\test_model_parallelism.py .....                                    [ 60%]
-tests\test_mps.py ....                                                   [ 65%]
-tests\test_mps_topology.py .....                                         [ 70%]
-tests\test_noise.py ....                                                 [ 75%]
-tests\test_registry.py .....                                             [ 80%]
-tests\test_reporter.py ......                                            [ 87%]
-tests\test_scorer.py ......                                              [ 94%]
+tests\test_charts.py ....                                                [  3%]
+tests\test_comparator.py .......                                         [ 10%]
+tests\test_energy.py ....                                                [ 14%]
+tests\test_engine.py ......                                              [ 20%]
+tests\test_entanglement.py ...........                                   [ 31%]
+tests\test_gpu.py ...........                                            [ 42%]
+tests\test_memory.py .......                                             [ 49%]
+tests\test_model_parallelism.py .....                                    [ 53%]
+tests\test_mps.py ....                                                   [ 57%]
+tests\test_mps_topology.py .....                                         [ 62%]
+tests\test_noise.py ....                                                 [ 66%]
+tests\test_registry.py ...........                                       [ 77%]
+tests\test_reporter.py .........                                         [ 86%]
+tests\test_scorer.py ......                                              [ 92%]
+tests\test_ui.py ...                                                     [ 95%]
 tests\test_variational_qv.py .....                                       [100%]
 
-============================= 89 passed in 8.80s ==============================
+============================ 102 passed in 16.24s =============================
 ```
 
 ---
 
 ## Reference Hardware Benchmarks
 
-The repository includes committed sample benchmark telemetry files in `results/samples/` representing performance across reference hardware platforms:
+The repository includes committed sample benchmark telemetry files in `results/registry/` representing performance across reference hardware platforms:
 
 | Reference CPU | Total RAM | Max Qubits (SV) | QuaComp Composite Score | Performance Category | Sample JSON File |
 | :--- | :---: | :---: | :---: | :---: | :--- | :--- |
-| **AMD Ryzen 3 5300U** | 11.33 GB | 20 Qubits | `10,486,120.47` | High-Performance | [`example_ryzen3_5300u.json`](results/samples/example_ryzen3_5300u.json) |
-| **AMD Ryzen 7 5800H** | 16.00 GB | 24 Qubits | `167,772,480.00` | Extreme Workstation | [`example_ryzen7_5800h.json`](results/samples/example_ryzen7_5800h.json) |
-| **Apple M3 (8-core)** | 24.00 GB | 25 Qubits | `335,544,830.00` | Extreme Workstation | [`example_apple_m3.json`](results/samples/example_apple_m3.json) |
+| **AMD Ryzen 3 5300U** | 11.33 GB | 20 Qubits | `10,486,120.47` | High-Performance | [`example_ryzen3_5300u.json`](results/registry/example_ryzen3_5300u.json) |
+| **AMD Ryzen 7 5800H** | 16.00 GB | 24 Qubits | `167,772,480.00` | Extreme Workstation | [`example_ryzen7_5800h.json`](results/registry/example_ryzen7_5800h.json) |
+| **Apple M3 (8-core)** | 24.00 GB | 25 Qubits | `335,544,830.00` | Extreme Workstation | [`example_apple_m3.json`](results/registry/example_apple_m3.json) |
 
 ---
 
@@ -341,6 +344,27 @@ QuaComp Composite Score maps directly into performance tiers, reflecting the com
 
 > **Methodology Note on Capacity Dominance:**  
 > Because state-vector memory allocation scales exponentially with $2^n$, the Capacity Metric of $10 \times 2^n$ exponentially dominates the Throughput Metric $T = \text{gates}/\mu_{\text{latency}}$. A system simulating 30 qubits will score higher than a system simulating 28 qubits with faster gate throughput, reflecting QuaComp's deliberate design choice to prioritize state-space memory capacity scaling over execution speed.
+
+---
+
+## Technical Limitations & Architecture Transparency
+
+QuaComp is engineered to provide rigorous, honest, and reproducible benchmarking. In keeping with this principle, the following architectural boundaries and hardware telemetry constraints should be noted:
+
+### 1. Multi-GPU Model Parallelism (Python-Level Statevector Slicing)
+- **Mechanism:** When `--state-slicing` or `--multi-gpu` is active, QuaComp orchestrates statevector chunk slicing at the Python process level via Qiskit Aer's chunk-based memory distribution backend (`batched_shots_gpu=True`, `blocking_enable=True`, `blocking_qubits`).
+- **Memory Scaling:** This allows pooling physical VRAM across multiple GPUs (e.g., $2 \times 16\text{ GB} = 32\text{ GB}$), enabling simulation of high-qubit statevectors ($n \ge 29$ qubits) that would otherwise trigger Out-Of-Memory (OOM) errors on a single GPU.
+- **Architectural Trade-Off:** Slicing coordinated at the Python/Aer host level incurs memory swapping overhead across the PCIe/NVLink bus when two-qubit gates cross chunk boundaries. It does not provide bare-metal CUDA/C++ kernel fusion or MPI multi-node distributed cluster execution.
+
+### 2. Linux RAPL Hardware Interface Access Permissions
+- **Mechanism:** On Linux, microjoule-precision energy metrics are read directly from the kernel Running Average Power Limit (RAPL) sysfs interface (`/sys/class/powercap/intel-rapl/intel-rapl:0/energy_uj`).
+- **Root/Privileged Access Requirement:** Contemporary Linux distributions restrict read access to `/sys/class/powercap` to root or privileged user groups. To enable direct RAPL sensor readings without running as root, grant read permissions:
+  ```bash
+  sudo chmod +r /sys/class/powercap/intel-rapl/intel-rapl:0/energy_uj
+  ```
+- **Automated Fallback & Sensor Origin Badges:** If read access is denied or when executing on Windows/macOS, QuaComp automatically and gracefully falls back to the dynamic TDP mathematical integration model:
+  $$P(t) = P_{\text{idle}} + U(t) \times (P_{\text{TDP}} - P_{\text{idle}})$$
+  For complete methodological transparency, all CLI tables and exported Markdown reports prominently display sensor origin badges: `[Sensor: RAPL]` for direct hardware counters vs `[Sensor: TDP Estimate]` for dynamic TDP estimations.
 
 ---
 

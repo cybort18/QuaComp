@@ -2,7 +2,7 @@ import os
 import json
 from typing import Dict, Any, List, Optional, Tuple
 
-SAMPLE_PROFILES_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "results", "samples"))
+REGISTRY_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "results", "registry"))
 
 KNOWN_ALIASES = {
     "apple_m3": "example_apple_m3.json",
@@ -15,7 +15,7 @@ KNOWN_ALIASES = {
 
 def resolve_target_profile(target_alias_or_path: str) -> str:
     """
-    Resolve a target file path or built-in sample reference profile alias.
+    Resolve a target file path or built-in reference profile alias from registry.
     
     Args:
         target_alias_or_path: Path to a JSON benchmark result or preset alias name.
@@ -30,10 +30,10 @@ def resolve_target_profile(target_alias_or_path: str) -> str:
     if os.path.exists(target_alias_or_path) and os.path.isfile(target_alias_or_path):
         return os.path.abspath(target_alias_or_path)
         
-    # Check if target matches built-in sample aliases
+    # Check if target matches built-in aliases
     clean_alias = target_alias_or_path.strip().lower()
     if clean_alias in KNOWN_ALIASES:
-        resolved = os.path.join(SAMPLE_PROFILES_DIR, KNOWN_ALIASES[clean_alias])
+        resolved = os.path.join(REGISTRY_DIR, KNOWN_ALIASES[clean_alias])
         if os.path.exists(resolved):
             return os.path.abspath(resolved)
             
@@ -49,10 +49,10 @@ def resolve_target_profile(target_alias_or_path: str) -> str:
         if refetched and os.path.exists(refetched):
             return os.path.abspath(refetched)
             
-    # Check if file exists inside results/ or results/samples/
+    # Check if file exists inside results/registry or results/
     candidates = [
-        os.path.join(SAMPLE_PROFILES_DIR, f"{clean_alias}.json"),
-        os.path.join(SAMPLE_PROFILES_DIR, f"example_{clean_alias}.json"),
+        os.path.join(REGISTRY_DIR, f"{clean_alias}.json"),
+        os.path.join(REGISTRY_DIR, f"example_{clean_alias}.json"),
         os.path.join("results", f"{clean_alias}.json"),
         os.path.join("results", f"{target_alias_or_path}")
     ]

@@ -181,5 +181,29 @@ $$\text{QuaComp Composite Score} = (C \times 10) + T = (2^{n_{\text{max}}} \time
     - Generates `results/entanglement_entropy.png` plotting entropy scaling curves against theoretical maximum bipartite bound $S_{\max}$.
     - Records entanglement metrics in exported JSON and Markdown reports.
 
+### FR-14: Hardware Power & Energy Telemetry (EQO) & Sensor Transparency
+- **Description:** The system must profile CPU/SoC energy consumption and calculate Energy per Quantum Operation (EQO) with full sensor origin transparency.
+- **Specifications & Behavior:**
+  - **Linux Hardware RAPL Counter:** Reads `/sys/class/powercap/intel-rapl/intel-rapl:0/energy_uj` with microjoule precision when read permissions are available.
+  - **Dynamic TDP Integration Model:** On Windows, macOS, or unprivileged Linux environments, continuously samples CPU utilization $U(t)$ and integrates instantaneous power:
+    $$P(t) = P_{\text{idle}} + \left(\frac{U(t)}{100}\right) \times (P_{\text{TDP}} - P_{\text{idle}})$$
+  - **Sensor Source Transparency:** Tags all energy output metrics with explicit origin badges (`[Sensor: RAPL]` for hardware counters vs `[Sensor: TDP Estimate]` for dynamic mathematical models) across CLI displays and Markdown reports.
+  - **Energy per Quantum Operation (EQO):** Computes $EQO = \text{Total Energy (Joules)} / \text{Gates Executed}$ in µJ/gate.
 
+---
 
+## 4. Technical Limitations & Architecture Transparency
+
+### 4.1 Multi-GPU Model Parallelism (Python-Level Statevector Slicing)
+- **Mechanism:** Multi-GPU statevector slicing in QuaComp is orchestrated at the Python process level via Qiskit Aer's chunk-based memory distribution backend (`batched_shots_gpu=True`, `blocking_enable=True`, `blocking_qubits`).
+- **Capabilities:** Successfully aggregates VRAM across multiple GPUs (e.g., $2\times 16\text{ GB} = 32\text{ GB}$), enabling simulation of circuits with $n \ge 29$ qubits that exceed the VRAM of any single GPU.
+- **Limitations:**
+  1. *Inter-Device Overhead:* Gate operations applied across chunk boundaries require inter-GPU memory swaps across the PCIe or NVLink bus, introducing non-negligible data transfer latency.
+  2. *No Bare-Metal Kernel Fusion:* It does not implement custom CUDA/C++ kernel fusion or low-level MPI cluster synchronization across distributed multi-node server clusters.
+  3. *Host-to-Device Memory Staging:* Overall execution speed is bounded by host-to-device interconnect bandwidth during chunk redistribution.
+
+### 4.2 Linux RAPL Hardware Interface Access Permissions & Fallback
+- **Mechanism:** High-precision hardware power telemetry on Linux utilizes the Running Average Power Limit (RAPL) driver via the sysfs interface (`/sys/class/powercap/intel-rapl`).
+- **Permission Requirements:** Linux security hardening restricts reading `/sys/class/powercap` to privileged users (root/sudo) or users granted read access (`chmod +r /sys/class/powercap/intel-rapl/intel-rapl:0/energy_uj` or specialized capability flags).
+- **Graceful Fallback:** If read permission is denied or the host is running Windows/macOS, QuaComp automatically and silently falls back to the dynamic TDP mathematical model without interrupting benchmark execution.
+- **Full Transparency:** CLI terminal output and Markdown reports prominently display `[Sensor: TDP Estimate]` to inform users that power values are model-derived rather than direct physical hardware counter readings.

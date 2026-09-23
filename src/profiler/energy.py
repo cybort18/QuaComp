@@ -45,6 +45,23 @@ def estimate_cpu_tdp(cpu_name: Optional[str] = None) -> float:
         return 35.0  # Generic balanced baseline
 
 
+def format_sensor_source_label(backend: Optional[str] = None) -> str:
+    """
+    Format human-readable sensor source label for telemetry transparency.
+    
+    Args:
+        backend (Optional[str]): Energy backend name or identifier.
+        
+    Returns:
+        str: '[Sensor: RAPL]' if RAPL hardware counter interface is used,
+             else '[Sensor: TDP Estimate]'.
+    """
+    b = (backend or "").lower()
+    if "rapl" in b:
+        return "[Sensor: RAPL]"
+    return "[Sensor: TDP Estimate]"
+
+
 class EnergyProfiler:
     """
     Cross-platform Energy & Power Consumption Profiler.
@@ -153,6 +170,7 @@ class EnergyProfiler:
         
         return {
             "energy_backend": self.backend,
+            "sensor_source": format_sensor_source_label(self.backend),
             "duration_seconds": round(duration, 4),
             "estimated_tdp_watts": round(self.tdp, 1),
             "average_power_watts": round(avg_power, 2),

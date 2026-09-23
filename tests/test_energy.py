@@ -21,6 +21,8 @@ def test_energy_profiler_context():
     metrics = ep.get_metrics(num_gates=50)
     
     assert "energy_backend" in metrics
+    assert "sensor_source" in metrics
+    assert metrics["sensor_source"] in ["[Sensor: RAPL]", "[Sensor: TDP Estimate]"]
     assert metrics["duration_seconds"] >= 0.04
     assert metrics["estimated_tdp_watts"] == 25.0
     assert metrics["average_power_watts"] > 0.0
@@ -38,3 +40,14 @@ def test_energy_profiler_zero_gates_safe():
         time.sleep(0.01)
     metrics = ep.get_metrics(num_gates=0)
     assert metrics["energy_per_quantum_op_joules"] >= 0.0
+
+def test_format_sensor_source_label():
+    """Verify sensor source labeling for hardware RAPL vs software TDP models."""
+    from src.profiler.energy import format_sensor_source_label
+    assert format_sensor_source_label("Linux RAPL Hardware Interface") == "[Sensor: RAPL]"
+    assert format_sensor_source_label("rapl-sysfs") == "[Sensor: RAPL]"
+    assert format_sensor_source_label("Windows Dynamic TDP Model") == "[Sensor: TDP Estimate]"
+    assert format_sensor_source_label("macOS Dynamic TDP Model") == "[Sensor: TDP Estimate]"
+    assert format_sensor_source_label("Dynamic TDP Model") == "[Sensor: TDP Estimate]"
+    assert format_sensor_source_label(None) == "[Sensor: TDP Estimate]"
+

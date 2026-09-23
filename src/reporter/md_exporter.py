@@ -54,6 +54,7 @@ def export_to_markdown(
     capacity_metric = 0.0
     throughput_metric = 0.0
     best_entanglement = {}
+    best_energy = {}
     
     if successful_runs:
         from src.scorer.calculator import calculate_scoring_breakdown, categorize_score
@@ -77,6 +78,7 @@ def export_to_markdown(
         best_fidelity = best_run.get("fidelity", 100.0)
         best_overhead_ratio = best_run.get("overhead_ratio", 0.0)
         best_entanglement = best_run.get("entanglement_metrics", {})
+        best_energy = best_run.get("energy_metrics", {})
         
     current_time = time.strftime("%Y-%m-%d %H:%M:%S")
     
@@ -107,6 +109,11 @@ def export_to_markdown(
     if best_entanglement and "von_neumann_entropy" in best_entanglement:
         md_content.append(f"> **Entanglement Entropy:** `S_vN = {best_entanglement['von_neumann_entropy']:.4f} bits` (Schmidt Rank: `{best_entanglement['schmidt_rank']}` | `{best_entanglement['entanglement_regime']}`)")
         md_content.append(f"> **MPS Simulation Complexity:** `{best_entanglement['mps_hardness']}`")
+        
+    if best_energy and "total_energy_joules" in best_energy:
+        backend_raw = str(best_energy.get("energy_backend", "Generic Model"))
+        sensor_tag = "[Sensor: RAPL]" if "rapl" in backend_raw.lower() else "[Sensor: TDP Estimate]"
+        md_content.append(f"> **Hardware Energy Telemetry:** `{sensor_tag}` `{best_energy.get('total_energy_joules', 0.0):.4f} J` (Avg Power: `{best_energy.get('average_power_watts', 0.0):.2f} W`, EQO: `{best_energy.get('eqo_microjoules', 0.0):.2f} µJ/gate | `{backend_raw}`)")
         
     md_content.append(f"> **Statistical Repeatability:** `{best_runs_count} runs` (Mean Latency: `{best_mean_latency:.4f}s`, Std Dev: `{best_std_latency:.4f}s`)")
     md_content.append(f"> **Max Qubits Simulated:** `{best_qubits} qubits` (using `{gates:,}` gates)")
@@ -159,6 +166,21 @@ def export_to_markdown(
             em = er["entanglement_metrics"]
             md_content.append(
                 f"| {er['qubits']} | {er.get('workload_label', 'Circuit')} | {em['von_neumann_entropy']:.4f} bits | {em['max_possible_entropy']:.1f} | {em['schmidt_rank']} | {em['entanglement_regime']} | {em['mps_hardness']} |"
+            )
+        md_content.append("\n---\n")
+        
+    # Hardware Power & Energy Telemetry Table (if available)
+    energy_runs = [r for r in results if r.get("success", False) and r.get("energy_metrics") and "total_energy_joules" in r["energy_metrics"]]
+    if energy_runs:
+        md_content.append("## Hardware Power & Energy Telemetry (EQO)")
+        md_content.append("| Qubits | Workload | Avg Power (W) | Total Energy (J) | EQO (µJ/Gate) | Telemetry Backend & Source |")
+        md_content.append("| :---: | :---: | :---: | :---: | :---: | :--- |")
+        for enr in energy_runs:
+            enm = enr["energy_metrics"]
+            backend_raw = str(enm.get("energy_backend", "Generic Model"))
+            sensor_tag = "[Sensor: RAPL]" if "rapl" in backend_raw.lower() else "[Sensor: TDP Estimate]"
+            md_content.append(
+                f"| {enr['qubits']} | {enr.get('workload_label', 'Circuit')} | {enm.get('average_power_watts', 0.0):.2f} W | {enm.get('total_energy_joules', 0.0):.4f} J | {enm.get('eqo_microjoules', 0.0):.2f} µJ | `{sensor_tag}` {backend_raw} |"
             )
         md_content.append("\n---\n")
         

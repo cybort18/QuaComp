@@ -152,13 +152,19 @@ def display_results(results: List[Dict[str, Any]], console: Optional[Console] = 
         
         for enr in energy_runs:
             enm = enr["energy_metrics"]
+            backend_raw = str(enm.get("energy_backend", "Generic Model"))
+            if "rapl" in backend_raw.lower():
+                sensor_badge = "[bold green][Sensor: RAPL][/bold green]"
+            else:
+                sensor_badge = "[bold yellow][Sensor: TDP Estimate][/bold yellow]"
+            source_display = f"{sensor_badge} {backend_raw}"
             en_table.add_row(
                 str(enr["qubits"]),
                 enr["workload_label"],
                 f"{enm.get('average_power_watts', 0.0):.2f} W",
                 f"{enm.get('total_energy_joules', 0.0):.4f} J",
                 f"{enm.get('eqo_microjoules', 0.0):.2f} uJ",
-                str(enm.get("energy_backend", "Generic Model"))
+                source_display
             )
         c.print(en_table)
         c.print()
@@ -234,6 +240,15 @@ def display_results(results: List[Dict[str, Any]], console: Optional[Console] = 
         panel_content.append(f"Entanglement Entropy: S_vN = {em['von_neumann_entropy']:.4f} bits (Schmidt Rank: {em['schmidt_rank']} | {em['entanglement_regime']})\n", style="bold red")
         panel_content.append(f"MPS Simulation Complexity: {em['mps_hardness']}\n", style="bold magenta")
         
+    if best_run.get("energy_metrics") and "total_energy_joules" in best_run["energy_metrics"]:
+        enm = best_run["energy_metrics"]
+        backend_raw = str(enm.get("energy_backend", "Generic Model"))
+        sensor_badge = "[Sensor: RAPL]" if "rapl" in backend_raw.lower() else "[Sensor: TDP Estimate]"
+        panel_content.append(
+            f"Hardware Energy Telemetry: {sensor_badge} {enm.get('total_energy_joules', 0.0):.4f} J (Avg: {enm.get('average_power_watts', 0.0):.2f}W | EQO: {enm.get('eqo_microjoules', 0.0):.2f} uJ/gate)\n",
+            style="bold yellow"
+        )
+        
     runs_cnt = best_run.get("runs_count", 1)
     std_lat = best_run.get("std_latency", 0.0)
     panel_content.append(f"Statistical Repeatability: {runs_cnt} runs (Mean: {mean_latency:.4f}s, Std Dev: {std_lat:.4f}s)\n", style="dim green")
@@ -252,5 +267,5 @@ def display_help_notice(console: Optional[Console] = None) -> None:
     c.print("  [cyan]quacomp --full[/cyan]                                                 (Incremental stress test)")
     c.print("  [cyan]quacomp --compare <file1.json> <file2.json>[/cyan]                     (Compare two benchmark results)")
     c.print("  [cyan]quacomp --compare results/report.json --target apple_m3[/cyan]         (Compare with reference profile)")
-    c.print("  [cyan]quacomp --quick --compare results/samples/example_apple_m3.json[/cyan] (Run benchmark & compare)")
+    c.print("  [cyan]quacomp --quick --compare results/registry/example_apple_m3.json[/cyan] (Run benchmark & compare)")
     c.print("\nRun [bold green]quacomp --help[/bold green] for full options.\n")
