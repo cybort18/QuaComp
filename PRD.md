@@ -190,6 +190,25 @@ $$\text{QuaComp Composite Score} = (C \times 10) + T = (2^{n_{\text{max}}} \time
   - **Sensor Source Transparency:** Tags all energy output metrics with explicit origin badges (`[Sensor: RAPL]` for hardware counters vs `[Sensor: TDP Estimate]` for dynamic mathematical models) across CLI displays and Markdown reports.
   - **Energy per Quantum Operation (EQO):** Computes $EQO = \text{Total Energy (Joules)} / \text{Gates Executed}$ in µJ/gate.
 
+### FR-15: Native Kernel Acceleration & C++ Gate Fusion Engine (`--use-native-kernels`)
+- **Description:** The system must support single-pass gate fusion and hardware acceleration kernels across C++ SIMD, Apple Metal, and NVIDIA CUDA with multi-tier graceful fallback.
+- **Specifications & Behavior:**
+  - **Single-Pass Gate Fusion:** Sequences of quantum operations targeting identical or adjacent qubits are mathematically consolidated into a single unitary matrix $U_{\text{fused}} = U_k \times \dots \times U_1$, reducing quantum circuit depth and simulation dispatch overhead.
+  - **C++ SIMD Extension (`quacomp_cpp`):** Implemented in modern C++17 via Pybind11 with unrolled $2\times 2$ and $4\times 4$ complex matrix multiplications and Kronecker products.
+  - **Apple Metal Shaders:** GPU compute pipeline with Metal Shading Language (`fusion.metal`) for acceleration on Apple Silicon.
+  - **CUDA JIT Stub:** Extensible interface for NVIDIA GPU CUDA execution.
+  - **Multi-Tier Graceful Fallback:** If GPU shaders or compiled C++ binaries are absent, execution seamlessly falls back to optimized NumPy/CPython routines without interruption or exceptions.
+
+### FR-16: Real Physical QPU Noise Calibration & Analytical Kraus Generator (`--noise-profile`)
+- **Description:** The system must ingest real hardware calibration profiles from production superconducting QPUs (such as IBM Quantum or Rigetti) and construct trace-preserving Kraus representation channels.
+- **Specifications & Behavior:**
+  - **Calibration Parser:** Ingests JSON calibration snapshots (e.g. `ibm_brisbane_sample.json`), extracting qubit thermal relaxation $T_1$, dephasing $T_2$, readout assignment error confusion matrices $P(\text{read}|\text{true})$, and gate error rates.
+  - **Analytical Kraus Operators:** Generates exact trace-preserving Kraus operators $\mathcal{E}(\rho) = \sum_k E_k \rho E_k^\dagger$ ($\sum_k E_k^\dagger E_k = I$):
+    - Amplitude damping with rate $\gamma = 1 - e^{-t/T_1}$.
+    - Phase damping with rate $\lambda = 1 - e^{-2t/T_\phi}$.
+    - Physical consistency bounds enforcing $T_2 \le 2T_1$ to avoid unphysical negative rates.
+  - **Noise Model Conversion:** Converts calibration parameters into Qiskit Aer `NoiseModel` objects for live circuit execution and fidelity analysis.
+
 ---
 
 ## 4. Technical Limitations & Architecture Transparency
@@ -207,3 +226,10 @@ $$\text{QuaComp Composite Score} = (C \times 10) + T = (2^{n_{\text{max}}} \time
 - **Permission Requirements:** Linux security hardening restricts reading `/sys/class/powercap` to privileged users (root/sudo) or users granted read access (`chmod +r /sys/class/powercap/intel-rapl/intel-rapl:0/energy_uj` or specialized capability flags).
 - **Graceful Fallback:** If read permission is denied or the host is running Windows/macOS, QuaComp automatically and silently falls back to the dynamic TDP mathematical model without interrupting benchmark execution.
 - **Full Transparency:** CLI terminal output and Markdown reports prominently display `[Sensor: TDP Estimate]` to inform users that power values are model-derived rather than direct physical hardware counter readings.
+
+### 4.3 Hardware Compatibility Matrix & Multi-Tier Graceful Fallback Strategy
+- **Tier 1 (GPU Hardware Compute):** Metal Shaders (Apple Silicon macOS) and CUDA Kernels (NVIDIA Linux/Windows).
+- **Tier 2 (C++ SIMD Native Extension):** Unrolled complex matrix arithmetic compiled via Pybind11.
+- **Tier 3 (Pure CPython / NumPy Fallback):** Vectorized Python fallback ensuring 100% execution guarantees on any host without compilation tools.
+- **Optional Build Strategy:** Setuptools `BuildExtOptional` ensures `pip install -e .` never fails even on bare systems lacking MSVC/GCC/Clang compilers.
+

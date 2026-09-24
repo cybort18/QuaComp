@@ -73,7 +73,10 @@ def export_to_json(results: List[Dict[str, Any]], system_metadata: Dict[str, Any
         best_ram_savings = best_run.get("ram_savings", {})
         best_noise_level = best_run.get("noise_level", "none")
         best_fidelity = best_run.get("fidelity", 100.0)
-        best_overhead_ratio = best_run.get("overhead_ratio", 0.0)
+        best_native_kernel = best_run.get("native_kernel_used", False)
+        best_accelerator_backend = best_run.get("accelerator_backend", "none")
+        best_accelerator_badge = best_run.get("accelerator_badge", "")
+        best_physical_noise = best_run.get("physical_noise_profile", None)
         best_entanglement_metrics = best_run.get("entanglement_metrics", {})
         best_energy_metrics = best_run.get("energy_metrics", {})
         
@@ -90,6 +93,10 @@ def export_to_json(results: List[Dict[str, Any]], system_metadata: Dict[str, Any
         "max_qubits_simulated": best_qubits,
         "simulation_method": best_method,
         "bond_dimension": best_bond_dim,
+        "native_kernel_used": best_native_kernel if successful_runs else False,
+        "accelerator_backend": best_accelerator_backend if successful_runs else "none",
+        "accelerator_badge": best_accelerator_badge if successful_runs else "",
+        "physical_noise_profile": best_physical_noise if successful_runs else None,
         "noise_level": best_noise_level,
         "quantum_state_fidelity": best_fidelity,
         "cpu_overhead_ratio": best_overhead_ratio,

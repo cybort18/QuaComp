@@ -34,7 +34,9 @@ def run_single_simulation(
     workers: int = 1,
     compute_entropy: bool = False,
     state_slicing: bool = False,
-    blocking_qubits: Optional[int] = None
+    blocking_qubits: Optional[int] = None,
+    use_native_kernels: bool = False,
+    noise_profile: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Execute a single quantum simulation workload with profiling.
@@ -118,7 +120,16 @@ def run_single_simulation(
     
     # 4. Simulation run with Energy Profiler, noise, multi-GPU/device, workers, and method support (multiple runs)
     from src.profiler.energy import EnergyProfiler
-    noise_model = get_noise_model(noise_level)
+    noise_model = None
+    if noise_profile:
+        from src.engine.physical_noise import PhysicalNoiseModel
+        pnm = PhysicalNoiseModel.from_json(noise_profile)
+        noise_model = pnm.to_qiskit_noise_model(active_qubits=list(range(circuit.num_qubits)))
+        if noise_level == 'none':
+            noise_level = f"physical:{pnm.backend_name}"
+    else:
+        noise_model = get_noise_model(noise_level)
+
     with EnergyProfiler() as energy_prof:
         sim_result = run_simulation(
             circuit, 
@@ -130,7 +141,9 @@ def run_single_simulation(
             runs=runs,
             workers=workers,
             state_slicing=state_slicing,
-            blocking_qubits=blocking_qubits
+            blocking_qubits=blocking_qubits,
+            use_native_kernels=use_native_kernels,
+            physical_noise_profile=noise_profile
         )
     energy_metrics = energy_prof.get_metrics(num_gates=num_gates)
     
@@ -218,6 +231,11 @@ def run_single_simulation(
         "cpu_usage": cpu_usage,
         "ram_status": "SAFE" if is_safe else "UNSAFE",
         "error": sim_result.get("error"),
+        "native_kernel_used": sim_result.get("native_kernel_used", False),
+        "accelerator_backend": sim_result.get("accelerator_backend"),
+        "accelerator_badge": sim_result.get("accelerator_badge"),
+        "fusion_metrics": sim_result.get("fusion_metrics"),
+        "physical_noise_profile": sim_result.get("physical_noise_profile"),
         "ram_savings": ram_savings,
         "entanglement_metrics": entanglement_metrics,
         "parameter_binding_metrics": param_binding_metrics,
@@ -235,8 +253,11 @@ def run_quick_benchmark(
     workers = getattr(args, 'workers', 1)
     state_slicing = getattr(args, 'state_slicing', False) or (effective_device == 'multi_gpu')
     blocking_qubits = getattr(args, 'blocking_qubits', None)
+    use_native_kernels = getattr(args, 'use_native_kernels', False)
+    noise_profile = getattr(args, 'noise_profile', None)
     slicing_label = " [Distributed State Slicing]" if state_slicing else ""
-    c.print(f"[bold yellow]Executing Quick Benchmark Suite (Qubits: 10, 15, 20) [Method: {args.method.upper()}, Device: {effective_device.upper()}{slicing_label}, Workers: {workers}, Noise: {args.noise_level.upper()}, Entropy: {args.entropy}, Runs: {args.runs}]...[/bold yellow]\n")
+    native_label = " [Native Kernel Fusion]" if use_native_kernels else ""
+    c.print(f"[bold yellow]Executing Quick Benchmark Suite (Qubits: 10, 15, 20) [Method: {args.method.upper()}, Device: {effective_device.upper()}{slicing_label}{native_label}, Workers: {workers}, Noise: {args.noise_level.upper()}, Entropy: {args.entropy}, Runs: {args.runs}]...[/bold yellow]\n")
     qubits_list = [10, 15, 20]
     results = []
     
@@ -247,7 +268,8 @@ def run_quick_benchmark(
             res = run_single_simulation(
                 q, workload, depth, args.method, args.bond_dim, effective_device, 
                 args.noise_level, args.runs, workers=workers, compute_entropy=args.entropy,
-                state_slicing=state_slicing, blocking_qubits=blocking_qubits
+                state_slicing=state_slicing, blocking_qubits=blocking_qubits,
+                use_native_kernels=use_native_kernels, noise_profile=noise_profile
             )
             res["workload_label"] = workload.upper()
             results.append(res)
@@ -266,8 +288,11 @@ def run_full_stress_test(
     workers = getattr(args, 'workers', 1)
     state_slicing = getattr(args, 'state_slicing', False) or (effective_device == 'multi_gpu')
     blocking_qubits = getattr(args, 'blocking_qubits', None)
+    use_native_kernels = getattr(args, 'use_native_kernels', False)
+    noise_profile = getattr(args, 'noise_profile', None)
     slicing_label = " [Distributed State Slicing]" if state_slicing else ""
-    c.print(f"[bold yellow]Executing Full Incremental Stress Test (starting from 10 qubits) [Method: {args.method.upper()}, Device: {effective_device.upper()}{slicing_label}, Workers: {workers}, Noise: {args.noise_level.upper()}, Entropy: {args.entropy}, Runs: {args.runs}]...[/bold yellow]\n")
+    native_label = " [Native Kernel Fusion]" if use_native_kernels else ""
+    c.print(f"[bold yellow]Executing Full Incremental Stress Test (starting from 10 qubits) [Method: {args.method.upper()}, Device: {effective_device.upper()}{slicing_label}{native_label}, Workers: {workers}, Noise: {args.noise_level.upper()}, Entropy: {args.entropy}, Runs: {args.runs}]...[/bold yellow]\n")
     q = 10
     max_limit = 50 if args.method == 'mps' else 100
     results = []
@@ -277,7 +302,8 @@ def run_full_stress_test(
             res = run_single_simulation(
                 q, "qft", 0, args.method, args.bond_dim, effective_device, 
                 args.noise_level, args.runs, workers=workers, compute_entropy=args.entropy,
-                state_slicing=state_slicing, blocking_qubits=blocking_qubits
+                state_slicing=state_slicing, blocking_qubits=blocking_qubits,
+                use_native_kernels=use_native_kernels, noise_profile=noise_profile
             )
             res["workload_label"] = "QFT"
             results.append(res)
@@ -297,15 +323,19 @@ def run_custom_simulation(
     workers = getattr(args, 'workers', 1)
     state_slicing = getattr(args, 'state_slicing', False) or (effective_device == 'multi_gpu')
     blocking_qubits = getattr(args, 'blocking_qubits', None)
+    use_native_kernels = getattr(args, 'use_native_kernels', False)
+    noise_profile = getattr(args, 'noise_profile', None)
     slicing_label = " [Distributed State Slicing]" if state_slicing else ""
-    c.print(f"[bold yellow]Executing Custom Simulation (Qubits: {args.qubits}, Workload: {args.type.upper()}, Method: {args.method.upper()}, Device: {effective_device.upper()}{slicing_label}, Workers: {workers}, Noise: {args.noise_level.upper()}, Entropy: {args.entropy}, Runs: {args.runs})...[/bold yellow]\n")
+    native_label = " [Native Kernel Fusion]" if use_native_kernels else ""
+    c.print(f"[bold yellow]Executing Custom Simulation (Qubits: {args.qubits}, Workload: {args.type.upper()}, Method: {args.method.upper()}, Device: {effective_device.upper()}{slicing_label}{native_label}, Workers: {workers}, Noise: {args.noise_level.upper()}, Entropy: {args.entropy}, Runs: {args.runs})...[/bold yellow]\n")
     results = []
     
     with Status(f"Running simulation for {args.qubits} qubits on {effective_device.upper()} ({args.runs} runs, {workers} workers)...", console=c):
         res = run_single_simulation(
             args.qubits, args.type, args.depth, args.method, args.bond_dim, effective_device, 
             args.noise_level, args.runs, workers=workers, compute_entropy=args.entropy,
-            state_slicing=state_slicing, blocking_qubits=blocking_qubits
+            state_slicing=state_slicing, blocking_qubits=blocking_qubits,
+            use_native_kernels=use_native_kernels, noise_profile=noise_profile
         )
         res["workload_label"] = args.type.upper()
         if args.type == "deep":

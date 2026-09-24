@@ -47,6 +47,8 @@ def build_argument_parser() -> argparse.ArgumentParser:
     param_group.add_argument("--workers", type=int, default=1, help="Parallel distributed worker threads/processes for batch execution (default 1).")
     param_group.add_argument("--entropy", action="store_true", help="Calculate bipartite Von Neumann entanglement entropy and simulation complexity.")
     param_group.add_argument("--noise-level", choices=["none", "low", "medium", "high"], default="none", help="NISQ noise model preset level (default none).")
+    param_group.add_argument("--noise-profile", type=str, default=None, help="Load real physical QPU noise calibration profile (e.g. ibm_brisbane_sample).")
+    param_group.add_argument("--use-native-kernels", action="store_true", help="Enable native kernel acceleration (C++/Metal/CUDA Single-Pass Gate Fusion).")
     param_group.add_argument("--runs", type=int, default=3, help="Number of benchmark iterations per circuit (default 3).")
     
     # Comparison Options

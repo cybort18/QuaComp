@@ -79,6 +79,10 @@ def export_to_markdown(
         best_overhead_ratio = best_run.get("overhead_ratio", 0.0)
         best_entanglement = best_run.get("entanglement_metrics", {})
         best_energy = best_run.get("energy_metrics", {})
+        best_native_kernel = best_run.get("native_kernel_used", False)
+        best_accelerator_badge = best_run.get("accelerator_badge", "")
+        best_accelerator_backend = best_run.get("accelerator_backend", "")
+        best_physical_noise = best_run.get("physical_noise_profile", None)
         
     current_time = time.strftime("%Y-%m-%d %H:%M:%S")
     
@@ -97,7 +101,13 @@ def export_to_markdown(
     method_name = "Statevector" if best_method == "statevector" else f"MPS (max_bond_dimension={best_bond_dim})"
     md_content.append(f"> **Simulation Method:** `{method_name}`")
     
-    if best_noise_level != "none":
+    if successful_runs and best_native_kernel and best_accelerator_badge:
+        md_content.append(f"> **Native Acceleration Engine:** `{best_accelerator_badge}` *({best_accelerator_backend})*")
+        
+    if successful_runs and best_physical_noise:
+        md_content.append(f"> **Physical QPU Noise Calibration:** `{best_physical_noise}` *(Realistic Kraus Operator Decomposition)*")
+        md_content.append(f"> **Quantum State Fidelity:** `{best_fidelity:.2f}%`")
+    elif best_noise_level != "none":
         md_content.append(f"> **NISQ Noise Profile:** `{best_noise_level}` *(synthetic representative)*")
         md_content.append(f"> **Quantum State Fidelity:** `{best_fidelity:.2f}%`")
         md_content.append(f"> **CPU Computation Overhead:** `+{best_overhead_ratio:.2f}%`")
@@ -145,8 +155,14 @@ def export_to_markdown(
         method_str = r.get("method", "statevector")
         if method_str in ('mps', 'matrix_product_state') and r.get("bond_dimension"):
             method_str = f"mps (chi={r['bond_dimension']})"
+        if r.get("accelerator_badge"):
+            method_str = f"{method_str} `{r['accelerator_badge']}`"
             
-        noise_str = r.get("noise_level", "none")
+        if r.get("physical_noise_profile"):
+            noise_str = f"QPU: {r['physical_noise_profile']}"
+        else:
+            noise_str = r.get("noise_level", "none")
+            
         fidelity_val = r.get("fidelity", 100.0)
         fidelity_str = f"{fidelity_val:.2f}%" if r["success"] else "-"
             

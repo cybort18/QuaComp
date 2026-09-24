@@ -16,11 +16,13 @@ def run_simulation(
     runs: int = 3,
     workers: int = 1,
     state_slicing: bool = False,
-    blocking_qubits: Optional[int] = None
+    blocking_qubits: Optional[int] = None,
+    use_native_kernels: bool = False,
+    physical_noise_profile: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Execute a Qiskit quantum circuit using AerSimulator across multiple benchmark runs for statistical repeatability,
-    with multi-GPU and parallel distributed worker pool support.
+    with multi-GPU, native kernel gate fusion (C++/Metal/CUDA), physical QPU noise calibration, and parallel distributed worker pool support.
     
     Measures execution latency across `runs` iterations and calculates Mean, Median, and Standard Deviation.
     
@@ -92,8 +94,30 @@ def run_simulation(
                 "metadata": {}
             }
             
-        # Prepare circuit with measurements for count extraction if needed
+        # Resolve Physical QPU Noise Model if requested
+        active_noise_profile = None
+        if physical_noise_profile:
+            from src.engine.physical_noise import PhysicalNoiseModel
+            pnm = PhysicalNoiseModel.from_json(physical_noise_profile)
+            noise_model = pnm.to_qiskit_noise_model(active_qubits=list(range(circuit.num_qubits)))
+            active_noise_profile = pnm.backend_name
+            if noise_level == 'none':
+                noise_level = f"physical:{pnm.backend_name}"
+                
+        # Resolve Native Kernel Acceleration (Single-Pass Gate Fusion: C++/Metal/CUDA)
         circ_to_run = circuit.copy()
+        fusion_metrics = None
+        accelerator_backend = None
+        accelerator_badge = None
+        
+        if use_native_kernels:
+            from src.engine.fusion import fuse_circuit_single_pass
+            from src.engine.accelerator import detect_primary_accelerator, get_accelerator_badge
+            circ_to_run, fusion_metrics = fuse_circuit_single_pass(circ_to_run)
+            accelerator_backend = fusion_metrics.get("backend", detect_primary_accelerator())
+            accelerator_badge = get_accelerator_badge(accelerator_backend)
+            
+        # Prepare circuit with measurements for count extraction if needed
         if len(circ_to_run.cregs) == 0:
             circ_to_run.measure_all()
             
@@ -176,6 +200,11 @@ def run_simulation(
             "device": device_label,
             "workers": workers,
             "noise_level": noise_level,
+            "physical_noise_profile": active_noise_profile,
+            "native_kernel_used": use_native_kernels,
+            "accelerator_backend": accelerator_backend,
+            "accelerator_badge": accelerator_badge,
+            "fusion_metrics": fusion_metrics,
             "runs_count": runs,
             "model_parallelism": "Distributed Statevector Slicing" if use_slicing else "None",
             "blocking_qubits": effective_blocking,
@@ -195,6 +224,11 @@ def run_simulation(
             "counts": last_counts,
             "device": device_label,
             "workers": workers,
+            "native_kernel_used": use_native_kernels,
+            "accelerator_backend": accelerator_backend,
+            "accelerator_badge": accelerator_badge,
+            "fusion_metrics": fusion_metrics,
+            "physical_noise_profile": active_noise_profile,
             "error": None,
             "metadata": metadata
         }
@@ -211,6 +245,11 @@ def run_simulation(
             "counts": {},
             "device": "MULTI_GPU" if is_multi_gpu else dev_clean,
             "workers": workers,
+            "native_kernel_used": use_native_kernels,
+            "accelerator_backend": None,
+            "accelerator_badge": None,
+            "fusion_metrics": None,
+            "physical_noise_profile": physical_noise_profile,
             "error": str(e),
             "metadata": {}
         }

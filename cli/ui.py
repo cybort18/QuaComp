@@ -76,8 +76,12 @@ def display_results(results: List[Dict[str, Any]], console: Optional[Console] = 
         if r.get("bond_dimension"):
             method_label += f" (chi={r['bond_dimension']})"
             
-        noise_label = r.get("noise_level", "none").upper()
-        fidelity_str = f"{r['fidelity']:.1f}%" if noise_label != "NONE" else "100.0%"
+        if r.get("physical_noise_profile"):
+            noise_label = f"QPU:{r['physical_noise_profile'][:8]}"
+        else:
+            noise_label = r.get("noise_level", "none").upper()
+            
+        fidelity_str = f"{r['fidelity']:.1f}%" if (noise_label != "NONE" or r.get("physical_noise_profile")) else "100.0%"
         
         runs_count = r.get("runs_count", 1)
         mean_lat = r.get("mean_latency", r.get("latency", 0.0))
@@ -91,12 +95,20 @@ def display_results(results: List[Dict[str, Any]], console: Optional[Console] = 
             latency_str = "-"
             
         device_label = r.get("device", "CPU").upper()
+        if r.get("accelerator_badge"):
+            device_display = f"{r['accelerator_badge']} {device_label}"
+        elif device_label == "GPU":
+            device_display = "[bold cyan]GPU[/bold cyan]"
+        elif device_label == "MULTI_GPU":
+            device_display = "[bold magenta]MULTI-GPU[/bold magenta]"
+        else:
+            device_display = "[dim]CPU[/dim]"
         
         table.add_row(
             str(r["qubits"]),
             r["workload_label"],
             method_label,
-            f"[bold cyan]{device_label}[/bold cyan]" if device_label == "GPU" else "[dim]CPU[/dim]",
+            device_display,
             noise_label,
             str(r["gates"]) if r["success"] else "-",
             latency_str,
@@ -224,8 +236,14 @@ def display_results(results: List[Dict[str, Any]], console: Optional[Console] = 
         method_used = f"MPS (max_bond_dimension={best_run['bond_dimension']})"
     panel_content.append(f"Simulation Method: {method_used}\n", style="cyan")
     
+    if best_run.get("accelerator_badge"):
+        panel_content.append(f"Acceleration Engine: {best_run['accelerator_badge']} (Backend: {best_run.get('accelerator_backend', 'N/A')})\n", style="bold cyan")
+        
     noise_used = best_run.get("noise_level", "none")
-    if noise_used != "none":
+    if best_run.get("physical_noise_profile"):
+        panel_content.append(f"Physical QPU Calibration: {best_run['physical_noise_profile']} (Realistic Kraus Operators)\n", style="bold yellow")
+        panel_content.append(f"Quantum State Fidelity: {best_run['fidelity']:.2f}%\n", style="bold cyan")
+    elif noise_used != "none":
         panel_content.append(f"NISQ Noise Profile: {noise_used} (synthetic representative)\n", style="bold yellow")
         panel_content.append(f"Quantum State Fidelity: {best_run['fidelity']:.2f}%\n", style="bold cyan")
         panel_content.append(f"CPU Computation Overhead: +{best_run['overhead_ratio']:.2f}%\n", style="magenta")
@@ -262,6 +280,8 @@ def display_help_notice(console: Optional[Console] = None) -> None:
     c.print(BANNER)
     c.print("[bold yellow]Please select a benchmark mode or comparison mode:[/bold yellow]")
     c.print("  [cyan]quacomp --quick[/cyan]                                                (Quick 10, 15, 20 qubits benchmark)")
+    c.print("  [cyan]quacomp --quick --use-native-kernels[/cyan]                           (Quick benchmark with C++/Metal/CUDA Gate Fusion)")
+    c.print("  [cyan]quacomp --quick --noise-profile ibm_brisbane_sample[/cyan]             (Quick benchmark with real physical QPU noise)")
     c.print("  [cyan]quacomp --quick --gpu[/cyan]                                          (Quick benchmark with GPU acceleration)")
     c.print("  [cyan]quacomp --quick --entropy[/cyan]                                      (Quick benchmark with Entanglement Entropy)")
     c.print("  [cyan]quacomp --full[/cyan]                                                 (Incremental stress test)")

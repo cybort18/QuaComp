@@ -1,0 +1,123 @@
+{
+    "backend_name": "ibm_brisbane",
+    "backend_version": "1.2.0",
+    "provider": "IBM Quantum",
+    "architecture": "Eagle r3 (Heavy-Hex)",
+    "last_update_date": "2026-09-24T00:00:00Z",
+    "num_qubits": 127,
+    "general_parameters": {
+        "gate_time_1q_ns": 35.5,
+        "gate_time_2q_ns": 320.0
+    },
+    "qubits": {
+        "0": {
+            "T1_us": 248.5,
+            "T2_us": 165.2,
+            "frequency_GHz": 5.082,
+            "readout_error": 0.0118,
+            "prob_meas0_prep1": 0.0165,
+            "prob_meas1_prep0": 0.0071,
+            "single_qubit_gate_error": 0.000182
+        },
+        "1": {
+            "T1_us": 232.1,
+            "T2_us": 142.6,
+            "frequency_GHz": 5.124,
+            "readout_error": 0.0135,
+            "prob_meas0_prep1": 0.0192,
+            "prob_meas1_prep0": 0.0078,
+            "single_qubit_gate_error": 0.000195
+        },
+        "2": {
+            "T1_us": 255.4,
+            "T2_us": 178.0,
+            "frequency_GHz": 4.986,
+            "readout_error": 0.0098,
+            "prob_meas0_prep1": 0.0140,
+            "prob_meas1_prep0": 0.0056,
+            "single_qubit_gate_error": 0.000164
+        },
+        "3": {
+            "T1_us": 218.7,
+            "T2_us": 135.4,
+            "frequency_GHz": 5.210,
+            "readout_error": 0.0152,
+            "prob_meas0_prep1": 0.0210,
+            "prob_meas1_prep0": 0.0094,
+            "single_qubit_gate_error": 0.000215
+        },
+        "4": {
+            "T1_us": 260.9,
+            "T2_us": 182.3,
+            "frequency_GHz": 5.045,
+            "readout_error": 0.0105,
+            "prob_meas0_prep1": 0.0151,
+            "prob_meas1_prep0": 0.0059,
+            "single_qubit_gate_error": 0.000171
+        },
+        "5": {
+            "T1_us": 240.2,
+            "T2_us": 156.7,
+            "frequency_GHz": 5.158,
+            "readout_error": 0.0128,
+            "prob_meas0_prep1": 0.0178,
+            "prob_meas1_prep0": 0.0078,
+            "single_qubit_gate_error": 0.000188
+        },
+        "6": {
+            "T1_us": 225.8,
+            "T2_us": 148.9,
+            "frequency_GHz": 4.945,
+            "readout_error": 0.0141,
+            "prob_meas0_prep1": 0.0199,
+            "prob_meas1_prep0": 0.0083,
+            "single_qubit_gate_error": 0.000201
+        },
+        "7": {
+            "T1_us": 251.3,
+            "T2_us": 170.5,
+            "frequency_GHz": 5.099,
+            "readout_error": 0.0112,
+            "prob_meas0_prep1": 0.0158,
+            "prob_meas1_prep0": 0.0066,
+            "single_qubit_gate_error": 0.000176
+        }
+    },
+    "couplings": [
+        {
+            "qubits": [0, 1],
+            "gate_name": "ecr",
+            "two_qubit_gate_error": 0.0072
+        },
+        {
+            "qubits": [1, 2],
+            "gate_name": "ecr",
+            "two_qubit_gate_error": 0.0081
+        },
+        {
+            "qubits": [2, 3],
+            "gate_name": "ecr",
+            "two_qubit_gate_error": 0.0069
+        },
+        {
+            "qubits": [3, 4],
+            "gate_name": "ecr",
+            "two_qubit_gate_error": 0.0094
+        },
+        {
+            "qubits": [4, 5],
+            "gate_name": "ecr",
+            "two_qubit_gate_error": 0.0075
+        },
+        {
+            "qubits": [5, 6],
+            "gate_name": "ecr",
+            "two_qubit_gate_error": 0.0088
+        },
+        {
+            "qubits": [6, 7],
+            "gate_name": "ecr",
+            "two_qubit_gate_error": 0.0079
+        }
+    ]
+}
