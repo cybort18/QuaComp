@@ -94,8 +94,10 @@
 - **Physical Parameter Extraction**: Extracts qubit-specific thermal relaxation $T_1$, dephasing $T_2$, readout assignment error confusion matrices $P(\text{read}|\text{true})$, and single/two-qubit gate fidelities.
 - **Analytical Trace-Preserving Kraus Representation**: Analytically computes complete trace-preserving Kraus operators:
   $$\mathcal{E}(\rho) = \sum_k E_k \rho E_k^\dagger, \quad \text{where} \quad \sum_k E_k^\dagger E_k = I$$
-  - **Amplitude Damping**: $E_0 = \begin{pmatrix} 1 & 0 \\ 0 & \sqrt{1-\gamma} \end{pmatrix}, \quad E_1 = \begin{pmatrix} 0 & \sqrt{\gamma} \\ 0 & 0 \end{pmatrix}, \quad \gamma = 1 - e^{-t/T_1}$
-  - **Phase Damping**: $E_0 = \begin{pmatrix} 1 & 0 \\ 0 & \sqrt{1-\lambda} \end{pmatrix}, \quad E_1 = \begin{pmatrix} 0 & 0 \\ 0 & \sqrt{\lambda} \end{pmatrix}, \quad \lambda = 1 - e^{-2t/T_\phi}$
+  - **Amplitude Damping** ($\gamma = 1 - e^{-t/T_1}$):
+    $$E_0 = |0\rangle\langle 0| + \sqrt{1-\gamma}|1\rangle\langle 1|, \quad E_1 = \sqrt{\gamma}|0\rangle\langle 1|$$
+  - **Phase Damping** ($\lambda = 1 - e^{-2t/T_\phi}$):
+    $$E_0 = |0\rangle\langle 0| + \sqrt{1-\lambda}|1\rangle\langle 1|, \quad E_1 = \sqrt{\lambda}|1\rangle\langle 1|$$
   - **Combined Thermal Relaxation & Readout Confusion**: Rigorously bounded such that $T_2 \le 2T_1$, preventing unphysical negative rates.
 - **Seamless Aer Simulation**: Converts calibration profiles directly into executable Qiskit Aer `NoiseModel` instances for realistic NISQ benchmarking against ideal statevectors.
 
@@ -263,12 +265,10 @@ pip install -e .
 
 | Hardware Platform | Accelerator Engine | Backend Technology | Supported OS | Graceful Fallback Mode |
 | :--- | :--- | :--- | :--- | :--- |
-| **Apple Silicon (M1/M2/M3/M4)** | Metal GPU Compute | Apple Metal Shaders (`fusion.metal`) | macOS | `[Engine: C++ SIMD]` $\to$ `[Engine: Python Fallback]` |
-| **NVIDIA GPU (RTX / Tesla / Hopper)** | CUDA JIT / Qiskit Aer GPU | CUDA Kernels & Aer GPU Device | Linux, Windows | `[Engine: C++ SIMD]` $\to$ `[Engine: Python Fallback]` |
+| **Apple Silicon (M1/M2/M3/M4)** | Metal GPU Compute | Apple Metal Shaders (`fusion.metal`) | macOS | `[Engine: C++ SIMD]` → `[Engine: Python Fallback]` |
+| **NVIDIA GPU (RTX / Tesla / Hopper)** | CUDA JIT / Qiskit Aer GPU | CUDA Kernels & Aer GPU Device | Linux, Windows | `[Engine: C++ SIMD]` → `[Engine: Python Fallback]` |
 | **x86_64 / ARM64 CPU (Modern)** | C++ Native SIMD | Pybind11 Unrolled Matrix Fusion | Linux, macOS, Windows | `[Engine: Python Fallback]` |
 | **Any Generic CPU** | Pure CPython / NumPy | Vectorized NumPy Fallback Engine | All Platforms | Built-in Base Level |
-
----
 
 ---
 
