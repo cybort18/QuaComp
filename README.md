@@ -15,7 +15,7 @@
 
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![CI](https://github.com/cybort18/QuaComp/actions/workflows/ci.yml/badge.svg)](https://github.com/cybort18/QuaComp/actions)
-[![Tests Status](https://img.shields.io/badge/tests-133%20passed-green.svg)](#running-tests)
+[![Tests Status](https://img.shields.io/badge/tests-138%20passed-green.svg)](#running-tests)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 ---
@@ -29,7 +29,7 @@
 - [Usage Examples](#usage-examples)
 - [Running Tests](#running-tests)
 - [Reference Hardware Benchmarks](#reference-hardware-benchmarks)
-- [Scoring Categories](#scoring-categories)
+- [Scoring & Dual-Mode Benchmark System](#scoring--dual-mode-benchmark-system)
 - [Technical Limitations & Architecture Transparency](#technical-limitations--architecture-transparency)
 - [Roadmap](#roadmap)
 - [Contribution Guide](#contribution-guide)
@@ -359,30 +359,30 @@ platform win32 -- Python 3.13.3, pytest-9.1.1, pluggy-1.6.0
 rootdir: C:\Users\HP\Documents\PROJECT\QuaComp
 configfile: pyproject.toml
 plugins: anyio-4.14.2
-collected 133 items
+collected 138 items
 
 tests\test_accelerator.py .......                                        [  5%]
-tests\test_charts.py ....                                                [  8%]
+tests\test_charts.py ....                                                [  7%]
 tests\test_comparator.py .......                                         [ 13%]
 tests\test_cpp_fusion.py ...........                                     [ 21%]
-tests\test_energy.py ....                                                [ 24%]
-tests\test_engine.py ......                                              [ 29%]
-tests\test_entanglement.py ...........                                   [ 37%]
-tests\test_gpu.py ...........                                            [ 45%]
-tests\test_memory.py .......                                             [ 51%]
-tests\test_model_parallelism.py .....                                    [ 54%]
-tests\test_mps.py ....                                                   [ 57%]
-tests\test_mps_topology.py .....                                         [ 61%]
-tests\test_native_integration.py .....                                   [ 65%]
-tests\test_noise.py ....                                                 [ 68%]
-tests\test_physical_noise.py ........                                    [ 74%]
-tests\test_registry.py ...........                                       [ 82%]
-tests\test_reporter.py .........                                         [ 89%]
-tests\test_scorer.py ......                                              [ 93%]
+tests\test_energy.py ....                                                [ 23%]
+tests\test_engine.py ......                                              [ 28%]
+tests\test_entanglement.py ...........                                   [ 36%]
+tests\test_gpu.py ...........                                            [ 44%]
+tests\test_memory.py .......                                             [ 49%]
+tests\test_model_parallelism.py .....                                    [ 52%]
+tests\test_mps.py ....                                                   [ 55%]
+tests\test_mps_topology.py .....                                         [ 59%]
+tests\test_native_integration.py .....                                   [ 63%]
+tests\test_noise.py ....                                                 [ 65%]
+tests\test_physical_noise.py ........                                    [ 71%]
+tests\test_registry.py ...........                                       [ 79%]
+tests\test_reporter.py .........                                         [ 86%]
+tests\test_scorer.py ...........                                         [ 94%]
 tests\test_ui.py ...                                                     [ 96%]
 tests\test_variational_qv.py .....                                       [100%]
 
-============================ 133 passed in 14.93s =============================
+============================ 138 passed in 20.39s =============================
 ```
 
 ---
@@ -399,19 +399,37 @@ The repository includes committed sample benchmark telemetry files in `results/r
 
 ---
 
-## Scoring Categories
+## Scoring & Dual-Mode Benchmark System
 
-QuaComp Composite Score maps directly into performance tiers, reflecting the computing capabilities of local environments:
+QuaComp implements a **Dual-Mode Benchmark Architecture** that decouples fast engineering comparison from formal academic evaluation:
+
+### 1. QuaComp Synthetic Index (QSI) — Fast Hardware Index
+For day-to-day CLI benchmarking and hardware tier ranking, QuaComp computes the **QuaComp Synthetic Index (QSI)** using a balanced logarithmic scale:
+
+$$\text{QSI} = \text{round}\left( n_{\text{qubits}} \cdot \left[ w_1 + w_2 \cdot \log_{10}(\max(T, 1.0)) + w_3 \cdot \left(\frac{\text{Fidelity}}{100}\right) \right], 2 \right)$$
+
+where:
+- $n_{\text{qubits}}$ is the maximum qubit capacity successfully simulated.
+- $T = \text{gates}/\mu_{\text{latency}}$ is gate throughput in gates/second.
+- $w_1 = 100.0$ (State-space scaling base).
+- $w_2 = 50.0$ (Gate throughput dynamic sensitivity).
+- $w_3 = 25.0$ (Quantum state fidelity factor).
 
 | Tier Category | Score Range (Points) | Max Qubits Simulation Range |
 | :--- | :--- | :--- |
-| **Entry-Level** | < 100,000 | Up to 18-20 Qubits |
-| **Mid-Range** | 100,000 to 1,000,000 | Up to 22-25 Qubits |
-| **High-Performance** | 1,000,000 to 50,000,000 | Up to 26-28 Qubits |
-| **Extreme Workstation** | > 50,000,000 | 29+ Qubits |
+| **Entry-Level** | < 2,500 | Up to ~10-12 Qubits |
+| **Mid-Range** | 2,500 to 6,000 | ~14-22 Qubits |
+| **High-Performance** | 6,000 to 10,000 | ~24-30 Qubits (Fast SIMD / GPU) |
+| **Extreme Workstation** | ≥ 10,000 | 30+ Qubits / Advanced MPS |
 
-> **Methodology Note on Capacity Dominance:**  
-> Because state-vector memory allocation scales exponentially with $2^n$, the Capacity Metric of $10 \times 2^n$ exponentially dominates the Throughput Metric $T = \text{gates}/\mu_{\text{latency}}$. A system simulating 30 qubits will score higher than a system simulating 28 qubits with faster gate throughput, reflecting QuaComp's deliberate design choice to prioritize state-space memory capacity scaling over execution speed.
+### 2. Formal Academic Verification Suite (Quantum HPC Standards)
+
+> [!IMPORTANT]
+> **Methodology & Academic Transparency Notice:**  
+> The **QuaComp Synthetic Index (QSI)** is an engineering heuristic metric intended for rapid local hardware comparisons. For peer-reviewed academic research and formal HPC benchmarking, researchers should reference QuaComp's exported **Formal Academic Metrics**:
+> - **Normalized Gate Throughput:** Direct gate execution throughput measured in thousands of gates per second (kGates/s).
+> - **Quantum Volume Certification ($h_{\text{prob}} > 2/3$):** Heavy output probability certification per Cross et al. (2019) with binomial 2-sigma confidence bounds ($h_{\text{prob}} - 2\sigma > 2/3$).
+> - **Energy-Delay Product (EDP):** Figure-of-merit in Joule-seconds ($J \cdot s$) combining execution latency and energy consumption from RAPL hardware registers or dynamic TDP modeling.
 
 ---
 

@@ -5,7 +5,8 @@ from typing import List, Dict, Any
 
 def export_to_json(results: List[Dict[str, Any]], system_metadata: Dict[str, Any], output_dir: str = "results") -> str:
     """
-    Export benchmark results, scoring breakdown, statistical metrics, and system telemetry to a JSON file.
+    Export benchmark results, scoring breakdown, statistical metrics, academic benchmarks,
+    and system telemetry to a JSON file.
     
     Args:
         results (list): List of simulation run dictionaries.
@@ -50,10 +51,20 @@ def export_to_json(results: List[Dict[str, Any]], system_metadata: Dict[str, Any
     best_runs_count = 0
     capacity_metric = 0.0
     throughput_metric = 0.0
+    throughput_kgps = 0.0
+    fidelity_factor = 1.0
+    edp_val = None
     best_entanglement_metrics = {}
+    best_energy_metrics = {}
+    
+    qv_hprob = None
+    qv_certified = None
     
     if successful_runs:
-        from src.scorer.calculator import calculate_scoring_breakdown, categorize_score
+        from src.scorer.calculator import (
+            calculate_scoring_breakdown, 
+            categorize_score
+        )
         best_run = max(successful_runs, key=lambda x: x["qubits"])
         best_qubits = best_run["qubits"]
         gates = best_run["gates"]
@@ -61,34 +72,60 @@ def export_to_json(results: List[Dict[str, Any]], system_metadata: Dict[str, Any
         best_median_latency = best_run.get("median_latency", best_mean_latency)
         best_std_latency = best_run.get("std_latency", 0.0)
         best_runs_count = best_run.get("runs_count", 1)
+        best_fidelity = best_run.get("fidelity", 100.0)
+        best_overhead_ratio = best_run.get("overhead_ratio", 0.0)
         
-        breakdown = calculate_scoring_breakdown(best_qubits, gates, best_mean_latency)
+        best_energy_metrics = best_run.get("energy_metrics", {})
+        total_energy_j = best_energy_metrics.get("total_energy_joules") if best_energy_metrics else None
+        
+        breakdown = calculate_scoring_breakdown(
+            best_qubits, gates, best_mean_latency, fidelity=best_fidelity, energy_joules=total_energy_j
+        )
         score = breakdown["composite_score"]
         capacity_metric = breakdown["capacity_metric"]
         throughput_metric = breakdown["throughput_metric"]
+        throughput_kgps = breakdown["throughput_kgps"]
+        fidelity_factor = breakdown["fidelity_factor"]
+        edp_val = breakdown["energy_delay_product"]
         category = categorize_score(score)
         
         best_method = best_run.get("method", "statevector")
         best_bond_dim = best_run.get("bond_dimension")
         best_ram_savings = best_run.get("ram_savings", {})
         best_noise_level = best_run.get("noise_level", "none")
-        best_fidelity = best_run.get("fidelity", 100.0)
         best_native_kernel = best_run.get("native_kernel_used", False)
         best_accelerator_backend = best_run.get("accelerator_backend", "none")
         best_accelerator_badge = best_run.get("accelerator_badge", "")
         best_physical_noise = best_run.get("physical_noise_profile", None)
         best_entanglement_metrics = best_run.get("entanglement_metrics", {})
-        best_energy_metrics = best_run.get("energy_metrics", {})
+        
+        # Check if Quantum Volume metrics exist across successful runs
+        qv_runs = [r for r in successful_runs if r.get("qv_metrics")]
+        if qv_runs:
+            best_qv_run = max(qv_runs, key=lambda x: x["qubits"])
+            qvm = best_qv_run["qv_metrics"]
+            qv_hprob = qvm.get("heavy_output_probability")
+            qv_certified = qvm.get("qv_certified", False)
+            
+    academic_benchmarks = {
+        "gate_throughput_kgps": throughput_kgps,
+        "energy_delay_product_js": edp_val,
+        "qv_heavy_output_probability": qv_hprob,
+        "qv_certified": qv_certified
+    }
         
     data = {
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
         "final_score": score,
         "final_composite_score": score,
-        "score_type": "project-specific composite heuristic score",
+        "score_type": "QuaComp Synthetic Index (QSI)",
         "scoring_breakdown": {
             "capacity_metric": capacity_metric,
-            "throughput_metric": throughput_metric
+            "throughput_metric": throughput_metric,
+            "throughput_kgps": throughput_kgps,
+            "fidelity_factor": fidelity_factor
         },
+        "academic_benchmarks": academic_benchmarks,
         "performance_category": category,
         "max_qubits_simulated": best_qubits,
         "simulation_method": best_method,

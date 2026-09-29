@@ -19,7 +19,7 @@ By leveraging state-vector simulation of dimension $2^n$, `QuaComp` measures mem
 - **Pre-flight Safety:** Prevents system crashes and Out-Of-Memory (OOM) errors by calculating theoretical $2^n$ RAM requirements before running simulation runs.
 - **Representative Workloads:** Evaluates hardware against diverse quantum circuit workloads (Shallow, Deep, and Algorithmic QFT).
 - **Statistical Multi-Run Profiling:** Executes multiple benchmark iterations per circuit (`--runs INT`, default 3) to compute Mean (μ), Median, and Standard Deviation (σ) of execution latencies, mitigating CPU governor and background process noise.
-- **Project-Specific Composite Scoring:** Computes a project-specific composite heuristic score ("QuaComp Composite Score") that decouples state-space capacity $C = 2^n$ and gate throughput $T = \text{gates}/\mu_{\text{latency}}$.
+- **Dual-Mode Scoring & Academic Suite:** Balances rapid engineering comparison via the logarithmic QuaComp Synthetic Index (QSI) while providing formal scientific benchmarks (kGates/s throughput, Quantum Volume verification, and Energy-Delay Product).
 - **Scalable MPS Simulation:** Supports high-qubit simulation (up to 100+ qubits) specifically for low-to-moderate entanglement circuits using tensor network compression (Matrix Product State), overcoming conventional state-vector memory limits.
 - **NISQ Synthetic Noise & Fidelity Profiling:** Evaluates hardware computational overhead under synthetic parameterized noise channels (thermal relaxation and depolarizing errors) while measuring classical Hellinger state fidelity loss.
 - **Automated Telemetry Visualizations:** Generates modern high-DPI chart graphics (`--chart`) illustrating qubit scalability, memory safety boundaries, simulation method comparisons, and noise fidelity degradation.
@@ -69,17 +69,37 @@ Three types of quantum workloads are supported:
   - **CPU Core Utilization:** Multi-core CPU utilization percentage.
   - **System Metadata:** CPU model name, total physical RAM, operating system, and Python/Qiskit version details.
 
-### FR-5: Composite Heuristic Scoring Engine
-The composite benchmark score (**QuaComp Composite Score**) is a project-specific heuristic score that decouples state-space capacity and gate throughput:
-$$\text{QuaComp Composite Score} = (C \times 10) + T = (2^{n_{\text{max}}} \times 10) + \left( \frac{\text{Total Gates Executed}}{\mu_{\text{latency}}} \right)$$
-- **Capacity Metric**: $C = 2^{n_{\text{max}}}$ (prioritizes memory capacity scaling).
-- **Throughput Metric**: $T = \frac{\text{Total Gates Executed}}{\mu_{\text{latency}}}$ (gates processed per second).
-- **Scoring Tiers:**
-  - *Entry-Level:* < 100,000 pts (Max 18-20 Qubits)
-  - *Mid-Range:* 100,000 - 1,000,000 pts (Max 22-25 Qubits)
-  - *High-Performance:* 1,000,000 - 50,000,000 pts (Max 26-28 Qubits)
-  - *Extreme Workstation:* > 50,000,000 pts (>= 29 Qubits)
-- **Methodology Note on Capacity Dominance:** Because state-vector memory allocation scales exponentially with $2^n$, the Capacity Metric of $10 \times 2^n$ exponentially dominates the Throughput Metric $T$. A machine simulating 30 qubits will score higher than a machine simulating 28 qubits with faster gate throughput, reflecting QuaComp's deliberate design choice to prioritize memory capacity scaling over execution speed.
+### FR-5: Dual-Mode Scoring & Academic Verification Engine
+
+QuaComp employs a **Dual-Mode Scoring Architecture** to serve both rapid hardware evaluation and peer-reviewed scientific benchmarking:
+
+#### 1. QuaComp Synthetic Index (QSI) — Engineering Heuristic
+For rapid CLI comparison and hardware tier classification, QuaComp calculates the **QuaComp Synthetic Index (QSI)**:
+
+$$\text{QSI} = \text{round}\left( n_{\text{qubits}} \cdot \left[ w_1 + w_2 \cdot \log_{10}(\max(T, 1.0)) + w_3 \cdot \left(\frac{\text{Fidelity}}{100}\right) \right], 2 \right)$$
+
+where:
+- $n_{\text{qubits}}$ = Maximum successfully simulated qubits.
+- $T = \frac{\text{Total Gates}}{\max(\mu_{\text{latency}}, 10^{-6})}$ = Gate throughput in gates/second.
+- $w_1 = 100.0$ (State-space capacity base weight).
+- $w_2 = 50.0$ (Throughput dynamic sensitivity factor).
+- $w_3 = 25.0$ (Quantum state fidelity factor).
+
+**QSI Performance Tiers:**
+| Performance Tier | Score Range (Points) | Typical Hardware Capability |
+| :--- | :--- | :--- |
+| **Entry-Level** | < 2,500 | Up to ~10-12 Qubits |
+| **Mid-Range** | 2,500 to 6,000 | ~14-22 Qubits |
+| **High-Performance** | 6,000 to 10,000 | ~24-30 Qubits (Fast SIMD / GPU) |
+| **Extreme Workstation** | ≥ 10,000 | 30+ Qubits / Advanced Tensor Networks |
+
+#### 2. Formal Academic Verification Suite (Quantum HPC Standards)
+> [!IMPORTANT]
+> **Methodological Transparency Notice:**  
+> The **QuaComp Synthetic Index (QSI)** is an engineering heuristic index designed for rapid hardware comparison. For formal peer-reviewed academic research, system architects must evaluate and cite the **Academic Verification Suite** metrics exported by QuaComp:
+> 1. **Normalized Gate Throughput (kGates/s):** Thousands of quantum gates executed per second ($T / 1000$).
+> 2. **Quantum Volume Verification ($h_{\text{prob}} > 2/3$):** Heavy Output Probability certification under Cross et al. (2019) with 2-sigma lower confidence bound testing.
+> 3. **Energy-Delay Product (EDP):** Measured in Joule-seconds ($J \cdot s$) via direct Linux RAPL hardware counters or calibrated dynamic TDP modeling ($\text{Latency} \times \text{Energy}$).
 
 ### FR-6: Report & Export Module
 - Benchmark results can be exported as:

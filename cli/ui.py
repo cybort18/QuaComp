@@ -184,8 +184,10 @@ def display_results(results: List[Dict[str, Any]], console: Optional[Console] = 
     # Render Quantum Volume Certification Table if present
     qv_runs = [r for r in successful_runs if r.get("qv_metrics") and "heavy_output_probability" in r["qv_metrics"]]
     if qv_runs:
-        qv_table = Table(title="Quantum Volume (QV) Verification", show_header=True, header_style="bold blue", expand=False)
+        qv_table = Table(title="Quantum Volume (QV) Verification & Heavy Output Analysis", show_header=True, header_style="bold blue", expand=False)
         qv_table.add_column("Qubits", style="cyan", justify="center")
+        qv_table.add_column("Noise Calibration", style="dim white", justify="left")
+        qv_table.add_column("Fidelity", style="bold cyan", justify="right")
         qv_table.add_column("Heavy Prob (h_prob)", style="bold yellow", justify="right")
         qv_table.add_column("2-Sigma Lower Bound", style="white", justify="right")
         qv_table.add_column("Threshold", style="dim white", justify="center")
@@ -193,8 +195,12 @@ def display_results(results: List[Dict[str, Any]], console: Optional[Console] = 
         for qvr in qv_runs:
             qvm = qvr["qv_metrics"]
             status_str = "[bold green]CERTIFIED (PASSED)[/bold green]" if qvm["qv_certified"] else "[bold red]FAILED[/bold red]"
+            noise_lbl = qvr.get("physical_noise_profile") or qvr.get("noise_level", "none")
+            fid_lbl = f"{qvr.get('fidelity', 100.0):.2f}%"
             qv_table.add_row(
                 str(qvr["qubits"]),
+                noise_lbl,
+                fid_lbl,
                 f"{qvm['heavy_output_probability']:.4f}",
                 f"{qvm['lower_confidence_bound_2sigma']:.4f}",
                 "> 0.6667",
@@ -208,10 +214,13 @@ def display_results(results: List[Dict[str, Any]], console: Optional[Console] = 
     max_qubits = best_run["qubits"]
     gates = best_run["gates"]
     mean_latency = best_run.get("mean_latency", best_run.get("latency", 0.0))
+    best_fidelity = best_run.get("fidelity", 100.0)
+    best_energy = best_run.get("energy_metrics", {})
+    total_energy_j = best_energy.get("total_energy_joules") if best_energy else None
     
-    score = calculate_qsim_score(max_qubits, gates, mean_latency)
+    score = calculate_qsim_score(max_qubits, gates, mean_latency, fidelity=best_fidelity)
     category = categorize_score(score)
-    breakdown = calculate_scoring_breakdown(max_qubits, gates, mean_latency)
+    breakdown = calculate_scoring_breakdown(max_qubits, gates, mean_latency, fidelity=best_fidelity, energy_joules=total_energy_j)
     
     tier_colors = {
         "Entry-Level": "blue",
@@ -222,12 +231,15 @@ def display_results(results: List[Dict[str, Any]], console: Optional[Console] = 
     color = tier_colors.get(category, "white")
     
     panel_content = Text()
-    panel_content.append("Final Composite Heuristic Score: ", style="bold")
-    panel_content.append(f"{score:,.2f}\n", style=f"bold {color}")
-    panel_content.append("Score Formulation: (2^Qubits * 10) + (Gates / Latency)\n", style="dim white")
-    panel_content.append("Scoring Metric Breakdown:\n", style="bold white")
-    panel_content.append(f"  - Capacity Metric:  {breakdown['capacity_metric']:,.0f} (2^{max_qubits})\n", style="dim cyan")
-    panel_content.append(f"  - Throughput Metric: {breakdown['throughput_metric']:,.2f} gates/sec\n", style="dim cyan")
+    panel_content.append("QuaComp Synthetic Index (QSI): ", style="bold")
+    panel_content.append(f"{score:,.2f} pts\n", style=f"bold {color}")
+    panel_content.append("Index Formulation: Balanced logarithmic scale of Qubit Capacity, Gate Throughput & Fidelity\n", style="dim white")
+    panel_content.append("Scoring Metrics Breakdown:\n", style="bold white")
+    panel_content.append(f"  - Capacity Metric:        {breakdown['capacity_metric']:,.0f} (2^{max_qubits})\n", style="dim cyan")
+    panel_content.append(f"  - Gate Throughput:        {breakdown['throughput_metric']:,.2f} gates/sec ({breakdown['throughput_kgps']:.3f} kGates/s)\n", style="dim cyan")
+    panel_content.append(f"  - State Fidelity Factor:  {breakdown['fidelity_factor'] * 100:.1f}%\n", style="dim cyan")
+    if breakdown.get("energy_delay_product") is not None:
+        panel_content.append(f"  - Energy-Delay Product:   {breakdown['energy_delay_product']:.6f} J·s\n", style="dim cyan")
     panel_content.append("Performance Category: ", style="bold")
     panel_content.append(f"{category}\n", style=f"bold {color}")
     

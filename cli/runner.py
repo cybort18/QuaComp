@@ -196,10 +196,14 @@ def run_single_simulation(
         try:
             from qiskit.quantum_info import Statevector
             circ_clean = circuit.copy()
-            circ_clean.remove_final_measurements(inplace=True)
+            if len(circ_clean.clbits) > 0:
+                circ_clean.remove_final_measurements(inplace=True)
             ideal_sv = Statevector.from_instruction(circ_clean)
             ideal_probs = ideal_sv.probabilities_dict()
             qv_metrics = calculate_heavy_output_probability(ideal_probs, sim_result["counts"])
+            if noise_profile or noise_level != "none":
+                qv_metrics["noise_degradation_active"] = True
+                qv_metrics["fidelity_percent"] = fidelity
         except Exception:
             pass
 
