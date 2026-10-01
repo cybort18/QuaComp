@@ -56,8 +56,10 @@ def run_simulation(
         TypeError: If the input circuit is not a Qiskit QuantumCircuit.
         ValueError: If runs is less than 1 or device is invalid.
     """
-    if not isinstance(circuit, QuantumCircuit):
-        raise TypeError("Input must be a Qiskit QuantumCircuit instance.")
+    if hasattr(circuit, "to_quantum_circuit"):
+        circuit = circuit.to_quantum_circuit()
+    elif not isinstance(circuit, QuantumCircuit):
+        raise TypeError("Input must be a Qiskit QuantumCircuit or ParsedQASMCircuit instance.")
         
     if not isinstance(runs, int) or runs < 1:
         raise ValueError("Number of runs must be an integer >= 1.")

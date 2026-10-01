@@ -15,7 +15,7 @@
 
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![CI](https://github.com/cybort18/QuaComp/actions/workflows/ci.yml/badge.svg)](https://github.com/cybort18/QuaComp/actions)
-[![Tests Status](https://img.shields.io/badge/tests-138%20passed-green.svg)](#running-tests)
+[![Tests Status](https://img.shields.io/badge/tests-171%20passed-green.svg)](#running-tests)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 ---
@@ -79,6 +79,14 @@
 - **Variational Quantum Eigensolver (VQE)**: Parametric ansatz (`quacomp --vqe`) with alternating $R_y$ layers and linear/full entanglement, featuring automatic Parameter Binding latency and throughput profiling.
 - **Quantum Approximate Optimization Algorithm (QAOA)**: Max-Cut parametric ansatz (`quacomp --qaoa`) parameterized by cost $\gamma$ and mixer $\beta$ Hamiltonians.
 - **Quantum Volume (QV)**: Square model circuits (`quacomp --qv`) with Haar-random $SU(4)$ 2-qubit unitaries on random qubit permutations per layer, accompanied by Heavy Output Generation Probability analysis where $h_{\text{prob}} > 2/3$ and $2\sigma$ confidence certification.
+
+### OpenQASM 2.0 Parser & Standard Circuit Interoperability (`--qasm`)
+- **Zero-Overhead Lightweight Parser**: Standalone native lexer, tokenizer, and safe AST evaluator supporting the official OpenQASM 2.0 specification without bulky external parser dependencies.
+- **Comprehensive Standard Gate Set**: Full parsing and synthesis for 1-qubit gates (`h`, `x`, `y`, `z`, `s`, `sdg`, `t`, `tdg`, `rx`, `ry`, `rz`, `u1`, `u2`, `u3`), 2-qubit gates (`cx`/`cnot`, `cz`, `cy`, `ch`, `swap`, `iswap`, `crz`, `cu1`, `cu3`, `rxx`, `ryy`, `rzz`), and 3-qubit gates (`ccx`/`toffoli`, `cswap`/`fredkin`).
+- **Safe Mathematical Parameter Expressions**: AST-based arithmetic evaluator for rotation angles supporting `pi`, algebraic operators (`+`, `-`, `*`, `/`, `**`, `^`), and safe standard functions (`sin`, `cos`, `tan`, `exp`, `ln`, `sqrt`).
+- **Gate Macro Expansion & Register Broadcasting**: Seamlessly handles user-defined custom gate macros (`gate ... { ... }`) and expands register-wide broadcast statements (e.g. `h q;` on `qreg q[4];`).
+- **Bi-Directional Qiskit Interoperability**: Direct translation to executable `QuantumCircuit` and seamless constructor from existing Qiskit circuits via `ParsedQASMCircuit.from_qiskit()`.
+- **Pre-bundled QASMBench Suite**: Includes standard benchmark fixtures in `benchmarks/` (`bell_state.qasm`, `teleportation.qasm`, `ghz_state.qasm`, `qft_4qubit.qasm`).
 
 ### NISQ Noise & State Fidelity Profiler
 - **Synthetic Parameterized Noise Channels**: Incorporates Thermal Relaxation $T_1, T_2$ and Depolarizing Errors using `qiskit_aer.noise`.
@@ -161,6 +169,11 @@ QuaComp/
 ├── .github/
 │   └── workflows/
 │       └── ci.yml          # GitHub Actions CI matrix (Ubuntu, Windows, macOS across Python 3.10-3.13)
+├── benchmarks/             # OpenQASM 2.0 industry-standard circuit fixtures
+│   ├── bell_state.qasm     # 2-qubit maximally entangled Bell state
+│   ├── ghz_state.qasm      # 3-qubit Greenberger-Horne-Zeilinger state
+│   ├── qft_4qubit.qasm     # 4-qubit Quantum Fourier Transform
+│   └── teleportation.qasm  # 3-qubit Quantum Teleportation protocol
 ├── cli/
 │   ├── __init__.py
 │   ├── __main__.py
@@ -188,6 +201,7 @@ QuaComp/
 │   │   ├── fusion.py       # Single-pass gate fusion engine & fallback dispatcher
 │   │   ├── mps.py          # MPS configuration & RAM savings profiler
 │   │   ├── noise.py        # NISQ noise presets & state fidelity calculator
+│   │   ├── parser.py       # OpenQASM 2.0 parser & circuit interoperability engine
 │   │   ├── physical_noise.py # Real physical QPU noise parser & analytical Kraus generator
 │   │   ├── shaders/        # GPU compute kernels
 │   │   │   └── fusion.metal# Apple Metal compute shader for unitary gate fusion
@@ -221,6 +235,7 @@ QuaComp/
 │   ├── test_mps_topology.py# MPS dynamic permutation routing and truncation tests
 │   ├── test_native_integration.py # Native kernels & physical noise CLI integration tests
 │   ├── test_noise.py       # NISQ noise models and state fidelity tests
+│   ├── test_parser.py      # OpenQASM 2.0 parser, parameter math & statevector tests
 │   ├── test_physical_noise.py # Real physical QPU noise calibration & Kraus tests
 │   ├── test_registry.py    # Dynamic baseline registry & offline caching tests
 │   ├── test_reporter.py    # Exporters files creation tests
@@ -300,6 +315,9 @@ quacomp --custom --qubits 6 --vqe
 # Run Quantum Volume benchmark with heavy output probability analysis
 quacomp --custom --qubits 4 --qv
 
+# Ingest and benchmark an industry-standard OpenQASM 2.0 circuit
+quacomp --qasm benchmarks/bell_state.qasm --runs 3
+
 # Synchronize enterprise baseline profiles from remote registry
 quacomp --fetch-baselines
 
@@ -332,7 +350,8 @@ quacomp --quick --compare --target apple_m4_max
 | `--type` | `shallow`, `deep`, `qft`, `vqe`, `qaoa`, `qv` | Quantum circuit workload type. |
 | `--vqe` | N/A | Shorthand for VQE variational ansatz with parameter binding latency measurement. |
 | `--qaoa` | N/A | Shorthand for QAOA Max-Cut variational workload. |
-| `--qv` | N/A | Shorthand for Quantum Volume square model benchmark with $h_{\text{prob}} > 2/3$. |
+| `--qv` | N/A | Shorthand for Quantum Volume square model benchmark with h_prob > 2/3. |
+| `--qasm` | `PATH` | Path to OpenQASM 2.0 file (`.qasm`) for standard circuit benchmark ingestion. |
 | `--depth` | `INT` (default: `10`) | Depth parameter for deep random circuit workloads. |
 | `--method` | `statevector`, `mps` (default: `statevector`) | Simulation engine method. |
 | `--bond-dim` | `INT` (default: `64`) | Maximum bond dimension for MPS tensor network engine. |
@@ -345,7 +364,7 @@ quacomp --quick --compare --target apple_m4_max
 
 ## Running Tests
 
-Automated unit tests are written with `pytest`. They cover statevector simulation, C++ gate fusion, hardware accelerator dispatching and fallback, real physical QPU calibration parsing, Kraus operator generation, GPU and multi-GPU detection & safety, multi-GPU model parallelism, dynamic MPS topology routing & truncation bounds, NISQ synthetic noise models, bipartite entanglement entropy, VQE/QAOA parameter binding latency, Quantum Volume heavy output probability analysis, cross-platform power/energy telemetry, remote registry synchronization, and report exporters.
+Automated unit tests are written with `pytest`. They cover statevector simulation, C++ gate fusion, hardware accelerator dispatching and fallback, real physical QPU calibration parsing, Kraus operator generation, GPU and multi-GPU detection & safety, multi-GPU model parallelism, dynamic MPS topology routing & truncation bounds, NISQ synthetic noise models, bipartite entanglement entropy, VQE/QAOA parameter binding latency, Quantum Volume heavy output probability analysis, OpenQASM 2.0 parsing and circuit interoperability, cross-platform power/energy telemetry, remote registry synchronization, and report exporters.
 
 To execute the full test suite, run:
 ```bash
@@ -359,30 +378,31 @@ platform win32 -- Python 3.13.3, pytest-9.1.1, pluggy-1.6.0
 rootdir: C:\Users\HP\Documents\PROJECT\QuaComp
 configfile: pyproject.toml
 plugins: anyio-4.14.2
-collected 138 items
+collected 171 items
 
-tests\test_accelerator.py .......                                        [  5%]
-tests\test_charts.py ....                                                [  7%]
-tests\test_comparator.py .......                                         [ 13%]
-tests\test_cpp_fusion.py ...........                                     [ 21%]
-tests\test_energy.py ....                                                [ 23%]
-tests\test_engine.py ......                                              [ 28%]
-tests\test_entanglement.py ...........                                   [ 36%]
-tests\test_gpu.py ...........                                            [ 44%]
-tests\test_memory.py .......                                             [ 49%]
-tests\test_model_parallelism.py .....                                    [ 52%]
-tests\test_mps.py ....                                                   [ 55%]
-tests\test_mps_topology.py .....                                         [ 59%]
-tests\test_native_integration.py .....                                   [ 63%]
-tests\test_noise.py ....                                                 [ 65%]
-tests\test_physical_noise.py ........                                    [ 71%]
-tests\test_registry.py ...........                                       [ 79%]
-tests\test_reporter.py .........                                         [ 86%]
+tests\test_accelerator.py .......                                        [  4%]
+tests\test_charts.py ....                                                [  6%]
+tests\test_comparator.py .......                                         [ 10%]
+tests\test_cpp_fusion.py ...........                                     [ 16%]
+tests\test_energy.py ....                                                [ 19%]
+tests\test_engine.py ......                                              [ 22%]
+tests\test_entanglement.py ...........                                   [ 29%]
+tests\test_gpu.py ...........                                            [ 35%]
+tests\test_memory.py .......                                             [ 39%]
+tests\test_model_parallelism.py .....                                    [ 42%]
+tests\test_mps.py ....                                                   [ 45%]
+tests\test_mps_topology.py .....                                         [ 47%]
+tests\test_native_integration.py .....                                   [ 50%]
+tests\test_noise.py ....                                                 [ 53%]
+tests\test_parser.py ................................                    [ 71%]
+tests\test_physical_noise.py ........                                    [ 76%]
+tests\test_registry.py ...........                                       [ 83%]
+tests\test_reporter.py .........                                         [ 88%]
 tests\test_scorer.py ...........                                         [ 94%]
-tests\test_ui.py ...                                                     [ 96%]
+tests\test_ui.py ....                                                    [ 97%]
 tests\test_variational_qv.py .....                                       [100%]
 
-============================ 138 passed in 20.39s =============================
+============================ 171 passed in 22.37s =============================
 ```
 
 ---
@@ -452,56 +472,6 @@ QuaComp is engineered to provide rigorous, honest, and reproducible benchmarking
   $$P(t) = P_{\text{idle}} + U(t) \times (P_{\text{TDP}} - P_{\text{idle}})$$
   For complete methodological transparency, all CLI tables and exported Markdown reports prominently display sensor origin badges: `[Sensor: RAPL]` for direct hardware counters vs `[Sensor: TDP Estimate]` for dynamic TDP estimations.
 
----
-
-## Roadmap
-
-- [x] **Phase 1: Core Simulation & Safety**
-  - Implement memory safety checks.
-  - Implement circuit workload generators (Shallow, Deep, QFT).
-  - Integrate Aer simulator execution & time tracking.
-  - Build out unit test coverage.
-- [x] **Phase 2: Scoring & CLI Interface**
-  - Implement benchmark scoring algorithms ("QuaComp Score").
-  - Create interactive terminal GUI using the `rich` library.
-- [x] **Phase 3: Exporters & Reports**
-  - Add JSON / Markdown export features.
-  - Publish documentation.
-- [x] **Phase 4: Matrix Product State (MPS) Engine**
-  - High-qubit simulation capabilities (30–100+ qubits for low-to-moderate entanglement).
-  - Parameterizable bond dimension (`--bond-dim`).
-  - Memory efficiency savings profiler.
-- [x] **Phase 5: NISQ Noise & Fidelity Benchmarking**
-  - Qiskit Aer synthetic noise channel integration (Thermal $T_1/T_2$ relaxation & depolarizing error).
-  - Customizable noise presets (`--noise-level [none|low|medium|high]`).
-  - Quantum State Fidelity (%) & CPU Computation Overhead (%) tracking.
-- [x] **Methodological Revision Phase**
-  - Multi-run statistical benchmarking (`--runs INT`, Mean, Median, Std Dev).
-  - Scoring breakdown (Capacity Metric $C$ & Throughput Metric $T$).
-  - Softened academic terminology across documentation.
-- [x] **Phase 6: Visualization Engine & Chart Generator**
-  - Matplotlib & Seaborn integration (`--chart`).
-  - Automated generation of `qubit_vs_latency.png`, `qubit_vs_ram.png`, `method_comparison.png`, `noise_fidelity_impact.png`, `entanglement_entropy.png`.
-  - Chart embedding in Markdown reports (`results/report.md`).
-- [x] **Phase 7: Packaging & CI/CD Pipeline**
-  - PEP 517/621 `pyproject.toml` build system & `quacomp` executable CLI entry point.
-  - Multi-platform GitHub Actions CI matrix running automated `pytest` across Ubuntu, Windows, and macOS on Python 3.10–3.13.
-- [x] **Phase 8: Relative Comparison & GPU Acceleration Support**
-  - Relative benchmark differencing engine (`--compare`) with side-by-side tables and verdict.
-  - GPU hardware detection, VRAM safety evaluation, and simulation backend (`--device gpu` / `--gpu`).
-  - Comparison charts (`qubit_latency_comparison.png` and `throughput_comparison.png`).
-- [x] **Phase 9: Entanglement Entropy & Hardness Profiler**
-  - Bipartite Von Neumann Entanglement Entropy calculation via Singular Value Decomposition (SVD).
-  - Schmidt rank, participation ratio, and MPS simulation hardness classification.
-  - Entanglement scaling chart generator (`entanglement_entropy.png`) and `--entropy` CLI flag.
-- [x] **Phase 10: Native Kernel Acceleration & Real Physical QPU Noise Models**
-  - C++ Single-Pass Gate Fusion engine (`quacomp_cpp` via Pybind11).
-  - Apple Metal Compute Shader (`fusion.metal`) and NVIDIA CUDA JIT dispatcher with multi-tier graceful fallback.
-  - Real physical QPU noise calibration model ingestion (IBM Quantum / Rigetti format).
-  - Analytical trace-preserving Kraus operator generator ($\mathcal{E}(\rho) = \sum_k E_k \rho E_k^\dagger$).
-  - CLI benchmarking flags (`--use-native-kernels`, `--noise-profile`).
-
----
 
 ## Contribution Guide
 

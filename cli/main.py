@@ -49,6 +49,7 @@ def build_argument_parser() -> argparse.ArgumentParser:
     param_group.add_argument("--noise-level", choices=["none", "low", "medium", "high"], default="none", help="NISQ noise model preset level (default none).")
     param_group.add_argument("--noise-profile", type=str, default=None, help="Load real physical QPU noise calibration profile (e.g. ibm_brisbane_sample).")
     param_group.add_argument("--use-native-kernels", action="store_true", help="Enable native kernel acceleration (C++/Metal/CUDA Single-Pass Gate Fusion).")
+    param_group.add_argument("--qasm", type=str, default=None, help="Path to OpenQASM 2.0 file (.qasm) to parse and benchmark.")
     param_group.add_argument("--runs", type=int, default=3, help="Number of benchmark iterations per circuit (default 3).")
     
     # Comparison Options
@@ -110,20 +111,27 @@ def main():
         return
 
     # Resolve workload shorthands
-    if args.vqe:
+    if args.qasm:
+        args.custom = True
+    elif args.vqe:
         args.type = "vqe"
     elif args.qaoa:
         args.type = "qaoa"
     elif args.qv:
         args.type = "qv"
         
-    if (args.vqe or args.qaoa or args.qv) and not (args.quick or args.full):
+    if (args.vqe or args.qaoa or args.qv or args.qasm) and not (args.quick or args.full):
         args.custom = True
         
     # Validate arguments: Must specify at least one benchmark mode OR --compare
     if not (args.quick or args.full or args.custom or args.compare is not None or args.fetch_baselines):
         display_help_notice(console=console)
         return
+        
+    import os
+    if args.qasm and not os.path.exists(args.qasm):
+        console.print(f"[bold red]QASM File Error:[/bold red] File not found: {args.qasm}")
+        sys.exit(1)
         
     try:
         validate_cli_arguments(args)

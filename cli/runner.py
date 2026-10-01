@@ -1,4 +1,5 @@
 from typing import List, Dict, Any, Optional
+import time
 import psutil
 from rich.console import Console
 from rich.status import Status
@@ -36,7 +37,9 @@ def run_single_simulation(
     state_slicing: bool = False,
     blocking_qubits: Optional[int] = None,
     use_native_kernels: bool = False,
-    noise_profile: Optional[str] = None
+    noise_profile: Optional[str] = None,
+    qasm_circuit: Optional[Any] = None,
+    qasm_metrics: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
     """
     Execute a single quantum simulation workload with profiling.
@@ -87,7 +90,10 @@ def run_single_simulation(
     param_binding_metrics = {}
     qv_metrics = {}
     
-    if workload_type == "shallow":
+    if qasm_circuit is not None:
+        circuit = qasm_circuit.to_quantum_circuit() if hasattr(qasm_circuit, 'to_quantum_circuit') else qasm_circuit
+        qubits = circuit.num_qubits
+    elif workload_type == "shallow":
         circuit = generate_shallow_circuit(qubits)
     elif workload_type == "deep":
         circuit = generate_deep_circuit(qubits, depth)
@@ -244,7 +250,8 @@ def run_single_simulation(
         "entanglement_metrics": entanglement_metrics,
         "parameter_binding_metrics": param_binding_metrics,
         "qv_metrics": qv_metrics,
-        "energy_metrics": energy_metrics
+        "energy_metrics": energy_metrics,
+        "qasm_metrics": qasm_metrics
     }
 
 def run_quick_benchmark(
@@ -322,7 +329,7 @@ def run_custom_simulation(
     effective_device: str, 
     console: Optional[Console] = None
 ) -> List[Dict[str, Any]]:
-    """Execute Custom Simulation configuration."""
+    """Execute Custom Simulation configuration, supporting procedural workloads or loaded OpenQASM 2.0 circuits."""
     c = console or default_console
     workers = getattr(args, 'workers', 1)
     state_slicing = getattr(args, 'state_slicing', False) or (effective_device == 'multi_gpu')
@@ -331,19 +338,59 @@ def run_custom_simulation(
     noise_profile = getattr(args, 'noise_profile', None)
     slicing_label = " [Distributed State Slicing]" if state_slicing else ""
     native_label = " [Native Kernel Fusion]" if use_native_kernels else ""
-    c.print(f"[bold yellow]Executing Custom Simulation (Qubits: {args.qubits}, Workload: {args.type.upper()}, Method: {args.method.upper()}, Device: {effective_device.upper()}{slicing_label}{native_label}, Workers: {workers}, Noise: {args.noise_level.upper()}, Entropy: {args.entropy}, Runs: {args.runs})...[/bold yellow]\n")
+    
+    parsed_qasm = None
+    qasm_metrics = None
+    qasm_path = getattr(args, 'qasm', None)
+    
+    if qasm_path:
+        from src.engine.parser import load_qasm
+        t0_parse = time.perf_counter()
+        try:
+            parsed_qasm = load_qasm(qasm_path)
+        except Exception as pe:
+            c.print(f"[bold red]QASM Parse Error:[/bold red] Failed to parse '{qasm_path}': {pe}")
+            return []
+        parse_lat = time.perf_counter() - t0_parse
+        summary = parsed_qasm.get_summary()
+        qasm_metrics = {
+            "name": summary["name"],
+            "file_path": qasm_path,
+            "depth": summary["depth"],
+            "one_qubit_gates": summary["one_qubit_gates"],
+            "two_qubit_gates": summary["two_qubit_gates"],
+            "multi_qubit_gates": summary["multi_qubit_gates"],
+            "total_gates": summary["total_gates"],
+            "parse_latency": parse_lat
+        }
+        effective_qubits = parsed_qasm.num_qubits
+        c.print(f"[bold green]OpenQASM 2.0 Circuit Loaded:[/bold green] [bold yellow]{summary['name']}[/bold yellow] ({qasm_path})")
+        c.print(f"  - Qubits: [bold cyan]{summary['num_qubits']}[/bold cyan] | Classical Bits: [cyan]{summary['num_clbits']}[/cyan] | Depth: [bold magenta]{summary['depth']}[/bold magenta]")
+        c.print(f"  - Total Gates: [bold green]{summary['total_gates']}[/bold green] (1-Qubit: [cyan]{summary['one_qubit_gates']}[/cyan], 2-Qubit: [magenta]{summary['two_qubit_gates']}[/magenta], Multi-Qubit: [yellow]{summary['multi_qubit_gates']}[/yellow])")
+        c.print(f"  - Parse Latency: [dim cyan]{parse_lat * 1000.0:.2f} ms[/dim cyan]")
+        c.print()
+        workload_desc = f"QASM: {summary['name']}"
+    else:
+        effective_qubits = args.qubits
+        workload_desc = args.type.upper()
+        
+    c.print(f"[bold yellow]Executing Custom Simulation (Qubits: {effective_qubits}, Workload: {workload_desc}, Method: {args.method.upper()}, Device: {effective_device.upper()}{slicing_label}{native_label}, Workers: {workers}, Noise: {args.noise_level.upper()}, Entropy: {args.entropy}, Runs: {args.runs})...[/bold yellow]\n")
     results = []
     
-    with Status(f"Running simulation for {args.qubits} qubits on {effective_device.upper()} ({args.runs} runs, {workers} workers)...", console=c):
+    with Status(f"Running simulation for {effective_qubits} qubits on {effective_device.upper()} ({args.runs} runs, {workers} workers)...", console=c):
         res = run_single_simulation(
-            args.qubits, args.type, args.depth, args.method, args.bond_dim, effective_device, 
+            effective_qubits, args.type, args.depth, args.method, args.bond_dim, effective_device, 
             args.noise_level, args.runs, workers=workers, compute_entropy=args.entropy,
             state_slicing=state_slicing, blocking_qubits=blocking_qubits,
-            use_native_kernels=use_native_kernels, noise_profile=noise_profile
+            use_native_kernels=use_native_kernels, noise_profile=noise_profile,
+            qasm_circuit=parsed_qasm, qasm_metrics=qasm_metrics
         )
-        res["workload_label"] = args.type.upper()
-        if args.type == "deep":
-            res["workload_label"] += f" (d={args.depth})"
+        if parsed_qasm:
+            res["workload_label"] = f"QASM: {parsed_qasm.name}"
+        else:
+            res["workload_label"] = args.type.upper()
+            if args.type == "deep":
+                res["workload_label"] += f" (d={args.depth})"
         results.append(res)
         if not res["success"]:
             c.print(f"[bold red]Simulation aborted:[/bold red] {res['error']}")

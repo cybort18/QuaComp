@@ -22,6 +22,7 @@ By leveraging state-vector simulation of dimension $2^n$, `QuaComp` measures mem
 - **Dual-Mode Scoring & Academic Suite:** Balances rapid engineering comparison via the logarithmic QuaComp Synthetic Index (QSI) while providing formal scientific benchmarks (kGates/s throughput, Quantum Volume verification, and Energy-Delay Product).
 - **Scalable MPS Simulation:** Supports high-qubit simulation (up to 100+ qubits) specifically for low-to-moderate entanglement circuits using tensor network compression (Matrix Product State), overcoming conventional state-vector memory limits.
 - **NISQ Synthetic Noise & Fidelity Profiling:** Evaluates hardware computational overhead under synthetic parameterized noise channels (thermal relaxation and depolarizing errors) while measuring classical Hellinger state fidelity loss.
+- **Standard OpenQASM 2.0 Ingestion:** Consumes industry-standard OpenQASM 2.0 quantum assembly code without third-party compilation dependencies, enabling direct benchmarking of production algorithms from QASMBench, IBM Quantum, and academic literature.
 - **Automated Telemetry Visualizations:** Generates modern high-DPI chart graphics (`--chart`) illustrating qubit scalability, memory safety boundaries, simulation method comparisons, and noise fidelity degradation.
 
 ---
@@ -228,6 +229,26 @@ where:
     - Phase damping with rate $\lambda = 1 - e^{-2t/T_\phi}$.
     - Physical consistency bounds enforcing $T_2 \le 2T_1$ to avoid unphysical negative rates.
   - **Noise Model Conversion:** Converts calibration parameters into Qiskit Aer `NoiseModel` objects for live circuit execution and fidelity analysis.
+ 
+### FR-17: OpenQASM 2.0 Parser & Standard Circuit Interoperability (`--qasm`)
+- **Description:** The system must provide a standalone, zero-overhead OpenQASM 2.0 parser and circuit interoperability module to ingest industry-standard quantum assembly files without manual Python construction.
+- **Specifications & Behavior:**
+  - **Native Tokenizer & AST Grammar Engine:**
+    - Parses register declarations: `qreg <name>[<size>];` and `creg <name>[<size>];`.
+    - Skips headers (`OPENQASM 2.0;`), standard includes (`include "qelib1.inc";`), single-line comments (`//`), and barrier statements.
+    - Full support for 1-qubit gates (`h`, `x`, `y`, `z`, `s`, `sdg`, `t`, `tdg`, `rx`, `ry`, `rz`, `u1`, `u2`, `u3`), 2-qubit gates (`cx`/`cnot`, `cz`, `cy`, `ch`, `swap`, `iswap`, `crz`, `cu1`, `cu3`, `rxx`, `ryy`, `rzz`), and 3-qubit gates (`ccx`/`toffoli`, `cswap`/`fredkin`).
+    - Measurement routing: `measure q[i] -> c[j];` and state resets: `reset q[i];`.
+    - Custom gate macro expansion: `gate <name>(<params>) <args> { <body> }`.
+    - Whole-register broadcasting: automatically expands statements such as `h q;` into element-wise operations across register length.
+  - **Safe Parameter Expression Evaluation:**
+    - Safely evaluates mathematical angle expressions via AST parsing supporting numerical constants (`pi`, `e`), basic arithmetic operators, and standard functions (`sin`, `cos`, `tan`, `exp`, `ln`, `sqrt`).
+  - **Internal Circuit Data Structure (`ParsedQASMCircuit`):**
+    - Tracks global linear qubit indices mapping `(reg_name, reg_idx)` to tensor basis statevector positions.
+    - Pre-flight memory safety verification: checks that total declared qubits satisfy theoretical RAM bounds prior to simulation dispatch.
+    - Bidirectional Qiskit interop: converts to `qiskit.QuantumCircuit` via `.to_quantum_circuit()` and imports existing circuits via `ParsedQASMCircuit.from_qiskit()`.
+  - **CLI Integration & Telemetry:**
+    - `--qasm <filepath>`: Executes custom simulation directly from an external `.qasm` file.
+    - Displays dedicated Rich telemetry table detailing circuit name, depth, total gates, 1-qubit / 2-qubit breakdown, and parse latency.
 
 ---
 

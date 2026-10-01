@@ -209,6 +209,31 @@ def display_results(results: List[Dict[str, Any]], console: Optional[Console] = 
         c.print(qv_table)
         c.print()
 
+    # Render OpenQASM 2.0 Circuit Telemetry Table if present
+    qasm_runs = [r for r in successful_runs if r.get("qasm_metrics")]
+    if qasm_runs:
+        qasm_table = Table(title="OpenQASM 2.0 Circuit Telemetry", show_header=True, header_style="bold magenta", expand=False)
+        qasm_table.add_column("Circuit Name", style="bold yellow")
+        qasm_table.add_column("Qubits", style="cyan", justify="center")
+        qasm_table.add_column("Depth", style="bold magenta", justify="center")
+        qasm_table.add_column("Total Gates", style="white", justify="right")
+        qasm_table.add_column("1-Qubit", style="dim white", justify="right")
+        qasm_table.add_column("2-Qubit", style="bold green", justify="right")
+        qasm_table.add_column("Parse Time", style="dim cyan", justify="right")
+        for qr in qasm_runs:
+            qm = qr["qasm_metrics"]
+            qasm_table.add_row(
+                str(qm.get("name", "circuit")),
+                str(qr["qubits"]),
+                str(qm.get("depth", "-")),
+                str(qm.get("total_gates", qr["gates"])),
+                str(qm.get("one_qubit_gates", "-")),
+                str(qm.get("two_qubit_gates", "-")),
+                f"{qm.get('parse_latency', 0.0) * 1000.0:.2f} ms"
+            )
+        c.print(qasm_table)
+        c.print()
+
     # Calculate final composite heuristic score using best successful run
     best_run = max(successful_runs, key=lambda x: x["qubits"])
     max_qubits = best_run["qubits"]
@@ -292,6 +317,7 @@ def display_help_notice(console: Optional[Console] = None) -> None:
     c.print(BANNER)
     c.print("[bold yellow]Please select a benchmark mode or comparison mode:[/bold yellow]")
     c.print("  [cyan]quacomp --quick[/cyan]                                                (Quick 10, 15, 20 qubits benchmark)")
+    c.print("  [cyan]quacomp --qasm benchmarks/bell_state.qasm[/cyan]                      (Parse and benchmark standard OpenQASM 2.0 circuit)")
     c.print("  [cyan]quacomp --quick --use-native-kernels[/cyan]                           (Quick benchmark with C++/Metal/CUDA Gate Fusion)")
     c.print("  [cyan]quacomp --quick --noise-profile ibm_brisbane_sample[/cyan]             (Quick benchmark with real physical QPU noise)")
     c.print("  [cyan]quacomp --quick --gpu[/cyan]                                          (Quick benchmark with GPU acceleration)")

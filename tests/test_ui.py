@@ -99,3 +99,41 @@ def test_print_system_info_and_help():
     output_help = console_help.export_text()
     assert "Quantum Computer Simulation Benchmark" in output_help
     assert "quacomp --quick" in output_help
+
+
+def test_display_results_with_qasm_telemetry():
+    """Verify display_results correctly renders OpenQASM 2.0 Circuit Telemetry table."""
+    console = Console(record=True, width=120)
+    results = [
+        {
+            "qubits": 2,
+            "success": True,
+            "latency": 0.05,
+            "mean_latency": 0.05,
+            "std_latency": 0.0,
+            "runs_count": 1,
+            "latencies": [0.05],
+            "gates": 2,
+            "cpu_usage": 50.0,
+            "fidelity": 100.0,
+            "ram_status": "SAFE",
+            "workload_label": "QASM: bell_state",
+            "method": "statevector",
+            "device": "CPU",
+            "noise_level": "none",
+            "qasm_metrics": {
+                "name": "bell_state",
+                "depth": 2,
+                "total_gates": 2,
+                "one_qubit_gates": 1,
+                "two_qubit_gates": 1,
+                "parse_latency": 0.0025
+            }
+        }
+    ]
+    display_results(results, console=console)
+    output = console.export_text()
+    assert "OpenQASM 2.0 Circuit Telemetry" in output
+    assert "bell_state" in output
+    assert "Total Gates" in output
+
