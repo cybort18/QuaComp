@@ -20,6 +20,7 @@ from src.engine.simulator import run_simulation
 from src.engine.mps import calculate_mps_ram_savings
 from src.engine.noise import get_noise_model, calculate_state_fidelity, calculate_overhead_ratio
 from src.engine.entanglement import calculate_bipartite_entropy
+from src.engine.accelerator import get_best_backend, InsufficientVRAMError
 
 default_console = Console()
 
@@ -137,22 +138,51 @@ def run_single_simulation(
     else:
         noise_model = get_noise_model(noise_level)
 
-    with EnergyProfiler() as energy_prof:
-        sim_result = run_simulation(
-            circuit, 
-            method=method, 
-            bond_dimension=bond_dimension, 
-            device=device,
-            noise_model=noise_model,
-            noise_level=noise_level,
-            runs=runs,
-            workers=workers,
-            state_slicing=state_slicing,
-            blocking_qubits=blocking_qubits,
-            use_native_kernels=use_native_kernels,
-            physical_noise_profile=noise_profile,
-            backend=backend
+    # 4. Device synchronization and simulation execution with pre-flight VRAM safety
+    active_be = get_best_backend(backend)
+    active_be.device_synchronize()
+
+    try:
+        with EnergyProfiler() as energy_prof:
+            sim_result = run_simulation(
+                circuit, 
+                method=method, 
+                bond_dimension=bond_dimension, 
+                device=device,
+                noise_model=noise_model,
+                noise_level=noise_level,
+                runs=runs,
+                workers=workers,
+                state_slicing=state_slicing,
+                blocking_qubits=blocking_qubits,
+                use_native_kernels=use_native_kernels,
+                physical_noise_profile=noise_profile,
+                backend=backend
+            )
+    except InsufficientVRAMError as vram_err:
+        default_console.print(
+            f"[bold yellow]⚠️  VRAM Limit Exceeded:[/] {vram_err}\n"
+            f"[bold cyan]ℹ️  Automatically falling back to CPU / NumPy execution...[/]"
         )
+        with EnergyProfiler() as energy_prof:
+            sim_result = run_simulation(
+                circuit, 
+                method=method, 
+                bond_dimension=bond_dimension, 
+                device="cpu",
+                noise_model=noise_model,
+                noise_level=noise_level,
+                runs=runs,
+                workers=workers,
+                state_slicing=False,
+                blocking_qubits=None,
+                use_native_kernels=False,
+                physical_noise_profile=noise_profile,
+                backend="numpy"
+            )
+    finally:
+        active_be.device_synchronize()
+
     energy_metrics = energy_prof.get_metrics(num_gates=num_gates)
     
     # 5. CPU measurement end
@@ -170,18 +200,21 @@ def run_single_simulation(
     fidelity = 100.0
     overhead_ratio = 0.0
     if noise_level != "none" and sim_result["success"]:
+        active_be.device_synchronize()
         ideal_sim_result = run_simulation(
             circuit, 
             method=method, 
-            bond_dimension=bond_dimension,
+            bond_dimension=bond_dimension, 
             device=device,
             noise_model=None, 
             noise_level="none",
             runs=1,
             workers=workers,
             state_slicing=state_slicing,
-            blocking_qubits=blocking_qubits
+            blocking_qubits=blocking_qubits,
+            backend=backend
         )
+        active_be.device_synchronize()
         if ideal_sim_result["success"]:
             fidelity = calculate_state_fidelity(ideal_sim_result["counts"], sim_result["counts"])
             overhead_ratio = calculate_overhead_ratio(ideal_sim_result["latency"], sim_result["mean_latency"])

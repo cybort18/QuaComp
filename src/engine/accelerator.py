@@ -154,6 +154,7 @@ def load_metal_shader() -> Optional[str]:
 def load_cuda_shader() -> str:
     """
     Load the NVIDIA CUDA source code from disk or embedded template.
+    Ensures that the returned source is completely self-contained with no unresolved includes.
     
     Returns:
         str: CUDA source string.
@@ -161,7 +162,10 @@ def load_cuda_shader() -> str:
     if os.path.exists(CUDA_SHADER_PATH):
         try:
             with open(CUDA_SHADER_PATH, "r", encoding="utf-8") as f:
-                return f.read()
+                content = f.read()
+                if '#include "fusion.cuh"' in content:
+                    content = content.replace('#include "fusion.cuh"', "")
+                return content
         except Exception:
             pass
     return CUDA_KERNEL_SOURCE
@@ -221,6 +225,14 @@ def is_cuda_available() -> bool:
 # Base & Concrete Accelerator Backend Classes
 # ==============================================================================
 
+class InsufficientVRAMError(MemoryError):
+    """Raised when available GPU VRAM is insufficient to allocate statevector for the requested qubits."""
+    def __init__(self, message: str, required_bytes: int = 0, available_bytes: int = 0):
+        super().__init__(message)
+        self.required_bytes = required_bytes
+        self.available_bytes = available_bytes
+
+
 class BaseAccelerator:
     """Abstract base class representing a hardware compute acceleration backend."""
     name: str = "Base"
@@ -246,13 +258,49 @@ class BaseAccelerator:
         """Copy a statevector from device memory back to host NumPy array."""
         return np.asarray(device_state)
 
+    def device_synchronize(self) -> None:
+        """Synchronize accelerator compute stream to ensure all asynchronous GPU tasks have completed."""
+        pass
+
     def apply_gate_1q(self, state: Any, matrix: np.ndarray, target: int, num_qubits: int) -> Any:
-        """Apply a 1-qubit unitary transformation to statevector in-place."""
-        raise NotImplementedError
+        """Apply a 1-qubit unitary transformation to statevector in-place (NumPy reference)."""
+        h_state = self.copy_to_host(state).copy()
+        total_pairs = 1 << (num_qubits - 1)
+        for idx in range(total_pairs):
+            low = idx & ((1 << target) - 1)
+            high = (idx >> target) << (target + 1)
+            i0 = high | low
+            i1 = i0 | (1 << target)
+            v0 = h_state[i0]
+            v1 = h_state[i1]
+            h_state[i0] = matrix[0, 0] * v0 + matrix[0, 1] * v1
+            h_state[i1] = matrix[1, 0] * v0 + matrix[1, 1] * v1
+        return h_state
 
     def apply_gate_2q(self, state: Any, matrix: np.ndarray, q0: int, q1: int, num_qubits: int) -> Any:
-        """Apply a 2-qubit unitary transformation to statevector in-place."""
-        raise NotImplementedError
+        """Apply a 2-qubit unitary transformation to statevector in-place (NumPy reference)."""
+        h_state = self.copy_to_host(state).copy()
+        q_min = min(q0, q1)
+        q_max = max(q0, q1)
+        total_quads = 1 << (num_qubits - 2)
+        for idx in range(total_quads):
+            low = idx & ((1 << q_min) - 1)
+            mid = (idx >> q_min) & ((1 << (q_max - q_min - 1)) - 1)
+            high = idx >> (q_max - 1)
+            base = low | (mid << (q_min + 1)) | (high << (q_max + 1))
+            i00 = base
+            i01 = base | (1 << q0)
+            i10 = base | (1 << q1)
+            i11 = base | (1 << q0) | (1 << q1)
+            v0 = h_state[i00]
+            v1 = h_state[i01]
+            v2 = h_state[i10]
+            v3 = h_state[i11]
+            h_state[i00] = matrix[0, 0] * v0 + matrix[0, 1] * v1 + matrix[0, 2] * v2 + matrix[0, 3] * v3
+            h_state[i01] = matrix[1, 0] * v0 + matrix[1, 1] * v1 + matrix[1, 2] * v2 + matrix[1, 3] * v3
+            h_state[i10] = matrix[2, 0] * v0 + matrix[2, 1] * v1 + matrix[2, 2] * v2 + matrix[2, 3] * v3
+            h_state[i11] = matrix[3, 0] * v0 + matrix[3, 1] * v1 + matrix[3, 2] * v2 + matrix[3, 3] * v3
+        return h_state
 
 
 class CUDABackend(BaseAccelerator):
@@ -267,17 +315,86 @@ class CUDABackend(BaseAccelerator):
         from src.profiler.gpu import get_cuda_telemetry
         return get_cuda_telemetry()
 
+    def device_synchronize(self) -> None:
+        """Explicitly synchronize NVIDIA CUDA compute stream (CuPy or PyTorch)."""
+        try:
+            import cupy as cp
+            if cp.cuda.is_available():
+                cp.cuda.Stream.null.synchronize()
+                return
+        except Exception:
+            pass
+
+        try:
+            import torch
+            if torch.cuda.is_available() and torch.cuda.device_count() > 0:
+                torch.cuda.synchronize()
+                return
+        except Exception:
+            pass
+
+    def get_free_vram(self) -> Optional[int]:
+        """Query available free VRAM in bytes on active CUDA device."""
+        try:
+            import cupy as cp
+            if cp.cuda.is_available():
+                dev = cp.cuda.Device()
+                free_b, _ = dev.mem_info
+                return int(free_b)
+        except Exception:
+            pass
+
+        try:
+            import torch
+            if torch.cuda.is_available() and torch.cuda.device_count() > 0:
+                free_b, _ = torch.cuda.mem_get_info()
+                return int(free_b)
+        except Exception:
+            pass
+
+        try:
+            from src.profiler.gpu import get_cuda_telemetry
+            tel = get_cuda_telemetry()
+            if tel.get("available", False):
+                tot_mb = tel.get("vram_total_mb", 0.0)
+                alloc_mb = tel.get("vram_allocated_mb", 0.0)
+                free_mb = max(0.0, tot_mb - alloc_mb)
+                return int(free_mb * 1024 * 1024)
+        except Exception:
+            pass
+
+        return None
+
     def allocate_statevector(self, num_qubits: int) -> Any:
-        """Allocate 2^n statevector on NVIDIA GPU VRAM initialized to |0...0>."""
+        """Allocate 2^n statevector on NVIDIA GPU VRAM initialized to |0...0> with pre-flight VRAM check."""
         total_states = 1 << num_qubits
-        
+        bytes_needed = total_states * 16  # 16 bytes per cuDoubleComplex (complex128)
+
+        # Pre-flight VRAM safety check
+        free_vram = self.get_free_vram()
+        if free_vram is not None and bytes_needed > free_vram:
+            req_gb = bytes_needed / (1024 ** 3)
+            free_gb = free_vram / (1024 ** 3)
+            raise InsufficientVRAMError(
+                f"Insufficient GPU VRAM to allocate {num_qubits}-qubit statevector: "
+                f"required {req_gb:.2f} GB ({bytes_needed:,} bytes), but only {free_gb:.2f} GB ({free_vram:,} bytes) free.",
+                required_bytes=bytes_needed,
+                available_bytes=free_vram
+            )
+
         # 1. Try CuPy allocation
         try:
             import cupy as cp
             state = cp.zeros(total_states, dtype=cp.complex128)
             state[0] = 1.0 + 0.0j
             return state
-        except Exception:
+        except (Exception, MemoryError) as oom_err:
+            if "out of memory" in str(oom_err).lower() or isinstance(oom_err, MemoryError):
+                req_gb = bytes_needed / (1024 ** 3)
+                raise InsufficientVRAMError(
+                    f"CuPy OutOfMemoryError allocating {num_qubits}-qubit statevector ({req_gb:.2f} GB): {oom_err}",
+                    required_bytes=bytes_needed
+                )
             pass
 
         # 2. Try PyTorch CUDA allocation
@@ -287,7 +404,13 @@ class CUDABackend(BaseAccelerator):
                 state = torch.zeros(total_states, dtype=torch.complex128, device="cuda")
                 state[0] = 1.0 + 0.0j
                 return state
-        except Exception:
+        except (Exception, MemoryError) as oom_err:
+            if "out of memory" in str(oom_err).lower() or isinstance(oom_err, MemoryError):
+                req_gb = bytes_needed / (1024 ** 3)
+                raise InsufficientVRAMError(
+                    f"PyTorch CUDA OutOfMemoryError allocating {num_qubits}-qubit statevector ({req_gb:.2f} GB): {oom_err}",
+                    required_bytes=bytes_needed
+                )
             pass
 
         # Fallback to NumPy host allocation

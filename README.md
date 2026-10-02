@@ -15,7 +15,7 @@
 
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![CI](https://github.com/cybort18/QuaComp/actions/workflows/ci.yml/badge.svg)](https://github.com/cybort18/QuaComp/actions)
-[![Tests Status](https://img.shields.io/badge/tests-184%20passed-green.svg)](#running-tests)
+[![Tests Status](https://img.shields.io/badge/tests-191%20passed-green.svg)](#running-tests)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 ---
@@ -404,32 +404,32 @@ platform win32 -- Python 3.13.3, pytest-9.1.1, pluggy-1.6.0
 rootdir: C:\Users\HP\Documents\PROJECT\QuaComp
 configfile: pyproject.toml
 plugins: anyio-4.14.2
-collected 185 items
+collected 192 items
 
 tests\test_accelerator.py .......                                        [  3%]
 tests\test_charts.py ....                                                [  5%]
 tests\test_comparator.py .......                                         [  9%]
 tests\test_cpp_fusion.py ...........                                     [ 15%]
-tests\test_cuda.py ..........s...                                        [ 23%]
-tests\test_energy.py ....                                                [ 25%]
-tests\test_engine.py ......                                              [ 28%]
-tests\test_entanglement.py ...........                                   [ 34%]
-tests\test_gpu.py ...........                                            [ 40%]
-tests\test_memory.py .......                                             [ 44%]
-tests\test_model_parallelism.py .....                                    [ 47%]
-tests\test_mps.py ....                                                   [ 49%]
-tests\test_mps_topology.py .....                                         [ 51%]
-tests\test_native_integration.py .....                                   [ 54%]
-tests\test_noise.py ....                                                 [ 56%]
-tests\test_parser.py ................................                    [ 74%]
-tests\test_physical_noise.py ........                                    [ 78%]
+tests\test_cuda.py ..........s..........                                 [ 26%]
+tests\test_energy.py ....                                                [ 28%]
+tests\test_engine.py ......                                              [ 31%]
+tests\test_entanglement.py ...........                                   [ 36%]
+tests\test_gpu.py ...........                                            [ 42%]
+tests\test_memory.py .......                                             [ 46%]
+tests\test_model_parallelism.py .....                                    [ 48%]
+tests\test_mps.py ....                                                   [ 51%]
+tests\test_mps_topology.py .....                                         [ 53%]
+tests\test_native_integration.py .....                                   [ 56%]
+tests\test_noise.py ....                                                 [ 58%]
+tests\test_parser.py ................................                    [ 75%]
+tests\test_physical_noise.py ........                                    [ 79%]
 tests\test_registry.py ...........                                       [ 84%]
 tests\test_reporter.py .........                                         [ 89%]
 tests\test_scorer.py ...........                                         [ 95%]
 tests\test_ui.py ....                                                    [ 97%]
 tests\test_variational_qv.py .....                                       [100%]
 
-======================= 184 passed, 1 skipped in 23.91s =======================
+======================= 191 passed, 1 skipped in 35.29s =======================
 ```
 
 ---

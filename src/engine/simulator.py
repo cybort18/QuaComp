@@ -113,11 +113,12 @@ def run_simulation(
         accelerator_backend = None
         accelerator_badge = None
         
+        from src.engine.accelerator import get_best_backend, get_accelerator_badge, InsufficientVRAMError
         is_backend_req = bool(backend and str(backend).lower() != "auto")
+        active_backend_obj = get_best_backend(backend if is_backend_req else ("cuda" if is_gpu_req else None))
+
         if use_native_kernels or is_backend_req:
             from src.engine.fusion import fuse_circuit_single_pass
-            from src.engine.accelerator import get_best_backend, get_accelerator_badge
-            active_backend_obj = get_best_backend(backend if is_backend_req else None)
             circ_to_run, fusion_metrics = fuse_circuit_single_pass(circ_to_run)
             accelerator_backend = active_backend_obj.tier_label
             accelerator_badge = get_accelerator_badge(accelerator_backend)
@@ -165,9 +166,13 @@ def run_simulation(
         last_result = None
         
         def _execute_single_run(_):
+            if active_backend_obj is not None:
+                active_backend_obj.device_synchronize()
             t0 = time.perf_counter()
             job = simulator.run(transpiled_circuit, shots=shots)
             res = job.result()
+            if active_backend_obj is not None:
+                active_backend_obj.device_synchronize()
             lat = time.perf_counter() - t0
             return lat, res
             

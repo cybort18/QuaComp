@@ -4,11 +4,13 @@ from unittest.mock import MagicMock, patch
 
 from src.engine.accelerator import (
     CUDABackend,
+    NumPyBackend,
     BaseAccelerator,
     is_cuda_available,
     load_cuda_shader,
     get_best_backend,
     CUDA_KERNEL_SOURCE,
+    InsufficientVRAMError,
 )
 from src.profiler.gpu import get_cuda_telemetry
 
@@ -252,4 +254,202 @@ def test_cuda_cli_backend_argument_parsing():
     
     args_metal = parser.parse_args(["--qubits", "4", "--backend", "metal"])
     assert args_metal.backend == "metal"
+
+
+def test_cuda_device_synchronize_graceful():
+    """Verify that device_synchronize executes gracefully across backends without errors."""
+    cuda_be = CUDABackend()
+    cuda_be.device_synchronize()
+
+    numpy_be = NumPyBackend()
+    numpy_be.device_synchronize()
+
+    base_be = BaseAccelerator()
+    base_be.device_synchronize()
+
+
+def test_cuda_device_synchronize_cupy_and_torch_mocked():
+    """Verify CuPy and PyTorch stream synchronization methods are invoked when present."""
+    cuda_be = CUDABackend()
+
+    # 1. Mock CuPy stream synchronization
+    mock_cp = MagicMock()
+    mock_stream = MagicMock()
+    mock_cp.cuda.is_available.return_value = True
+    mock_cp.cuda.Stream.null = mock_stream
+    with patch.dict("sys.modules", {"cupy": mock_cp}):
+        cuda_be.device_synchronize()
+        assert mock_stream.synchronize.called
+
+    # 2. Mock PyTorch synchronization
+    mock_torch = MagicMock()
+    mock_torch.cuda.is_available.return_value = True
+    mock_torch.cuda.device_count.return_value = 1
+    with patch.dict("sys.modules", {"cupy": None, "torch": mock_torch}):
+        cuda_be.device_synchronize()
+        assert mock_torch.cuda.synchronize.called
+
+
+def test_cuda_kernel_source_self_contained():
+    """Verify CUDA source template and shader on disk are 100% self-contained without unresolved includes."""
+    # Check in-memory template
+    assert '#include "fusion.cuh"' not in CUDA_KERNEL_SOURCE
+    assert "cuDoubleComplex" in CUDA_KERNEL_SOURCE
+    assert "c_mul" in CUDA_KERNEL_SOURCE
+
+    # Check shader loader
+    loaded = load_cuda_shader()
+    assert '#include "fusion.cuh"' not in loaded
+
+    # Check fusion.cu on disk
+    import os
+    from src.engine.accelerator import CUDA_SHADER_PATH
+    if os.path.exists(CUDA_SHADER_PATH):
+        with open(CUDA_SHADER_PATH, "r", encoding="utf-8") as f:
+            disk_content = f.read()
+            assert '#include "fusion.cuh"' not in disk_content
+
+
+def test_cuda_preflight_vram_oom_guard():
+    """Verify pre-flight check detects insufficient free VRAM and raises InsufficientVRAMError gracefully."""
+    cuda_be = CUDABackend()
+
+    # Mock free VRAM to 100 MB
+    low_vram_bytes = 100 * 1024 * 1024
+    with patch.object(cuda_be, "get_free_vram", return_value=low_vram_bytes):
+        # 28 qubits requires 2^28 * 16 bytes = 4.29 GB (> 100 MB)
+        with pytest.raises(InsufficientVRAMError) as exc_info:
+            cuda_be.allocate_statevector(28)
+
+        err = exc_info.value
+        assert err.required_bytes == (1 << 28) * 16
+        assert err.available_bytes == low_vram_bytes
+        assert "Insufficient GPU VRAM" in str(err)
+        assert "28-qubit" in str(err)
+
+
+def test_cuda_bit_indexing_numerical_parity_against_numpy_3qubit():
+    """Verify 3-qubit bit twiddling and tensor basis ordering between CUDA and NumPy is 100% identical."""
+    cuda_be = CUDABackend()
+    numpy_be = NumPyBackend()
+    num_qubits = 3
+
+    state_cuda = cuda_be.allocate_statevector(num_qubits)
+    state_numpy = numpy_be.allocate_statevector(num_qubits)
+
+    # 1. Hadamard on Qubit 0 (LSB)
+    H = (1.0 / np.sqrt(2.0)) * np.array([[1.0, 1.0], [1.0, -1.0]], dtype=np.complex128)
+    state_cuda = cuda_be.apply_gate_1q(state_cuda, H, target=0, num_qubits=num_qubits)
+    state_numpy = numpy_be.apply_gate_1q(state_numpy, H, target=0, num_qubits=num_qubits)
+
+    # 2. RZ(pi/4) rotation on Qubit 1
+    theta = np.pi / 4.0
+    RZ = np.array([
+        [np.exp(-1j * theta / 2.0), 0.0],
+        [0.0, np.exp(1j * theta / 2.0)]
+    ], dtype=np.complex128)
+    state_cuda = cuda_be.apply_gate_1q(state_cuda, RZ, target=1, num_qubits=num_qubits)
+    state_numpy = numpy_be.apply_gate_1q(state_numpy, RZ, target=1, num_qubits=num_qubits)
+
+    # 3. Pauli X on Qubit 2 (MSB in 3q)
+    X = np.array([[0.0, 1.0], [1.0, 0.0]], dtype=np.complex128)
+    state_cuda = cuda_be.apply_gate_1q(state_cuda, X, target=2, num_qubits=num_qubits)
+    state_numpy = numpy_be.apply_gate_1q(state_numpy, X, target=2, num_qubits=num_qubits)
+
+    # 4. Non-adjacent CNOT: Control Qubit 0, Target Qubit 2
+    # In computational basis |q1 q0>: |01> -> |11> and |11> -> |01>
+    CX = np.array([
+        [1.0, 0.0, 0.0, 0.0],
+        [0.0, 0.0, 0.0, 1.0],
+        [0.0, 0.0, 1.0, 0.0],
+        [0.0, 1.0, 0.0, 0.0],
+    ], dtype=np.complex128)
+    state_cuda = cuda_be.apply_gate_2q(state_cuda, CX, q0=0, q1=2, num_qubits=num_qubits)
+    state_numpy = numpy_be.apply_gate_2q(state_numpy, CX, q0=0, q1=2, num_qubits=num_qubits)
+
+    h_cuda = cuda_be.copy_to_host(state_cuda)
+    h_numpy = numpy_be.copy_to_host(state_numpy)
+
+    # Assert 1:1 numerical parity
+    max_diff = np.max(np.abs(h_cuda - h_numpy))
+    assert max_diff < 1e-12
+    np.testing.assert_allclose(h_cuda, h_numpy, atol=1e-12)
+
+
+def test_cuda_bit_indexing_numerical_parity_against_numpy_4qubit():
+    """Verify 4-qubit non-adjacent multi-gate tensor basis ordering parity (LSB = Qubit 0)."""
+    cuda_be = CUDABackend()
+    numpy_be = NumPyBackend()
+    num_qubits = 4
+
+    state_cuda = cuda_be.allocate_statevector(num_qubits)
+    state_numpy = numpy_be.allocate_statevector(num_qubits)
+
+    H = (1.0 / np.sqrt(2.0)) * np.array([[1.0, 1.0], [1.0, -1.0]], dtype=np.complex128)
+    X = np.array([[0.0, 1.0], [1.0, 0.0]], dtype=np.complex128)
+    CX = np.array([
+        [1.0, 0.0, 0.0, 0.0],
+        [0.0, 0.0, 0.0, 1.0],
+        [0.0, 0.0, 1.0, 0.0],
+        [0.0, 1.0, 0.0, 0.0],
+    ], dtype=np.complex128)
+
+    # Gate sequences across non-adjacent qubits
+    state_cuda = cuda_be.apply_gate_1q(state_cuda, H, target=0, num_qubits=num_qubits)
+    state_numpy = numpy_be.apply_gate_1q(state_numpy, H, target=0, num_qubits=num_qubits)
+
+    state_cuda = cuda_be.apply_gate_1q(state_cuda, X, target=1, num_qubits=num_qubits)
+    state_numpy = numpy_be.apply_gate_1q(state_numpy, X, target=1, num_qubits=num_qubits)
+
+    state_cuda = cuda_be.apply_gate_2q(state_cuda, CX, q0=0, q1=2, num_qubits=num_qubits)
+    state_numpy = numpy_be.apply_gate_2q(state_numpy, CX, q0=0, q1=2, num_qubits=num_qubits)
+
+    state_cuda = cuda_be.apply_gate_2q(state_cuda, CX, q0=1, q1=3, num_qubits=num_qubits)
+    state_numpy = numpy_be.apply_gate_2q(state_numpy, CX, q0=1, q1=3, num_qubits=num_qubits)
+
+    h_cuda = cuda_be.copy_to_host(state_cuda)
+    h_numpy = numpy_be.copy_to_host(state_numpy)
+
+    max_diff = np.max(np.abs(h_cuda - h_numpy))
+    assert max_diff < 1e-12
+    np.testing.assert_allclose(h_cuda, h_numpy, atol=1e-12)
+
+
+def test_runner_graceful_vram_fallback():
+    """Verify runner catches InsufficientVRAMError and falls back to CPU NumPy backend gracefully."""
+    from cli.runner import run_single_simulation
+
+    # Mock run_simulation so that it raises InsufficientVRAMError on first call (GPU)
+    # and succeeds on second call (CPU fallback)
+    call_count = 0
+    real_sim_result = {
+        "success": True,
+        "mean_latency": 0.01,
+        "median_latency": 0.01,
+        "std_latency": 0.0,
+        "runs_count": 1,
+        "counts": {"00": 100},
+        "metadata": {"device": "CPU"}
+    }
+
+    def fake_run_sim(*args, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            raise InsufficientVRAMError("Mock VRAM OOM: insufficient memory", 4000, 100)
+        return real_sim_result
+
+    with patch("cli.runner.check_memory_safety", return_value=(True, "Safe")), \
+         patch("cli.runner.run_simulation", side_effect=fake_run_sim):
+        res = run_single_simulation(
+            qubits=2,
+            workload_type="shallow",
+            depth=1,
+            device="gpu",
+            backend="cuda",
+            runs=1
+        )
+        assert res["success"] is True
+        assert call_count >= 2
+
 

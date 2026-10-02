@@ -1,7 +1,30 @@
 #include <cuda_runtime.h>
 #include <cuComplex.h>
 
-#include "fusion.cuh"
+// 128-bit double-precision complex number representation
+typedef cuDoubleComplex cdouble;
+
+// Complex arithmetic inline device helpers
+__device__ __forceinline__ cdouble c_mul(cdouble a, cdouble b) {
+    return make_cuDoubleComplex(
+        cuCreal(a) * cuCreal(b) - cuCimag(a) * cuCimag(b),
+        cuCreal(a) * cuCimag(b) + cuCimag(a) * cuCreal(b)
+    );
+}
+
+__device__ __forceinline__ cdouble c_add(cdouble a, cdouble b) {
+    return make_cuDoubleComplex(
+        cuCreal(a) + cuCreal(b), 
+        cuCimag(a) + cuCimag(b)
+    );
+}
+
+__device__ __forceinline__ cdouble c_sub(cdouble a, cdouble b) {
+    return make_cuDoubleComplex(
+        cuCreal(a) - cuCreal(b), 
+        cuCimag(a) - cuCimag(b)
+    );
+}
 
 extern "C" {
 
