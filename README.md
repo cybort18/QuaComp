@@ -15,7 +15,7 @@
 
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![CI](https://github.com/cybort18/QuaComp/actions/workflows/ci.yml/badge.svg)](https://github.com/cybort18/QuaComp/actions)
-[![Tests Status](https://img.shields.io/badge/tests-171%20passed-green.svg)](#running-tests)
+[![Tests Status](https://img.shields.io/badge/tests-184%20passed-green.svg)](#running-tests)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 ---
@@ -64,13 +64,14 @@
 - Supports Distributed Multi-Worker parallel simulation execution (`quacomp --workers <INT>`) across multi-core CPUs and GPU compute backends.
 - Graceful, informative diagnostics and fallback if GPU execution is requested on a CPU-only environment.
 
-### Native Kernel Acceleration & C++ Gate Fusion (`--use-native-kernels`)
+### Native Kernel Acceleration & Hardware Compute Engines (`--use-native-kernels`, `--backend`)
 - **Single-Pass Gate Fusion Engine**: Fuses sequential multi-gate subcircuits on identical or adjacent qubits into consolidated unitary matrices:
   $$U_{\text{fused}} = U_k \times U_{k-1} \times \dots \times U_1$$
+- **NVIDIA CUDA Native Engine (`src/engine/cuda/fusion.cu`)**: Custom high-performance CUDA kernels for $2^n$ statevector manipulation using 128-bit `cuDoubleComplex` with coalesced global memory access, unrolled 1-qubit / 2-qubit bit twiddling, and multi-tier runtime integration (CuPy `RawKernel` / PyTorch CUDA Stream).
+- **Apple Metal Shaders (`fusion.metal`)**: Metal Performance Compute Shaders executing unitary gate fusion on Apple Silicon GPU pipelines.
 - **C++ SIMD Extension (`quacomp_cpp`)**: Pybind11-compiled optimized C++ kernels featuring unrolled single-pass $2\times 2$ and $4\times 4$ complex matrix multiplications and Kronecker tensor products.
-- **Metal & CUDA GPU Shaders**: Metal Performance Compute Shaders (`fusion.metal`) on Apple Silicon and CUDA JIT kernel stubs on NVIDIA GPUs.
 - **Multi-Tier Graceful Fallback**: Automatically dispatches kernels across a multi-tier hierarchy:
-  $$\text{Metal / CUDA GPU} \longrightarrow \text{C++ Native SIMD Engine} \longrightarrow \text{Pure CPython / NumPy Fallback}$$
+  $$\text{NVIDIA CUDA GPU} \longrightarrow \text{Apple Metal GPU} \longrightarrow \text{C++ Native SIMD Engine} \longrightarrow \text{Pure CPython / NumPy Fallback}$$
 
 ### Diverse Quantum Workload Generators
 - **Shallow Workloads**: Initial state allocations using Hadamard gates coupled with 1D entanglement (CNOT chains).
@@ -197,6 +198,9 @@ QuaComp/
 │   │   ├── cpp/            # C++ SIMD Native Gate Fusion Engine
 │   │   │   ├── fusion.hpp  # High-performance complex matrix math declarations
 │   │   │   └── fusion.cpp  # Pybind11 unrolled 2x2/4x4 fusion implementation
+│   │   ├── cuda/           # NVIDIA CUDA GPU Acceleration Engine
+│   │   │   ├── fusion.cuh  # CUDA kernel signatures & cuDoubleComplex math helpers
+│   │   │   └── fusion.cu   # Coalesced 1Q/2Q gate kernels and gate fusion
 │   │   ├── entanglement.py # Von Neumann Entanglement Entropy, MPS topology router, & SVD bounds
 │   │   ├── fusion.py       # Single-pass gate fusion engine & fallback dispatcher
 │   │   ├── mps.py          # MPS configuration & RAM savings profiler
@@ -225,6 +229,7 @@ QuaComp/
 │   ├── test_charts.py      # Visualization engine and PNG plot tests
 │   ├── test_comparator.py  # Relative benchmark comparison & differencing tests
 │   ├── test_cpp_fusion.py  # C++ & Python gate fusion engine tests
+│   ├── test_cuda.py        # NVIDIA CUDA backend detection, mock & live tests
 │   ├── test_energy.py      # Hardware energy telemetry & EQO calculation tests
 │   ├── test_engine.py      # Circuit and simulation execution tests
 │   ├── test_entanglement.py# Entanglement entropy and Schmidt decomposition tests
@@ -274,14 +279,31 @@ pip install -e .
 - **Automatic Graceful Fallback (`BuildExtOptional`):**  
   QuaComp's `setup.py` wraps Pybind11 compilation inside a non-blocking build hook. If a compatible C++ compiler is not present on the host system, the build continues smoothly and installs QuaComp in pure Python mode. At runtime, `src/engine/accelerator.py` automatically detects binary availability and dispatches computations to optimized CPython fallback algorithms without throwing fatal errors.
 
+#### NVIDIA CUDA GPU Acceleration Setup (Optional for CUDA)
+For NVIDIA GPU hardware acceleration (`--backend cuda`):
+- **Prerequisites:**
+  - NVIDIA GPU with Compute Capability 6.0+ (Pascal, Volta, Turing, Ampere, Ada Lovelace, Hopper, Blackwell).
+  - NVIDIA Display Driver (525+ recommended) and CUDA Toolkit (11.8+ or 12.x).
+- **Python CUDA Runtime Libraries:**
+  - Install CuPy for your CUDA version (recommended):
+    ```bash
+    pip install cupy-cuda12x  # For CUDA 12.x
+    # or: pip install cupy-cuda11x  # For CUDA 11.x
+    ```
+  - Alternatively, PyTorch with CUDA support:
+    ```bash
+    pip install torch --index-url https://download.pytorch.org/whl/cu121
+    ```
+- **Automatic Fallback:** If `--backend cuda` is requested on systems without NVIDIA hardware or CUDA runtime, QuaComp outputs an informative diagnostic notice and automatically falls back to Apple Metal, C++ SIMD, or NumPy without crashing.
+
 ---
 
 ## Hardware Compatibility Matrix
 
 | Hardware Platform | Accelerator Engine | Backend Technology | Supported OS | Graceful Fallback Mode |
 | :--- | :--- | :--- | :--- | :--- |
-| **Apple Silicon (M1/M2/M3/M4)** | Metal GPU Compute | Apple Metal Shaders (`fusion.metal`) | macOS | `[Engine: C++ SIMD]` → `[Engine: Python Fallback]` |
-| **NVIDIA GPU (RTX / Tesla / Hopper)** | CUDA JIT / Qiskit Aer GPU | CUDA Kernels & Aer GPU Device | Linux, Windows | `[Engine: C++ SIMD]` → `[Engine: Python Fallback]` |
+| **NVIDIA GPU (RTX / A100 / H100)** | CUDA GPU Acceleration | Native CUDA (fusion.cu) & CuPy/PyTorch | Linux, Windows | `[Engine: C++ SIMD]` → `[Engine: Python Fallback]` |
+| **Apple Silicon (M1/M2/M3/M4)** | Metal GPU Compute | Apple Metal Shaders (fusion.metal) | macOS | `[Engine: C++ SIMD]` → `[Engine: Python Fallback]` |
 | **x86_64 / ARM64 CPU (Modern)** | C++ Native SIMD | Pybind11 Unrolled Matrix Fusion | Linux, macOS, Windows | `[Engine: Python Fallback]` |
 | **Any Generic CPU** | Pure CPython / NumPy | Vectorized NumPy Fallback Engine | All Platforms | Built-in Base Level |
 
@@ -299,6 +321,9 @@ quacomp --quick --chart
 
 # Run a quick benchmark with native C++/Metal/CUDA gate fusion acceleration
 quacomp --quick --use-native-kernels
+
+# Run a simulation using the NVIDIA CUDA acceleration backend
+quacomp --custom --qubits 24 --backend cuda
 
 # Run a quick benchmark with real physical QPU noise calibration (IBM Brisbane)
 quacomp --quick --noise-profile ibm_brisbane_sample
@@ -341,6 +366,7 @@ quacomp --quick --compare --target apple_m4_max
 | `--gpu` | N/A | Shorthand flag to enable GPU acceleration (`--device gpu`). |
 | `--multi-gpu` | N/A | Enable multi-GPU distributed simulation backend (`--device multi_gpu`). |
 | `--use-native-kernels` | N/A | Force native kernel acceleration (C++ SIMD / Apple Metal / CUDA Single-Pass Gate Fusion). |
+| `--backend` | `auto`, `cuda`, `metal`, `cpp`, `numpy` (default: `auto`) | Compute accelerator backend selection with graceful multi-tier fallback. |
 | `--noise-profile` | `PATH` or alias | Ingest real physical QPU noise calibration profile with trace-preserving Kraus representation. |
 | `--state-slicing` | N/A | Enable distributed statevector slicing model parallelism across VRAM pools. |
 | `--blocking-qubits` | `INT` | Statevector chunk slice size in qubits for distributed model parallelism. |
@@ -378,31 +404,32 @@ platform win32 -- Python 3.13.3, pytest-9.1.1, pluggy-1.6.0
 rootdir: C:\Users\HP\Documents\PROJECT\QuaComp
 configfile: pyproject.toml
 plugins: anyio-4.14.2
-collected 171 items
+collected 185 items
 
-tests\test_accelerator.py .......                                        [  4%]
-tests\test_charts.py ....                                                [  6%]
-tests\test_comparator.py .......                                         [ 10%]
-tests\test_cpp_fusion.py ...........                                     [ 16%]
-tests\test_energy.py ....                                                [ 19%]
-tests\test_engine.py ......                                              [ 22%]
-tests\test_entanglement.py ...........                                   [ 29%]
-tests\test_gpu.py ...........                                            [ 35%]
-tests\test_memory.py .......                                             [ 39%]
-tests\test_model_parallelism.py .....                                    [ 42%]
-tests\test_mps.py ....                                                   [ 45%]
-tests\test_mps_topology.py .....                                         [ 47%]
-tests\test_native_integration.py .....                                   [ 50%]
-tests\test_noise.py ....                                                 [ 53%]
-tests\test_parser.py ................................                    [ 71%]
-tests\test_physical_noise.py ........                                    [ 76%]
-tests\test_registry.py ...........                                       [ 83%]
-tests\test_reporter.py .........                                         [ 88%]
-tests\test_scorer.py ...........                                         [ 94%]
+tests\test_accelerator.py .......                                        [  3%]
+tests\test_charts.py ....                                                [  5%]
+tests\test_comparator.py .......                                         [  9%]
+tests\test_cpp_fusion.py ...........                                     [ 15%]
+tests\test_cuda.py ..........s...                                        [ 23%]
+tests\test_energy.py ....                                                [ 25%]
+tests\test_engine.py ......                                              [ 28%]
+tests\test_entanglement.py ...........                                   [ 34%]
+tests\test_gpu.py ...........                                            [ 40%]
+tests\test_memory.py .......                                             [ 44%]
+tests\test_model_parallelism.py .....                                    [ 47%]
+tests\test_mps.py ....                                                   [ 49%]
+tests\test_mps_topology.py .....                                         [ 51%]
+tests\test_native_integration.py .....                                   [ 54%]
+tests\test_noise.py ....                                                 [ 56%]
+tests\test_parser.py ................................                    [ 74%]
+tests\test_physical_noise.py ........                                    [ 78%]
+tests\test_registry.py ...........                                       [ 84%]
+tests\test_reporter.py .........                                         [ 89%]
+tests\test_scorer.py ...........                                         [ 95%]
 tests\test_ui.py ....                                                    [ 97%]
 tests\test_variational_qv.py .....                                       [100%]
 
-============================ 171 passed in 22.37s =============================
+======================= 184 passed, 1 skipped in 23.91s =======================
 ```
 
 ---

@@ -18,7 +18,8 @@ def run_simulation(
     state_slicing: bool = False,
     blocking_qubits: Optional[int] = None,
     use_native_kernels: bool = False,
-    physical_noise_profile: Optional[str] = None
+    physical_noise_profile: Optional[str] = None,
+    backend: str = 'auto'
 ) -> Dict[str, Any]:
     """
     Execute a Qiskit quantum circuit using AerSimulator across multiple benchmark runs for statistical repeatability,
@@ -112,11 +113,13 @@ def run_simulation(
         accelerator_backend = None
         accelerator_badge = None
         
-        if use_native_kernels:
+        is_backend_req = bool(backend and str(backend).lower() != "auto")
+        if use_native_kernels or is_backend_req:
             from src.engine.fusion import fuse_circuit_single_pass
-            from src.engine.accelerator import detect_primary_accelerator, get_accelerator_badge
+            from src.engine.accelerator import get_best_backend, get_accelerator_badge
+            active_backend_obj = get_best_backend(backend if is_backend_req else None)
             circ_to_run, fusion_metrics = fuse_circuit_single_pass(circ_to_run)
-            accelerator_backend = fusion_metrics.get("backend", detect_primary_accelerator())
+            accelerator_backend = active_backend_obj.tier_label
             accelerator_badge = get_accelerator_badge(accelerator_backend)
             
         # Prepare circuit with measurements for count extraction if needed
@@ -226,7 +229,7 @@ def run_simulation(
             "counts": last_counts,
             "device": device_label,
             "workers": workers,
-            "native_kernel_used": use_native_kernels,
+            "native_kernel_used": use_native_kernels or is_backend_req,
             "accelerator_backend": accelerator_backend,
             "accelerator_badge": accelerator_badge,
             "fusion_metrics": fusion_metrics,
@@ -247,7 +250,7 @@ def run_simulation(
             "counts": {},
             "device": "MULTI_GPU" if is_multi_gpu else dev_clean,
             "workers": workers,
-            "native_kernel_used": use_native_kernels,
+            "native_kernel_used": use_native_kernels or is_backend_req,
             "accelerator_backend": None,
             "accelerator_badge": None,
             "fusion_metrics": None,

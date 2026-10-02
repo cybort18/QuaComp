@@ -49,6 +49,7 @@ def build_argument_parser() -> argparse.ArgumentParser:
     param_group.add_argument("--noise-level", choices=["none", "low", "medium", "high"], default="none", help="NISQ noise model preset level (default none).")
     param_group.add_argument("--noise-profile", type=str, default=None, help="Load real physical QPU noise calibration profile (e.g. ibm_brisbane_sample).")
     param_group.add_argument("--use-native-kernels", action="store_true", help="Enable native kernel acceleration (C++/Metal/CUDA Single-Pass Gate Fusion).")
+    param_group.add_argument("--backend", choices=["auto", "cuda", "metal", "cpp", "numpy"], default="auto", help="Compute accelerator backend (auto, cuda, metal, cpp, numpy).")
     param_group.add_argument("--qasm", type=str, default=None, help="Path to OpenQASM 2.0 file (.qasm) to parse and benchmark.")
     param_group.add_argument("--runs", type=int, default=3, help="Number of benchmark iterations per circuit (default 3).")
     
@@ -140,6 +141,12 @@ def main():
         sys.exit(1)
         
     console.print(BANNER)
+    
+    # Check backend availability if explicitly requested
+    if getattr(args, "backend", "auto") == "cuda":
+        from src.engine.accelerator import is_cuda_available
+        if not is_cuda_available():
+            console.print("[bold yellow]Hardware Notice:[/bold yellow] NVIDIA CUDA acceleration requested ('--backend cuda'), but no supported CUDA GPU was detected. Automatically falling back to optimal available backend.\n")
     
     results: List[Dict[str, Any]] = []
     

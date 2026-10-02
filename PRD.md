@@ -250,6 +250,31 @@ where:
     - `--qasm <filepath>`: Executes custom simulation directly from an external `.qasm` file.
     - Displays dedicated Rich telemetry table detailing circuit name, depth, total gates, 1-qubit / 2-qubit breakdown, and parse latency.
 
+### FR-18: NVIDIA CUDA Acceleration Backend (--backend cuda)
+- **Description:** The system must provide a native NVIDIA CUDA acceleration backend (`CUDABackend`) with parity to Apple Metal, enabling high-performance double-precision complex statevector manipulation (`cuDoubleComplex` / `complex128`) and fused unitary gate execution.
+- **Specifications & Behavior:**
+  - **Native CUDA Kernels (`src/engine/cuda/fusion.cu`, `fusion.cuh`):**
+    - 128-bit complex floating-point representation using `cuDoubleComplex` for 64-bit IEEE 754 precision.
+    - 1-Qubit Gate Kernel (`apply_gate_1q_cuda`): Thread mapping over index pairs with coalesced global memory access and bit-twiddling basis indexing.
+    - 2-Qubit Fused Gate Kernel (`apply_gate_2q_cuda`): Arbitrary 2-qubit unitary transformations over index quadruplets with bit-mask insertion at control and target qubit positions.
+    - Optimized thread configuration: 256 threads per block with warp-level divergence mitigation.
+  - **Modular Runtime Integration (`CUDABackend`):**
+    - Dynamic device availability detection via `is_cuda_available()`.
+    - Multi-tier CUDA execution priority:
+      1. CuPy `RawKernel` JIT compilation and memory management.
+      2. PyTorch CUDA stream tensors (`torch.cuda`).
+      3. Vectorized NumPy CPU fallback.
+    - Direct VRAM allocation (`allocate_statevector`) and zero-overhead host copy (`copy_to_host`).
+  - **Hardware Priority Hierarchy (`get_best_backend`):**
+    - Automatic engine selection order:
+      CUDA GPU → Metal GPU → C++ Native SIMD Engine → Pure CPython / NumPy Fallback
+  - **Telemetry & Monitoring (`get_cuda_telemetry`):**
+    - Queries active CUDA GPU device name, compute capability, VRAM allocated and peak usage, and utilization via NVML / PyTorch / CuPy / `nvidia-smi`.
+  - **CLI Integration & Diagnostics:**
+    - Adds `--backend {auto,cuda,metal,cpp,numpy}` flag across `cli/main.py` and `cli/runner.py`.
+    - Rich UI terminal displays active CUDA device metadata, compute capability, and initial memory allocation.
+    - Non-blocking warning and graceful fallback when `--backend cuda` is requested on systems without NVIDIA hardware.
+
 ---
 
 ## 4. Technical Limitations & Architecture Transparency
@@ -268,9 +293,18 @@ where:
 - **Graceful Fallback:** If read permission is denied or the host is running Windows/macOS, QuaComp automatically and silently falls back to the dynamic TDP mathematical model without interrupting benchmark execution.
 - **Full Transparency:** CLI terminal output and Markdown reports prominently display `[Sensor: TDP Estimate]` to inform users that power values are model-derived rather than direct physical hardware counter readings.
 
-### 4.3 Hardware Compatibility Matrix & Multi-Tier Graceful Fallback Strategy
-- **Tier 1 (GPU Hardware Compute):** Metal Shaders (Apple Silicon macOS) and CUDA Kernels (NVIDIA Linux/Windows).
-- **Tier 2 (C++ SIMD Native Extension):** Unrolled complex matrix arithmetic compiled via Pybind11.
+### 4.3 Hardware Parity Matrix & Multi-Tier Graceful Fallback Strategy
+
+| Hardware Platform | Accelerator Engine | Runtime Technology | Supported OS | Fallback Hierarchy |
+| :--- | :--- | :--- | :--- | :--- |
+| Apple Silicon (M1/M2/M3/M4) | Metal GPU Compute | Apple Metal Shaders (fusion.metal) | macOS | C++ SIMD → CPython / NumPy |
+| NVIDIA GPU (RTX / A100 / H100) | CUDA GPU Acceleration | CUDA Kernels (fusion.cu) & CuPy/PyTorch | Linux, Windows | C++ SIMD → CPython / NumPy |
+| x86_64 / ARM64 CPU (Modern) | C++ Native SIMD | Pybind11 Unrolled Matrix Fusion | Linux, macOS, Windows | CPython / NumPy |
+| Any Generic CPU | Pure CPython / NumPy | Vectorized NumPy Fallback Engine | All Platforms | Built-in Base Level |
+
+- **Tier 1 (GPU Hardware Compute):** NVIDIA CUDA Kernels (Linux/Windows) and Apple Metal Shaders (macOS).
+- **Tier 2 (C++ SIMD Native Extension):** Unrolled complex matrix arithmetic compiled via Pybind11 with OpenMP/AVX.
 - **Tier 3 (Pure CPython / NumPy Fallback):** Vectorized Python fallback ensuring 100% execution guarantees on any host without compilation tools.
 - **Optional Build Strategy:** Setuptools `BuildExtOptional` ensures `pip install -e .` never fails even on bare systems lacking MSVC/GCC/Clang compilers.
+
 

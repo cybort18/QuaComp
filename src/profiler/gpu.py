@@ -221,3 +221,163 @@ def check_gpu_vram_safety(
         return False, f"CRITICAL: {qubits} qubits requires ~{req_gb:.2f} GB VRAM, which exceeds standard single-GPU VRAM capacity without Distributed Statevector Slicing."
         
     return True, f"SAFE: {qubits} qubits statevector requires ~{req_gb:.4f} GB VRAM on GPU."
+
+
+def get_cuda_telemetry() -> Dict[str, Any]:
+    """
+    Query real-time NVIDIA CUDA hardware telemetry including VRAM usage,
+    core utilization, temperature, power, and compute capability.
+    
+    Uses multi-tier probing:
+      1. pynvml (NVIDIA Management Library Python bindings)
+      2. PyTorch / CuPy CUDA runtime APIs
+      3. nvidia-smi CLI fallback
+      4. Safe non-blocking default when NVIDIA hardware is unavailable
+      
+    Returns:
+        Dict[str, Any]: Dictionary of telemetry metrics.
+    """
+    telemetry: Dict[str, Any] = {
+        "available": False,
+        "device_name": "None detected",
+        "device_count": 0,
+        "compute_capability": "None",
+        "vram_total_mb": 0.0,
+        "vram_allocated_mb": 0.0,
+        "vram_peak_mb": 0.0,
+        "gpu_utilization_pct": 0.0,
+        "temperature_c": None,
+        "power_w": None,
+        "telemetry_source": "None"
+    }
+
+    # 1. Try pynvml (NVIDIA Management Library)
+    try:
+        import pynvml
+        pynvml.nvmlInit()
+        count = pynvml.nvmlDeviceGetCount()
+        if count > 0:
+            handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+            name = pynvml.nvmlDeviceGetName(handle)
+            if isinstance(name, bytes):
+                name = name.decode("utf-8")
+            mem = pynvml.nvmlDeviceGetMemoryInfo(handle)
+            util = pynvml.nvmlDeviceGetUtilizationRates(handle)
+            try:
+                temp = float(pynvml.nvmlDeviceGetTemperature(handle, pynvml.NVML_TEMPERATURE_GPU))
+            except Exception:
+                temp = None
+            try:
+                power = float(pynvml.nvmlDeviceGetPowerUsage(handle)) / 1000.0  # mW -> W
+            except Exception:
+                power = None
+
+            # Compute capability if available via nvml
+            cap_str = "None"
+            try:
+                major, minor = pynvml.nvmlDeviceGetCudaComputeCapability(handle)
+                cap_str = f"{major}.{minor}"
+            except Exception:
+                pass
+
+            telemetry.update({
+                "available": True,
+                "device_name": name,
+                "device_count": count,
+                "compute_capability": cap_str,
+                "vram_total_mb": round(mem.total / (1024.0 * 1024.0), 2),
+                "vram_allocated_mb": round(mem.used / (1024.0 * 1024.0), 2),
+                "vram_peak_mb": round(mem.used / (1024.0 * 1024.0), 2),
+                "gpu_utilization_pct": float(util.gpu),
+                "temperature_c": temp,
+                "power_w": power,
+                "telemetry_source": "pynvml"
+            })
+            return telemetry
+    except Exception:
+        pass
+
+    # 2. Try PyTorch CUDA runtime
+    try:
+        import torch
+        if torch.cuda.is_available() and torch.cuda.device_count() > 0:
+            dev_idx = 0
+            dev_name = torch.cuda.get_device_name(dev_idx)
+            major, minor = torch.cuda.get_device_capability(dev_idx)
+            props = torch.cuda.get_device_properties(dev_idx)
+            total_mb = props.total_memory / (1024.0 * 1024.0)
+            alloc_mb = torch.cuda.memory_allocated(dev_idx) / (1024.0 * 1024.0)
+            peak_mb = torch.cuda.max_memory_allocated(dev_idx) / (1024.0 * 1024.0)
+            telemetry.update({
+                "available": True,
+                "device_name": dev_name,
+                "device_count": torch.cuda.device_count(),
+                "compute_capability": f"{major}.{minor}",
+                "vram_total_mb": round(total_mb, 2),
+                "vram_allocated_mb": round(alloc_mb, 2),
+                "vram_peak_mb": round(peak_mb, 2),
+                "telemetry_source": "torch.cuda"
+            })
+            return telemetry
+    except Exception:
+        pass
+
+    # 3. Try CuPy runtime
+    try:
+        import cupy
+        if cupy.cuda.is_available() and cupy.cuda.runtime.getDeviceCount() > 0:
+            dev = cupy.cuda.Device(0)
+            free_b, total_b = dev.mem_info
+            cap = dev.compute_capability
+            alloc_b = total_b - free_b
+            telemetry.update({
+                "available": True,
+                "device_name": f"NVIDIA Device (CuPy Dev 0)",
+                "device_count": cupy.cuda.runtime.getDeviceCount(),
+                "compute_capability": str(cap),
+                "vram_total_mb": round(total_b / (1024.0 * 1024.0), 2),
+                "vram_allocated_mb": round(alloc_b / (1024.0 * 1024.0), 2),
+                "vram_peak_mb": round(alloc_b / (1024.0 * 1024.0), 2),
+                "telemetry_source": "cupy.cuda"
+            })
+            return telemetry
+    except Exception:
+        pass
+
+    # 4. Try nvidia-smi CLI
+    try:
+        res = subprocess.run(
+            ["nvidia-smi", "--query-gpu=name,memory.total,memory.used,utilization.gpu,temperature.gpu,power.draw", "--format=csv,noheader,nounits"],
+            capture_output=True,
+            text=True,
+            timeout=2
+        )
+        if res.returncode == 0 and res.stdout.strip():
+            first_line = res.stdout.strip().split("\n")[0]
+            parts = [p.strip() for p in first_line.split(",")]
+            if len(parts) >= 3:
+                name = parts[0]
+                tot_mb = float(parts[1]) if parts[1].replace('.', '', 1).isdigit() else 0.0
+                used_mb = float(parts[2]) if parts[2].replace('.', '', 1).isdigit() else 0.0
+                util_pct = float(parts[3]) if len(parts) > 3 and parts[3].replace('.', '', 1).isdigit() else 0.0
+                temp = float(parts[4]) if len(parts) > 4 and parts[4].replace('.', '', 1).isdigit() else None
+                power = float(parts[5]) if len(parts) > 5 and parts[5].replace('.', '', 1).isdigit() else None
+                telemetry.update({
+                    "available": True,
+                    "device_name": name,
+                    "device_count": len(res.stdout.strip().split("\n")),
+                    "compute_capability": "Detected",
+                    "vram_total_mb": tot_mb,
+                    "vram_allocated_mb": used_mb,
+                    "vram_peak_mb": used_mb,
+                    "gpu_utilization_pct": util_pct,
+                    "temperature_c": temp,
+                    "power_w": power,
+                    "telemetry_source": "nvidia-smi"
+                })
+                return telemetry
+    except Exception:
+        pass
+
+    return telemetry
+
