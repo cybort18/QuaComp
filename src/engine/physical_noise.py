@@ -323,3 +323,48 @@ class PhysicalNoiseModel:
                         noise_model.add_quantum_error(err2, gname, [q1, q0])
                         
         return noise_model
+
+    def to_trajectory_noise_model(self, active_qubits: Optional[List[int]] = None) -> Any:
+        """
+        Translate physical calibration parameters into a Monte Carlo Wavefunction TrajectoryNoiseModel.
+        
+        Args:
+            active_qubits (Optional[List[int]]): Subset of qubits to model, or None for all.
+            
+        Returns:
+            TrajectoryNoiseModel: Ready-to-simulate trajectory noise model.
+        """
+        from src.engine.noise import TrajectoryNoiseModel
+        
+        qubit_indices = active_qubits if active_qubits is not None else list(range(max(8, self.num_qubits)))
+        qubit_props: Dict[int, Dict[str, Any]] = {}
+        
+        for q_idx in qubit_indices:
+            props = self.get_qubit_properties(q_idx)
+            qubit_props[q_idx] = {
+                "T1_s": props["T1_us"] * 1e-6,
+                "T2_s": props["T2_us"] * 1e-6,
+                "single_qubit_gate_error": props["single_qubit_gate_error"],
+                "prob_meas0_prep1": props["prob_meas0_prep1"],
+                "prob_meas1_prep0": props["prob_meas1_prep0"],
+                "readout_error": props["readout_error"]
+            }
+            
+        coupling_errs: Dict[Tuple[int, int], float] = {}
+        for link in self.couplings_data:
+            q_pair = link.get("qubits", [])
+            if len(q_pair) == 2:
+                q0, q1 = q_pair
+                if (active_qubits is None) or (q0 in active_qubits and q1 in active_qubits):
+                    p2 = float(link.get("two_qubit_gate_error", 0.008))
+                    coupling_errs[(q0, q1)] = p2
+                    coupling_errs[(q1, q0)] = p2
+                    
+        return TrajectoryNoiseModel(
+            gate_time_1q=self.gate_time_1q_ns * 1e-9,
+            gate_time_2q=self.gate_time_2q_ns * 1e-9,
+            qubit_properties=qubit_props,
+            coupling_errors=coupling_errs,
+            name=f"Trajectory:{self.backend_name}"
+        )
+

@@ -275,6 +275,28 @@ where:
     - Rich UI terminal displays active CUDA device metadata, compute capability, and initial memory allocation.
     - Non-blocking warning and graceful fallback when `--backend cuda` is requested on systems without NVIDIA hardware.
 
+### FR-19: Monte Carlo Wavefunction (Quantum Trajectories) Noise Simulation (`--noise-method trajectory`)
+- **Description:** The system must provide a Monte Carlo Wavefunction (MCWF) / Quantum Trajectories noise simulation algorithm maintaining pure statevector $\mathcal{O}(2^n)$ memory scaling, enabling physical dephasing and relaxation noise simulations up to 28 qubits on standard 16 GB memory machines and eliminating the $\mathcal{O}(4^n)$ density matrix memory wall.
+- **Specifications & Behavior:**
+  - **Stochastic Quantum Jump Sampling:**
+    - Replaces exponential density matrix operations by stochastically sampling quantum jump trajectories directly on the statevector.
+    - Single-Qubit Depolarizing Channel: With probability $1 - p$, gate proceeds error-free ($I$); with probability $p/3$, applies a stochastic Pauli jump ($X, Y, Z$).
+    - Two-Qubit Depolarizing Channel: With probability $1 - p$, proceeds error-free ($II$); with probability $p/15$, applies one of the 15 non-identity 2-qubit Pauli operator pairs.
+    - Thermal Relaxation ($T_1, T_2$):
+      - Amplitude damping (energy relaxation): Decays from state $\vert{}1\rangle$ to ground state $\vert{}0\rangle$ with jump probability $p_{\text{decay}} = 1 - e^{-t_g / T_1}$.
+      - Pure dephasing: Applies stochastic phase flip ($Z$) with probability $p_{\text{phase}} = \frac{1 - e^{-t_g / T_\phi}}{2}$ where $1 / T_\phi = \max(0, 1/T_2 - 1/(2T_1))$.
+  - **Stochastic Classical Readout Bit-Flip:**
+    - Injects classical measurement bit-flips according to calibrated hardware readout confusion probabilities $P(0\vert{}1)$ and $P(1\vert{}0)$.
+  - **Memory Scaling & Safety Guard:**
+    - Guarantees strict $\mathcal{O}(2^n)$ memory allocation at all compute stages.
+    - Pre-flight Density Matrix Safety Guard: If explicit `--noise-method density_matrix` is requested, automatically inspects qubit count and rejects execution for $n \ge 16$ qubits with `DensityMatrixMemoryError` to prevent operating system freezes.
+  - **CLI Integration & Telemetry:**
+    - Adds `--noise-method {trajectory,density_matrix}` (default: `trajectory`).
+    - Adds `--shots <int>` (default: `1000`).
+    - Runner displays noise simulation mode, shot count, and memory savings ratio:
+
+      $$\text{Memory Saved Ratio} \approx 2^n \times$$
+
 ---
 
 ## 4. Technical Limitations & Architecture Transparency
@@ -306,5 +328,22 @@ where:
 - **Tier 2 (C++ SIMD Native Extension):** Unrolled complex matrix arithmetic compiled via Pybind11 with OpenMP/AVX.
 - **Tier 3 (Pure CPython / NumPy Fallback):** Vectorized Python fallback ensuring 100% execution guarantees on any host without compilation tools.
 - **Optional Build Strategy:** Setuptools `BuildExtOptional` ensures `pip install -e .` never fails even on bare systems lacking MSVC/GCC/Clang compilers.
+
+### 4.4 Noise Simulation Memory Scaling: Monte Carlo Wavefunction vs. Density Matrix
+
+Simulating open quantum systems with physical noise via density matrices ($\rho$) scales quadratically in memory as $\mathcal{O}(4^n) = \mathcal{O}(2^{2n})$. In contrast, QuaComp's Monte Carlo Wavefunction (Quantum Trajectories) preserves pure statevector scaling of $\mathcal{O}(2^n)$, delivering exponential memory savings:
+
+| Qubits (n) | Density Matrix Memory O(2^(2n)) | MCWF Trajectory Memory O(2^n) | Memory Savings Ratio | 16 GB RAM Feasibility |
+| :--- | :--- | :--- | :--- | :--- |
+| 10 | 16 MB | 16 KB | 1,024× | Both Supported |
+| 14 | 4 GB | 256 KB | 16,384× | Density Matrix Limit (16 GB RAM) |
+| 16 | 64 GB | 1 MB | 65,536× | Trajectory Only (DM Out of Memory) |
+| 20 | 16 TB (16,384 GB) | 16 MB | 1,048,576× | Trajectory Only |
+| 24 | 4.3 PB | 256 MB | 16,777,216× | Trajectory Only |
+| 28 | 1.1 EB (Exabytes) | 4.0 GB | 268,435,456× | Trajectory Safe on 16 GB RAM |
+| 29 | 4.4 EB | 8.0 GB | 536,870,912× | Trajectory Safe on 16 GB RAM |
+
+- **Industrial Significance:** On a standard workstation with 16 GB RAM, density matrix simulations hit an insurmountable memory barrier at 14 qubits. QuaComp's MCWF trajectory engine breaks this barrier, allowing noisy circuit evaluation up to 28 qubits on the same machine.
+
 
 

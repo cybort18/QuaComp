@@ -48,6 +48,8 @@ def build_argument_parser() -> argparse.ArgumentParser:
     param_group.add_argument("--entropy", action="store_true", help="Calculate bipartite Von Neumann entanglement entropy and simulation complexity.")
     param_group.add_argument("--noise-level", choices=["none", "low", "medium", "high"], default="none", help="NISQ noise model preset level (default none).")
     param_group.add_argument("--noise-profile", type=str, default=None, help="Load real physical QPU noise calibration profile (e.g. ibm_brisbane_sample).")
+    param_group.add_argument("--noise-method", choices=["trajectory", "density_matrix"], default="trajectory", help="Noise simulation algorithm: trajectory (Monte Carlo Wavefunction O(2^n)) or density_matrix (O(4^n), default trajectory).")
+    param_group.add_argument("--shots", type=int, default=1000, help="Number of measurement shots / stochastic trajectories (default 1000).")
     param_group.add_argument("--use-native-kernels", action="store_true", help="Enable native kernel acceleration (C++/Metal/CUDA Single-Pass Gate Fusion).")
     param_group.add_argument("--backend", choices=["auto", "cuda", "metal", "cpp", "numpy"], default="auto", help="Compute accelerator backend (auto, cuda, metal, cpp, numpy).")
     param_group.add_argument("--qasm", type=str, default=None, help="Path to OpenQASM 2.0 file (.qasm) to parse and benchmark.")
@@ -78,8 +80,11 @@ def validate_cli_arguments(args: argparse.Namespace) -> None:
         raise ValueError("Argument --workers must be a positive integer >= 1.")
     if getattr(args, 'runs', None) is not None and args.runs < 1:
         raise ValueError("Argument --runs must be a positive integer >= 1.")
+    if getattr(args, 'shots', None) is not None and args.shots < 1:
+        raise ValueError("Argument --shots must be a positive integer >= 1.")
     if getattr(args, 'blocking_qubits', None) is not None and args.blocking_qubits < 1:
         raise ValueError("Argument --blocking-qubits must be a positive integer >= 1.")
+
 
 def main():
     """Main CLI entrypoint for QuaComp."""

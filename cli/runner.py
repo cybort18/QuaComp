@@ -41,8 +41,11 @@ def run_single_simulation(
     noise_profile: Optional[str] = None,
     qasm_circuit: Optional[Any] = None,
     qasm_metrics: Optional[Dict[str, Any]] = None,
-    backend: str = 'auto'
+    backend: str = 'auto',
+    shots: int = 1000,
+    noise_method: str = 'trajectory'
 ) -> Dict[str, Any]:
+
     """
     Execute a single quantum simulation workload with profiling.
     
@@ -151,13 +154,15 @@ def run_single_simulation(
                 device=device,
                 noise_model=noise_model,
                 noise_level=noise_level,
+                shots=shots,
                 runs=runs,
                 workers=workers,
                 state_slicing=state_slicing,
                 blocking_qubits=blocking_qubits,
                 use_native_kernels=use_native_kernels,
                 physical_noise_profile=noise_profile,
-                backend=backend
+                backend=backend,
+                noise_method=noise_method
             )
     except InsufficientVRAMError as vram_err:
         default_console.print(
@@ -172,13 +177,15 @@ def run_single_simulation(
                 device="cpu",
                 noise_model=noise_model,
                 noise_level=noise_level,
+                shots=shots,
                 runs=runs,
                 workers=workers,
                 state_slicing=False,
                 blocking_qubits=None,
                 use_native_kernels=False,
                 physical_noise_profile=noise_profile,
-                backend="numpy"
+                backend="numpy",
+                noise_method=noise_method
             )
     finally:
         active_be.device_synchronize()
@@ -208,13 +215,16 @@ def run_single_simulation(
             device=device,
             noise_model=None, 
             noise_level="none",
+            shots=shots,
             runs=1,
             workers=workers,
             state_slicing=state_slicing,
             blocking_qubits=blocking_qubits,
-            backend=backend
+            backend=backend,
+            noise_method="trajectory"
         )
         active_be.device_synchronize()
+
         if ideal_sim_result["success"]:
             fidelity = calculate_state_fidelity(ideal_sim_result["counts"], sim_result["counts"])
             overhead_ratio = calculate_overhead_ratio(ideal_sim_result["latency"], sim_result["mean_latency"])
@@ -287,6 +297,9 @@ def run_single_simulation(
         "entanglement_metrics": entanglement_metrics,
         "parameter_binding_metrics": param_binding_metrics,
         "qv_metrics": qv_metrics,
+        "noise_method": sim_meta.get("noise_method", noise_method),
+        "shots": shots,
+        "memory_saved_ratio": sim_meta.get("memory_saved_ratio", 2 ** qubits),
         "energy_metrics": energy_metrics,
         "qasm_metrics": qasm_metrics
     }
@@ -300,6 +313,8 @@ def run_quick_benchmark(
     c = console or default_console
     workers = getattr(args, 'workers', 1)
     backend = getattr(args, 'backend', 'auto')
+    shots = getattr(args, 'shots', 1000)
+    noise_method = getattr(args, 'noise_method', 'trajectory')
     state_slicing = getattr(args, 'state_slicing', False) or (effective_device == 'multi_gpu')
     blocking_qubits = getattr(args, 'blocking_qubits', None)
     use_native_kernels = getattr(args, 'use_native_kernels', False)
@@ -314,7 +329,11 @@ def run_quick_benchmark(
         if cuda_info.get("available"):
             c.print(f"[bold cyan]NVIDIA CUDA Hardware Active:[/bold cyan] {cuda_info['device_name']} (Compute: {cuda_info['compute_capability']}, VRAM: {cuda_info['vram_total_mb']:.1f} MB)")
             
-    c.print(f"[bold yellow]Executing Quick Benchmark Suite (Qubits: 10, 15, 20) [Method: {args.method.upper()}, Device: {effective_device.upper()}{slicing_label}{native_label}{backend_label}, Workers: {workers}, Noise: {args.noise_level.upper()}, Entropy: {args.entropy}, Runs: {args.runs}]...[/bold yellow]\n")
+    if args.noise_level != 'none' or noise_profile is not None:
+        noise_desc = "Monte Carlo Wavefunction (Trajectory)" if noise_method == "trajectory" else "Density Matrix"
+        c.print(f"[bold cyan]Noise Simulation Mode:[/] [bold magenta]{noise_desc}[/] | Shots: [bold green]{shots:,}[/] | Preserving O(2^n) Scaling (Memory Saved: [bold yellow]~2^n x[/bold yellow])")
+
+    c.print(f"[bold yellow]Executing Quick Benchmark Suite (Qubits: 10, 15, 20) [Method: {args.method.upper()}, Device: {effective_device.upper()}{slicing_label}{native_label}{backend_label}, Workers: {workers}, Noise: {args.noise_level.upper()} ({noise_method.upper()}, {shots} shots), Entropy: {args.entropy}, Runs: {args.runs}]...[/bold yellow]\n")
     qubits_list = [10, 15, 20]
     results = []
     
@@ -327,7 +346,7 @@ def run_quick_benchmark(
                 args.noise_level, args.runs, workers=workers, compute_entropy=args.entropy,
                 state_slicing=state_slicing, blocking_qubits=blocking_qubits,
                 use_native_kernels=use_native_kernels, noise_profile=noise_profile,
-                backend=backend
+                backend=backend, shots=shots, noise_method=noise_method
             )
             res["workload_label"] = workload.upper()
             results.append(res)
@@ -345,6 +364,8 @@ def run_full_stress_test(
     c = console or default_console
     workers = getattr(args, 'workers', 1)
     backend = getattr(args, 'backend', 'auto')
+    shots = getattr(args, 'shots', 1000)
+    noise_method = getattr(args, 'noise_method', 'trajectory')
     state_slicing = getattr(args, 'state_slicing', False) or (effective_device == 'multi_gpu')
     blocking_qubits = getattr(args, 'blocking_qubits', None)
     use_native_kernels = getattr(args, 'use_native_kernels', False)
@@ -359,7 +380,11 @@ def run_full_stress_test(
         if cuda_info.get("available"):
             c.print(f"[bold cyan]NVIDIA CUDA Hardware Active:[/bold cyan] {cuda_info['device_name']} (Compute: {cuda_info['compute_capability']}, VRAM: {cuda_info['vram_total_mb']:.1f} MB)")
 
-    c.print(f"[bold yellow]Executing Full Incremental Stress Test (starting from 10 qubits) [Method: {args.method.upper()}, Device: {effective_device.upper()}{slicing_label}{native_label}{backend_label}, Workers: {workers}, Noise: {args.noise_level.upper()}, Entropy: {args.entropy}, Runs: {args.runs}]...[/bold yellow]\n")
+    if args.noise_level != 'none' or noise_profile is not None:
+        noise_desc = "Monte Carlo Wavefunction (Trajectory)" if noise_method == "trajectory" else "Density Matrix"
+        c.print(f"[bold cyan]Noise Simulation Mode:[/] [bold magenta]{noise_desc}[/] | Shots: [bold green]{shots:,}[/] | Preserving O(2^n) Scaling (Memory Saved: [bold yellow]~2^n x[/bold yellow])")
+
+    c.print(f"[bold yellow]Executing Full Incremental Stress Test (starting from 10 qubits) [Method: {args.method.upper()}, Device: {effective_device.upper()}{slicing_label}{native_label}{backend_label}, Workers: {workers}, Noise: {args.noise_level.upper()} ({noise_method.upper()}, {shots} shots), Entropy: {args.entropy}, Runs: {args.runs}]...[/bold yellow]\n")
     q = 10
     max_limit = 50 if args.method == 'mps' else 100
     results = []
@@ -371,7 +396,7 @@ def run_full_stress_test(
                 args.noise_level, args.runs, workers=workers, compute_entropy=args.entropy,
                 state_slicing=state_slicing, blocking_qubits=blocking_qubits,
                 use_native_kernels=use_native_kernels, noise_profile=noise_profile,
-                backend=backend
+                backend=backend, shots=shots, noise_method=noise_method
             )
             res["workload_label"] = "QFT"
             results.append(res)
@@ -390,6 +415,8 @@ def run_custom_simulation(
     c = console or default_console
     workers = getattr(args, 'workers', 1)
     backend = getattr(args, 'backend', 'auto')
+    shots = getattr(args, 'shots', 1000)
+    noise_method = getattr(args, 'noise_method', 'trajectory')
     state_slicing = getattr(args, 'state_slicing', False) or (effective_device == 'multi_gpu')
     blocking_qubits = getattr(args, 'blocking_qubits', None)
     use_native_kernels = getattr(args, 'use_native_kernels', False)
@@ -439,7 +466,11 @@ def run_custom_simulation(
         effective_qubits = args.qubits
         workload_desc = args.type.upper()
         
-    c.print(f"[bold yellow]Executing Custom Simulation (Qubits: {effective_qubits}, Workload: {workload_desc}, Method: {args.method.upper()}, Device: {effective_device.upper()}{slicing_label}{native_label}{backend_label}, Workers: {workers}, Noise: {args.noise_level.upper()}, Entropy: {args.entropy}, Runs: {args.runs})...[/bold yellow]\n")
+    if args.noise_level != 'none' or noise_profile is not None:
+        noise_desc = "Monte Carlo Wavefunction (Trajectory)" if noise_method == "trajectory" else "Density Matrix"
+        c.print(f"[bold cyan]Noise Simulation Mode:[/] [bold magenta]{noise_desc}[/] | Shots: [bold green]{shots:,}[/] | Preserving O(2^n) Scaling (Memory Saved: [bold yellow]~2^{effective_qubits} = ~{1 << effective_qubits:,} x[/bold yellow])")
+
+    c.print(f"[bold yellow]Executing Custom Simulation (Qubits: {effective_qubits}, Workload: {workload_desc}, Method: {args.method.upper()}, Device: {effective_device.upper()}{slicing_label}{native_label}{backend_label}, Workers: {workers}, Noise: {args.noise_level.upper()} ({noise_method.upper()}, {shots} shots), Entropy: {args.entropy}, Runs: {args.runs})...[/bold yellow]\n")
     results = []
     
     with Status(f"Running simulation for {effective_qubits} qubits on {effective_device.upper()} ({args.runs} runs, {workers} workers)...", console=c):
@@ -449,7 +480,7 @@ def run_custom_simulation(
             state_slicing=state_slicing, blocking_qubits=blocking_qubits,
             use_native_kernels=use_native_kernels, noise_profile=noise_profile,
             qasm_circuit=parsed_qasm, qasm_metrics=qasm_metrics,
-            backend=backend
+            backend=backend, shots=shots, noise_method=noise_method
         )
         if parsed_qasm:
             res["workload_label"] = f"QASM: {parsed_qasm.name}"
@@ -461,3 +492,4 @@ def run_custom_simulation(
         if not res["success"]:
             c.print(f"[bold red]Simulation aborted:[/bold red] {res['error']}")
     return results
+

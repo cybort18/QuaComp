@@ -144,3 +144,29 @@ def test_to_qiskit_noise_model_and_simulation(sample_profile_path):
     assert sum(counts.values()) == 500
     # Because of real QPU noise, minor counts in '01' and '10' may appear
     assert "00" in counts or "11" in counts
+
+
+def test_to_trajectory_noise_model_and_simulation(sample_profile_path):
+    """Verify conversion to TrajectoryNoiseModel and execution with MCWF simulate_trajectories."""
+    from src.engine.simulator import simulate_trajectories
+    from src.engine.noise import TrajectoryNoiseModel
+    
+    model = PhysicalNoiseModel.from_json(sample_profile_path)
+    traj_model = model.to_trajectory_noise_model(active_qubits=[0, 1])
+    assert isinstance(traj_model, TrajectoryNoiseModel)
+    assert traj_model.name == "Trajectory:ibm_brisbane"
+    assert traj_model.gate_time_1q > 0
+    assert traj_model.gate_time_2q > 0
+    
+    # Run a simple 2-qubit Bell circuit with the trajectory noise model
+    qc = QuantumCircuit(2)
+    qc.h(0)
+    qc.cx(0, 1)
+    
+    res = simulate_trajectories(qc, noise_model=traj_model, shots=500, seed=42)
+    assert res["success"] is True
+    counts = res["counts"]
+    assert len(counts) > 0
+    assert sum(counts.values()) == 500
+    assert "00" in counts and "11" in counts
+

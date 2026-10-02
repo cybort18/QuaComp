@@ -15,8 +15,9 @@
 
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![CI](https://github.com/cybort18/QuaComp/actions/workflows/ci.yml/badge.svg)](https://github.com/cybort18/QuaComp/actions)
-[![Tests Status](https://img.shields.io/badge/tests-191%20passed-green.svg)](#running-tests)
+[![Tests Status](https://img.shields.io/badge/tests-199%20passed-green.svg)](#running-tests)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
 
 ---
 
@@ -109,6 +110,23 @@
     $$E_0 = |0\rangle\langle 0| + \sqrt{1-\lambda}|1\rangle\langle 1|, \quad E_1 = \sqrt{\lambda}|1\rangle\langle 1|$$
   - **Combined Thermal Relaxation & Readout Confusion**: Rigorously bounded such that $T_2 \le 2T_1$, preventing unphysical negative rates.
 - **Seamless Aer Simulation**: Converts calibration profiles directly into executable Qiskit Aer `NoiseModel` instances for realistic NISQ benchmarking against ideal statevectors.
+
+### Monte Carlo Wavefunction (Quantum Trajectories) Noise Simulation (`--noise-method trajectory`, `--shots`)
+- **Memory Scaling Preservation**: Replaces density matrix exponential memory explosion ($\mathcal{O}(4^n) = \mathcal{O}(2^{2n})$) with stochastic quantum trajectories maintaining $\mathcal{O}(2^n)$ statevector scaling.
+- **Overcoming the Density Matrix Barrier**: Standard 16 GB RAM workstations can now simulate noisy circuits up to **28 qubits** (requiring only ~4 GB RAM), breaking through the classical 14-qubit density matrix ceiling.
+- **Stochastic Quantum Jumps**: Evaluates Kraus channels via branch probability sampling and in-place wave function collapse and renormalization:
+
+$$p_k = \langle \psi | K_k^\dagger K_k | \psi \rangle, \quad |\psi'\rangle = \frac{K_j |\psi\rangle}{\sqrt{p_j}}$$
+
+- **NISQ Noise Channels Supported**:
+  - **Depolarizing Noise**: In-place stochastic Pauli errors ($X, Y, Z$) applied per gate.
+  - **Thermal Relaxation ($T_1, T_2$)**: In-place amplitude damping jumps ($|1\rangle \to |0\rangle$ with probability $1 - e^{-t_g / T_1}$) and pure dephasing phase flips ($Z$ with probability $(1 - e^{-t_g / T_\phi})/2$).
+  - **Readout Mitigation & Stochastic Bit-Flip**: Post-measurement bit-flips modeled via readout confusion matrices $P(\text{read}|\text{true})$.
+- **Ensemble Averaging & Observables**: Aggregates output bitstring distributions across configurable shots ($N_{\text{shots}}$, default 1000) to reproduce exact NISQ expectation values:
+
+$$\langle O \rangle = \frac{1}{N_{\text{shots}}} \sum_{s=1}^{N_{\text{shots}}} \langle \psi_s | O | \psi_s \rangle$$
+
+- **Pre-Flight Density Matrix Safety Guard**: Automatically halts execution if `--noise-method density_matrix` is requested for $n \ge 16$ qubits on systems with $\le 32\text{ GB}$ RAM, preventing fatal system Out-Of-Memory crashes.
 
 ### Entanglement Entropy & MPS Topology Optimization (`--entropy`)
 - **Native MPS Tensor Bond SVD & Statevector SVD**: Seamlessly switches between full Statevector SVD for $n \le 22$ and local 1D Tensor Network MPS Central Bond SVD for $n > 22$, enabling exact Entanglement Entropy analysis for **30 to 100+ qubit circuits** in under 0.2 seconds with under 2 MB RAM consumption.
@@ -328,6 +346,9 @@ quacomp --custom --qubits 24 --backend cuda
 # Run a quick benchmark with real physical QPU noise calibration (IBM Brisbane)
 quacomp --quick --noise-profile ibm_brisbane_sample
 
+# Run a 20-qubit simulation with Monte Carlo Wavefunction quantum trajectories (1000 shots)
+quacomp --custom --qubits 20 --noise-level medium --noise-method trajectory --shots 1000
+
 # Run a quick benchmark with GPU acceleration
 quacomp --quick --gpu
 
@@ -382,6 +403,8 @@ quacomp --quick --compare --target apple_m4_max
 | `--method` | `statevector`, `mps` (default: `statevector`) | Simulation engine method. |
 | `--bond-dim` | `INT` (default: `64`) | Maximum bond dimension for MPS tensor network engine. |
 | `--noise-level` | `none`, `low`, `medium`, `high` (default: `none`) | NISQ synthetic noise preset level. |
+| `--noise-method` | `trajectory`, `density_matrix` (default: `trajectory`) | Noise simulation method: Monte Carlo Wavefunction (O(2^n) memory) or exact Density Matrix (O(4^n) memory, n ≤ 15). |
+| `--shots` | `INT` (default: `1000`) | Number of stochastic quantum trajectories (shots) for Monte Carlo ensemble averaging. |
 | `--runs` | `INT` (default: `3`) | Number of benchmark iterations per circuit for statistical mean/std calculation. |
 | `--chart` | N/A | Automatically generates PNG telemetry chart plots in `results/`. |
 | `--export` | `json`, `md`, `all` (default: `all`) | Benchmark report output format. |
@@ -390,7 +413,7 @@ quacomp --quick --compare --target apple_m4_max
 
 ## Running Tests
 
-Automated unit tests are written with `pytest`. They cover statevector simulation, C++ gate fusion, hardware accelerator dispatching and fallback, real physical QPU calibration parsing, Kraus operator generation, GPU and multi-GPU detection & safety, multi-GPU model parallelism, dynamic MPS topology routing & truncation bounds, NISQ synthetic noise models, bipartite entanglement entropy, VQE/QAOA parameter binding latency, Quantum Volume heavy output probability analysis, OpenQASM 2.0 parsing and circuit interoperability, cross-platform power/energy telemetry, remote registry synchronization, and report exporters.
+Automated unit tests are written with `pytest`. They cover statevector simulation, C++ gate fusion, hardware accelerator dispatching and fallback, real physical QPU calibration parsing, Kraus operator generation, Monte Carlo Wavefunction (Quantum Trajectories) stochastic noise sampling, GPU and multi-GPU detection & safety, multi-GPU model parallelism, dynamic MPS topology routing & truncation bounds, NISQ synthetic noise models, bipartite entanglement entropy, VQE/QAOA parameter binding latency, Quantum Volume heavy output probability analysis, OpenQASM 2.0 parsing and circuit interoperability, cross-platform power/energy telemetry, remote registry synchronization, and report exporters.
 
 To execute the full test suite, run:
 ```bash
@@ -404,32 +427,32 @@ platform win32 -- Python 3.13.3, pytest-9.1.1, pluggy-1.6.0
 rootdir: C:\Users\HP\Documents\PROJECT\QuaComp
 configfile: pyproject.toml
 plugins: anyio-4.14.2
-collected 192 items
+collected 200 items
 
 tests\test_accelerator.py .......                                        [  3%]
 tests\test_charts.py ....                                                [  5%]
 tests\test_comparator.py .......                                         [  9%]
-tests\test_cpp_fusion.py ...........                                     [ 15%]
-tests\test_cuda.py ..........s..........                                 [ 26%]
-tests\test_energy.py ....                                                [ 28%]
-tests\test_engine.py ......                                              [ 31%]
-tests\test_entanglement.py ...........                                   [ 36%]
-tests\test_gpu.py ...........                                            [ 42%]
-tests\test_memory.py .......                                             [ 46%]
-tests\test_model_parallelism.py .....                                    [ 48%]
-tests\test_mps.py ....                                                   [ 51%]
-tests\test_mps_topology.py .....                                         [ 53%]
-tests\test_native_integration.py .....                                   [ 56%]
-tests\test_noise.py ....                                                 [ 58%]
+tests\test_cpp_fusion.py ...........                                     [ 14%]
+tests\test_cuda.py ..........s..........                                 [ 25%]
+tests\test_energy.py ....                                                [ 27%]
+tests\test_engine.py ......                                              [ 30%]
+tests\test_entanglement.py ...........                                   [ 35%]
+tests\test_gpu.py ...........                                            [ 41%]
+tests\test_memory.py .......                                             [ 44%]
+tests\test_model_parallelism.py .....                                    [ 47%]
+tests\test_mps.py ....                                                   [ 49%]
+tests\test_mps_topology.py .....                                         [ 51%]
+tests\test_native_integration.py .....                                   [ 54%]
+tests\test_noise.py ...........                                          [ 59%]
 tests\test_parser.py ................................                    [ 75%]
-tests\test_physical_noise.py ........                                    [ 79%]
-tests\test_registry.py ...........                                       [ 84%]
-tests\test_reporter.py .........                                         [ 89%]
+tests\test_physical_noise.py .........                                   [ 80%]
+tests\test_registry.py ...........                                       [ 85%]
+tests\test_reporter.py .........                                         [ 90%]
 tests\test_scorer.py ...........                                         [ 95%]
 tests\test_ui.py ....                                                    [ 97%]
 tests\test_variational_qv.py .....                                       [100%]
 
-======================= 191 passed, 1 skipped in 35.29s =======================
+======================= 199 passed, 1 skipped in 34.38s =======================
 ```
 
 ---
