@@ -195,29 +195,41 @@ def apply_amplitude_damping_mcwf(
     rng: np.random.Generator
 ) -> np.ndarray:
     """
-    Apply stochastic amplitude damping jump (or conditioned no-jump evolution) in-place to statevector O(2^n).
+    Apply stochastic amplitude damping jump or conditioned no-jump drift evolution in-place to statevector O(2^n).
+    
+    Formalism:
+    - Kraus jump operator: K1 = sqrt(gamma) |0><1| (spontaneous emission |1> -> |0>)
+    - Kraus no-jump operator: K0 = diag(1, sqrt(1 - gamma)) (coherent phase and amplitude drift)
+    - Branch probability: p_jump = gamma * p1, where p1 = sum_{target=1} |psi|^2
     """
+    gamma = min(1.0, max(0.0, float(gamma)))
     if gamma <= 0.0:
         return state
+        
     axis = num_qubits - 1 - target
     s = state.reshape([2] * num_qubits)
     s_moved = np.moveaxis(s, axis, 0)
     
-    # Population of state |1> on target qubit
+    # Population of state |1> on target qubit: p1 = <psi| (|1><1|_target) |psi>
     p_one = float(np.sum(np.abs(s_moved[1]) ** 2))
     p_jump = min(1.0, max(0.0, gamma * p_one))
     
     r = float(rng.random())
     if r < p_jump and p_one > 1e-15:
-        # Jump occurred: |1> -> |0>
-        s_moved[0] = s_moved[1] / math.sqrt(p_one)
+        # Jump branch (K1): project |1> -> |0>, zero out |1>, and renormalize
+        v1 = s_moved[1].copy()
+        s_moved[0] = v1
         s_moved[1] = 0.0
+        norm = float(np.linalg.norm(state))
+        if norm > 0.0:
+            state /= norm
     else:
-        # No jump occurred: continuous E0 evolution (non-unitary decay followed by renormalization)
+        # No-jump drift branch (K0): non-unitary decay by sqrt(1 - gamma) on |1>, target=0 unchanged
         s_moved[1] *= math.sqrt(max(0.0, 1.0 - gamma))
         norm = float(np.linalg.norm(state))
         if norm > 0.0:
             state /= norm
+            
     return state
 
 

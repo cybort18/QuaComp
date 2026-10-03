@@ -283,13 +283,18 @@ where:
     - Single-Qubit Depolarizing Channel: With probability $1 - p$, gate proceeds error-free ($I$); with probability $p/3$, applies a stochastic Pauli jump ($X, Y, Z$).
     - Two-Qubit Depolarizing Channel: With probability $1 - p$, proceeds error-free ($II$); with probability $p/15$, applies one of the 15 non-identity 2-qubit Pauli operator pairs.
     - Thermal Relaxation ($T_1, T_2$):
-      - Amplitude damping (energy relaxation): Decays from state $\vert{}1\rangle$ to ground state $\vert{}0\rangle$ with jump probability $p_{\text{decay}} = 1 - e^{-t_g / T_1}$.
+      - Amplitude damping (energy relaxation): Evaluates spontaneous emission jump probability $p_{\text{jump}} = \gamma \cdot p_1$ where $\gamma = 1 - e^{-t_g / T_1}$ and $p_1 = \sum_{\text{target}=1} |\psi|^2$.
+        - Jump branch: Applies $K_1 = \sqrt{\gamma}|0\rangle\langle 1|$ (collapses $|1\rangle \to |0\rangle$) followed by statevector renormalization.
+        - No-jump drift branch: Applies non-unitary Kraus operator $K_0 = \text{diag}(1, \sqrt{1 - \gamma})$ followed by statevector renormalization, preserving exact open quantum system coherence and $T_2$ dynamics.
       - Pure dephasing: Applies stochastic phase flip ($Z$) with probability $p_{\text{phase}} = \frac{1 - e^{-t_g / T_\phi}}{2}$ where $1 / T_\phi = \max(0, 1/T_2 - 1/(2T_1))$.
+  - **Parallelized Trajectory Execution:**
+    - Automatically distributes trajectory shots across worker pools using `ProcessPoolExecutor` when $N_{\text{shots}} \ge 100$ and `num_workers > 1`, utilizing orthogonal `SeedSequence.spawn()` random streams to prevent inter-trajectory correlation. Single-process execution is maintained on CUDA GPU backends to prevent multi-processing driver context collisions.
   - **Stochastic Classical Readout Bit-Flip:**
     - Injects classical measurement bit-flips according to calibrated hardware readout confusion probabilities $P(0\vert{}1)$ and $P(1\vert{}0)$.
   - **Memory Scaling & Safety Guard:**
     - Guarantees strict $\mathcal{O}(2^n)$ memory allocation at all compute stages.
     - Pre-flight Density Matrix Safety Guard: If explicit `--noise-method density_matrix` is requested, automatically inspects qubit count and rejects execution for $n \ge 16$ qubits with `DensityMatrixMemoryError` to prevent operating system freezes.
+    - Pre-flight GPU VRAM 90% Safety Headroom: Enforces a 90% safety threshold on available VRAM to safeguard against driver memory fragmentation, with defensive exception handling automatically catching CUDA OOM runtime exceptions and falling back smoothly to CPU/NumPy.
   - **CLI Integration & Telemetry:**
     - Adds `--noise-method {trajectory,density_matrix}` (default: `trajectory`).
     - Adds `--shots <int>` (default: `1000`).

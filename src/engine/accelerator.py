@@ -370,17 +370,21 @@ class CUDABackend(BaseAccelerator):
         total_states = 1 << num_qubits
         bytes_needed = total_states * 16  # 16 bytes per cuDoubleComplex (complex128)
 
-        # Pre-flight VRAM safety check
+        # Pre-flight VRAM safety check with 90% headroom buffer (driver fragmentation margin)
         free_vram = self.get_free_vram()
-        if free_vram is not None and bytes_needed > free_vram:
-            req_gb = bytes_needed / (1024 ** 3)
-            free_gb = free_vram / (1024 ** 3)
-            raise InsufficientVRAMError(
-                f"Insufficient GPU VRAM to allocate {num_qubits}-qubit statevector: "
-                f"required {req_gb:.2f} GB ({bytes_needed:,} bytes), but only {free_gb:.2f} GB ({free_vram:,} bytes) free.",
-                required_bytes=bytes_needed,
-                available_bytes=free_vram
-            )
+        if free_vram is not None:
+            safe_vram = int(free_vram * 0.90)
+            if bytes_needed > safe_vram:
+                req_gb = bytes_needed / (1024 ** 3)
+                free_gb = free_vram / (1024 ** 3)
+                safe_gb = safe_vram / (1024 ** 3)
+                raise InsufficientVRAMError(
+                    f"Insufficient GPU VRAM to allocate {num_qubits}-qubit statevector: "
+                    f"required {req_gb:.2f} GB ({bytes_needed:,} bytes), but safe VRAM threshold (90% headroom for driver/fragmentation margin) "
+                    f"is {safe_gb:.2f} GB (free: {free_gb:.2f} GB, {free_vram:,} bytes).",
+                    required_bytes=bytes_needed,
+                    available_bytes=free_vram
+                )
 
         # 1. Try CuPy allocation
         try:

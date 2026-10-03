@@ -170,3 +170,48 @@ def test_to_trajectory_noise_model_and_simulation(sample_profile_path):
     assert sum(counts.values()) == 500
     assert "00" in counts and "11" in counts
 
+
+def test_simulate_trajectories_parallelization_and_seed_reproducibility(sample_profile_path):
+    """
+    Verify trajectory parallelization across multiple worker processes with SeedSequence:
+    1. Independent parallel execution with num_workers=2 produces identical results when given the same seed.
+    2. Statistical output counts are consistent with expected Bell state distribution ('00' and '11' dominate).
+    3. Trajectory returns metadata with workers=2.
+    """
+    from src.engine.simulator import simulate_trajectories
+    
+    model = PhysicalNoiseModel.from_json(sample_profile_path)
+    traj_model = model.to_trajectory_noise_model(active_qubits=[0, 1])
+    
+    qc = QuantumCircuit(2)
+    qc.h(0)
+    qc.cx(0, 1)
+    
+    shots = 400
+    
+    # Run 1: Parallel with num_workers=2, seed=42
+    res_parallel_1 = simulate_trajectories(qc, noise_model=traj_model, shots=shots, seed=42, num_workers=2)
+    assert res_parallel_1["success"] is True
+    assert res_parallel_1["workers"] == 2
+    assert sum(res_parallel_1["counts"].values()) == shots
+    
+    # Run 2: Parallel with same seed=42 and num_workers=2 -> must be 100% bit-for-bit identical
+    res_parallel_2 = simulate_trajectories(qc, noise_model=traj_model, shots=shots, seed=42, num_workers=2)
+    assert res_parallel_1["counts"] == res_parallel_2["counts"]
+    
+    # Run 3: Serial with num_workers=1, shots=shots
+    res_serial = simulate_trajectories(qc, noise_model=traj_model, shots=shots, seed=42, num_workers=1)
+    assert res_serial["success"] is True
+    assert res_serial["workers"] == 1
+    assert sum(res_serial["counts"].values()) == shots
+    
+    # Both parallel and serial show Bell state physics: dominant '00' and '11'
+    p00_par = res_parallel_1["counts"].get("00", 0) / shots
+    p11_par = res_parallel_1["counts"].get("11", 0) / shots
+    assert p00_par > 0.35 and p11_par > 0.35
+    
+    p00_ser = res_serial["counts"].get("00", 0) / shots
+    p11_ser = res_serial["counts"].get("11", 0) / shots
+    assert p00_ser > 0.35 and p11_ser > 0.35
+
+

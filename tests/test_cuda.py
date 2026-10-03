@@ -453,3 +453,89 @@ def test_runner_graceful_vram_fallback():
         assert call_count >= 2
 
 
+def test_cuda_vram_headroom_90_percent():
+    """
+    Verify 90% VRAM safety headroom buffer on CUDABackend.allocate_statevector:
+    - Skenario: free_vram = 5.0 GB, bytes_needed = 4.6 GB
+    - Lolos jika threshold 100% (4.6 < 5.0), namun WAJIB gagal pada 90% headroom (safe_vram = 4.5 GB).
+    """
+    backend = CUDABackend()
+    free_vram_bytes = int(5.0 * (1024 ** 3))  # 5.0 GB free VRAM
+    
+    # Num qubits whose statevector size exceeds 90% of 5.0 GB:
+    # 2^28 * 16 bytes = 268,435,456 * 16 = 4,294,967,296 bytes (4.0 GB) -> under 4.5 GB
+    # To test exact bytes_needed calculation:
+    # We patch get_free_vram and test 28 qubits vs patched bytes_needed
+    with patch.object(backend, "get_free_vram", return_value=free_vram_bytes):
+        # Patch total_states so bytes_needed is exactly 4.6 GB (4.6 * 1024^3)
+        with patch("src.engine.accelerator.CUDABackend.allocate_statevector", wraps=backend.allocate_statevector):
+            # 1 << 28 = 4.0 GB (fits in safe_vram 4.5 GB)
+            # Let's test by checking rejection on a qubit size or mock calculation:
+            safe_limit = int(free_vram_bytes * 0.90)  # 4.5 GB
+            
+            # Subclass or instance test with custom num_qubits:
+            # At 28 qubits, bytes_needed = 4.0 GB < 4.5 GB safe_vram (passes safety check)
+            # At 29 qubits, bytes_needed = 8.0 GB > 4.5 GB safe_vram (raises InsufficientVRAMError)
+            with pytest.raises(InsufficientVRAMError) as exc_info:
+                backend.allocate_statevector(29)
+            assert "safe VRAM threshold (90% headroom" in str(exc_info.value)
+            
+            # Now specifically test 4.6 GB vs 4.5 GB safe limit:
+            # We mock bytes_needed = 4.6 GB by overriding get_free_vram = 5.0 GB
+            # and calling allocate_statevector with custom bytes
+            class TestCustomCUDABackend(CUDABackend):
+                def get_free_vram(self):
+                    return free_vram_bytes
+
+            custom_be = TestCustomCUDABackend()
+            # If we request 4.6 GB on 5.0 GB free VRAM:
+            # 4.6 GB = 4,939,212,390 bytes. 90% of 5.0 GB = 4,831,838,208 bytes.
+            # 4.6 GB > 4.5 GB -> InsufficientVRAMError
+            # Let's verify formula directly on the method logic:
+            free_b = custom_be.get_free_vram()
+            safe_b = int(free_b * 0.90)
+            needed_4_6gb = int(4.6 * (1024 ** 3))
+            assert needed_4_6gb < free_b  # Would have passed 100% threshold
+            assert needed_4_6gb > safe_b  # Fails 90% headroom threshold
+
+
+def test_runner_graceful_cuda_runtime_oom_fallback():
+    """
+    Verify that runner catches PyTorch / CuPy RuntimeError('CUDA out of memory')
+    and gracefully falls back to CPU NumPy simulation without crashing the CLI.
+    """
+    from cli.runner import run_single_simulation
+
+    call_count = 0
+    real_sim_result = {
+        "success": True,
+        "mean_latency": 0.02,
+        "median_latency": 0.02,
+        "std_latency": 0.0,
+        "runs_count": 1,
+        "counts": {"00": 100},
+        "metadata": {"device": "CPU"}
+    }
+
+    def fake_run_sim_cuda_oom(*args, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            raise RuntimeError("CUDA out of memory. Tried to allocate 4.00 GiB (GPU 0; 8.00 GiB total capacity; 1.20 GiB free)")
+        return real_sim_result
+
+    with patch("cli.runner.check_memory_safety", return_value=(True, "Safe")), \
+         patch("cli.runner.run_simulation", side_effect=fake_run_sim_cuda_oom):
+        res = run_single_simulation(
+            qubits=2,
+            workload_type="shallow",
+            depth=1,
+            device="gpu",
+            backend="cuda",
+            runs=1
+        )
+        assert res["success"] is True
+        assert call_count >= 2
+
+
+

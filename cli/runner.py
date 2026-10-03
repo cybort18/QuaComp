@@ -164,9 +164,11 @@ def run_single_simulation(
                 backend=backend,
                 noise_method=noise_method
             )
-    except InsufficientVRAMError as vram_err:
+    except (InsufficientVRAMError, MemoryError, RuntimeError) as e:
+        if isinstance(e, RuntimeError) and "cuda out of memory" not in str(e).lower() and "out of memory" not in str(e).lower():
+            raise
         default_console.print(
-            f"[bold yellow]⚠️  VRAM Limit Exceeded:[/] {vram_err}\n"
+            f"[bold yellow]⚠️  VRAM Limit Exceeded / CUDA OOM:[/] {e}\n"
             f"[bold cyan]ℹ️  Automatically falling back to CPU / NumPy execution...[/]"
         )
         with EnergyProfiler() as energy_prof:
@@ -208,21 +210,40 @@ def run_single_simulation(
     overhead_ratio = 0.0
     if noise_level != "none" and sim_result["success"]:
         active_be.device_synchronize()
-        ideal_sim_result = run_simulation(
-            circuit, 
-            method=method, 
-            bond_dimension=bond_dimension, 
-            device=device,
-            noise_model=None, 
-            noise_level="none",
-            shots=shots,
-            runs=1,
-            workers=workers,
-            state_slicing=state_slicing,
-            blocking_qubits=blocking_qubits,
-            backend=backend,
-            noise_method="trajectory"
-        )
+        try:
+            ideal_sim_result = run_simulation(
+                circuit, 
+                method=method, 
+                bond_dimension=bond_dimension, 
+                device=device,
+                noise_model=None, 
+                noise_level="none",
+                shots=shots,
+                runs=1,
+                workers=workers,
+                state_slicing=state_slicing,
+                blocking_qubits=blocking_qubits,
+                backend=backend,
+                noise_method="trajectory"
+            )
+        except (InsufficientVRAMError, MemoryError, RuntimeError) as e:
+            if isinstance(e, RuntimeError) and "cuda out of memory" not in str(e).lower() and "out of memory" not in str(e).lower():
+                raise
+            ideal_sim_result = run_simulation(
+                circuit, 
+                method=method, 
+                bond_dimension=bond_dimension, 
+                device="cpu",
+                noise_model=None, 
+                noise_level="none",
+                shots=shots,
+                runs=1,
+                workers=workers,
+                state_slicing=False,
+                blocking_qubits=None,
+                backend="numpy",
+                noise_method="trajectory"
+            )
         active_be.device_synchronize()
 
         if ideal_sim_result["success"]:

@@ -1,7 +1,9 @@
+import os
 import time
 import math
-from typing import Any, Dict, List, Optional
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Any, Dict, List, Optional, Tuple
+import concurrent.futures
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
 import numpy as np
 from qiskit import QuantumCircuit, transpile
 from qiskit_aer import AerSimulator
@@ -15,12 +17,67 @@ from src.engine.noise import (
 )
 
 
+def _trajectory_worker_batch(
+    parsed_ops: List[Tuple[str, List[int], np.ndarray]],
+    num_qubits: int,
+    batch_shots: int,
+    traj_model: Optional[TrajectoryNoiseModel],
+    seed_seq: Any
+) -> Dict[str, int]:
+    """
+    Execute a batch of stochastic quantum trajectories independently on a single worker process or thread.
+    """
+    rng = np.random.default_rng(seed_seq)
+    worker_counts: Dict[str, int] = {}
+    
+    if traj_model is None:
+        sv = np.zeros(1 << num_qubits, dtype=np.complex128)
+        sv[0] = 1.0 + 0.0j
+        for name, q_idx, mat in parsed_ops:
+            if len(q_idx) == 1:
+                apply_gate_1q_to_statevector(sv, mat, q_idx[0], num_qubits)
+            elif len(q_idx) == 2:
+                apply_gate_2q_to_statevector(sv, mat, q_idx[0], q_idx[1], num_qubits)
+                
+        probs = np.abs(sv) ** 2
+        p_sum = float(np.sum(probs))
+        if p_sum > 0:
+            probs /= p_sum
+        sampled_indices = rng.choice(1 << num_qubits, size=batch_shots, p=probs)
+        for idx in sampled_indices:
+            bs = f"{int(idx):0{num_qubits}b}"
+            worker_counts[bs] = worker_counts.get(bs, 0) + 1
+    else:
+        for _ in range(batch_shots):
+            sv = np.zeros(1 << num_qubits, dtype=np.complex128)
+            sv[0] = 1.0 + 0.0j
+            for name, q_idx, mat in parsed_ops:
+                if len(q_idx) == 1:
+                    apply_gate_1q_to_statevector(sv, mat, q_idx[0], num_qubits)
+                elif len(q_idx) == 2:
+                    apply_gate_2q_to_statevector(sv, mat, q_idx[0], q_idx[1], num_qubits)
+                traj_model.apply_stochastic_gate_noise(sv, q_idx, name, rng)
+                
+            probs = np.abs(sv) ** 2
+            p_sum = float(np.sum(probs))
+            if p_sum > 0:
+                probs /= p_sum
+                
+            sample_idx = int(rng.choice(1 << num_qubits, p=probs))
+            raw_bs = f"{sample_idx:0{num_qubits}b}"
+            noisy_bs = traj_model.apply_readout_error(raw_bs, rng)
+            worker_counts[noisy_bs] = worker_counts.get(noisy_bs, 0) + 1
+            
+    return worker_counts
+
+
 def simulate_trajectories(
     circuit: QuantumCircuit,
     noise_model: Any = None,
     shots: int = 1024,
     backend: str = 'auto',
-    seed: Optional[int] = None
+    seed: Optional[int] = None,
+    num_workers: Optional[int] = None
 ) -> Dict[str, Any]:
     """
     Execute quantum circuit simulation using the Monte Carlo Wavefunction (MCWF) /
@@ -32,6 +89,7 @@ def simulate_trajectories(
         shots (int): Number of trajectory paths to sample (default 1024).
         backend (str): Compute accelerator backend ('auto', 'cuda', 'metal', 'cpp', 'numpy').
         seed (Optional[int]): Random seed for stochastic jump reproducibility.
+        num_workers (Optional[int]): Number of parallel worker threads/processes for batch trajectory sampling.
         
     Returns:
         Dict[str, Any]: Execution metrics and measurement counts.
@@ -59,7 +117,6 @@ def simulate_trajectories(
         traj_model = noise_model.to_trajectory_noise_model(active_qubits=list(range(num_qubits)))
         
     t0 = time.perf_counter()
-    rng = np.random.default_rng(seed)
     
     # Clean circuit for execution (remove measurements for pure statevector propagation)
     circ_clean = circuit.copy()
@@ -82,47 +139,53 @@ def simulate_trajectories(
         except Exception:
             pass
             
+    # Determine parallel worker allocation:
+    # On CUDA GPU, force single-process to avoid CUDA context multi-processing collisions
+    if backend.lower() == 'cuda' or getattr(active_be, "name", "").lower() == "cuda":
+        effective_workers = 1
+    elif num_workers is not None:
+        effective_workers = max(1, int(num_workers))
+    else:
+        effective_workers = min(os.cpu_count() or 1, 8)
+        
     counts: Dict[str, int] = {}
     
-    if traj_model is None:
-        # Ideal trajectory: compute deterministic statevector once, then sample bitstrings
-        sv = np.zeros(1 << num_qubits, dtype=np.complex128)
-        sv[0] = 1.0 + 0.0j
-        for name, q_idx, mat in parsed_ops:
-            if len(q_idx) == 1:
-                apply_gate_1q_to_statevector(sv, mat, q_idx[0], num_qubits)
-            elif len(q_idx) == 2:
-                apply_gate_2q_to_statevector(sv, mat, q_idx[0], q_idx[1], num_qubits)
-                
-        probs = np.abs(sv) ** 2
-        p_sum = float(np.sum(probs))
-        if p_sum > 0:
-            probs /= p_sum
-        sampled_indices = rng.choice(1 << num_qubits, size=shots, p=probs)
-        for idx in sampled_indices:
-            bs = f"{int(idx):0{num_qubits}b}"
-            counts[bs] = counts.get(bs, 0) + 1
+    if shots < 100 or effective_workers <= 1:
+        # Serial execution in main thread
+        counts = _trajectory_worker_batch(parsed_ops, num_qubits, shots, traj_model, seed)
     else:
-        # Stochastic quantum trajectories loop: exactly 1 statevector of size 2^n in memory at a time
-        for _ in range(shots):
-            sv = np.zeros(1 << num_qubits, dtype=np.complex128)
-            sv[0] = 1.0 + 0.0j
-            for name, q_idx, mat in parsed_ops:
-                if len(q_idx) == 1:
-                    apply_gate_1q_to_statevector(sv, mat, q_idx[0], num_qubits)
-                elif len(q_idx) == 2:
-                    apply_gate_2q_to_statevector(sv, mat, q_idx[0], q_idx[1], num_qubits)
-                traj_model.apply_stochastic_gate_noise(sv, q_idx, name, rng)
-                
-            probs = np.abs(sv) ** 2
-            p_sum = float(np.sum(probs))
-            if p_sum > 0:
-                probs /= p_sum
-                
-            sample_idx = int(rng.choice(1 << num_qubits, p=probs))
-            raw_bs = f"{sample_idx:0{num_qubits}b}"
-            noisy_bs = traj_model.apply_readout_error(raw_bs, rng)
-            counts[noisy_bs] = counts.get(noisy_bs, 0) + 1
+        # Parallel execution across worker pool with orthogonal SeedSequence streams
+        base_shots = shots // effective_workers
+        rem = shots % effective_workers
+        batch_sizes = [base_shots + (1 if i < rem else 0) for i in range(effective_workers)]
+        batch_sizes = [b for b in batch_sizes if b > 0]
+        actual_workers = len(batch_sizes)
+        
+        ss = np.random.SeedSequence(seed)
+        child_seeds = ss.spawn(actual_workers)
+        
+        batch_results = []
+        try:
+            with ProcessPoolExecutor(max_workers=actual_workers) as executor:
+                futures = [
+                    executor.submit(_trajectory_worker_batch, parsed_ops, num_qubits, batch_sizes[i], traj_model, child_seeds[i])
+                    for i in range(actual_workers)
+                ]
+                for fut in as_completed(futures):
+                    batch_results.append(fut.result())
+        except Exception:
+            batch_results = []
+            with ThreadPoolExecutor(max_workers=actual_workers) as executor:
+                futures = [
+                    executor.submit(_trajectory_worker_batch, parsed_ops, num_qubits, batch_sizes[i], traj_model, child_seeds[i])
+                    for i in range(actual_workers)
+                ]
+                for fut in as_completed(futures):
+                    batch_results.append(fut.result())
+                    
+        for b_counts in batch_results:
+            for bs, cnt in b_counts.items():
+                counts[bs] = counts.get(bs, 0) + cnt
             
     active_be.device_synchronize()
     latency = time.perf_counter() - t0
@@ -134,6 +197,7 @@ def simulate_trajectories(
         "method": "trajectory",
         "noise_method": "trajectory",
         "shots": shots,
+        "workers": effective_workers,
         "qubits": num_qubits,
         "memory_saved_ratio": saved_ratio,
         "noise_model": traj_model.name if traj_model else "None",
@@ -151,7 +215,7 @@ def simulate_trajectories(
         "runs_count": 1,
         "counts": counts,
         "device": backend.upper(),
-        "workers": 1,
+        "workers": effective_workers,
         "native_kernel_used": False,
         "accelerator_backend": active_be.tier_label,
         "accelerator_badge": None,
@@ -347,7 +411,8 @@ def run_simulation(
                         noise_model=traj_model,
                         shots=shots,
                         backend=backend,
-                        seed=None
+                        seed=None,
+                        num_workers=workers
                     )
                     latencies.append(t_res["latency"])
                     last_counts = t_res["counts"]

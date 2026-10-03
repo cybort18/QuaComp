@@ -300,3 +300,51 @@ def test_density_matrix_safety_guard():
     with pytest.raises(DensityMatrixMemoryError):
         run_simulation(qc_16, noise_method="density_matrix", noise_level="medium")
 
+
+def test_amplitude_damping_no_jump_drift_and_normalization():
+    """
+    Verify exact Kraus physics for amplitude damping:
+    1. Conditioned no-jump branch (K0): state |1> amplitude shrinks by sqrt(1 - gamma)
+       relative to |0>, and the full state is renormalized to 1.0 +- 1e-12.
+    2. Jump branch (K1): state transitions strictly to |0>, |1> is annihilated,
+       and state is renormalized to 1.0 +- 1e-12.
+    """
+    import math
+    from unittest.mock import MagicMock
+    from src.engine.noise import apply_amplitude_damping_mcwf
+    
+    # 1. Test No-Jump Drift Branch (r >= p_jump)
+    gamma = 0.36
+    sqrt_1_minus_gamma = math.sqrt(1.0 - gamma)  # 0.8
+    
+    # Prepare superposition state (|0> + |1>) / sqrt(2)
+    state = np.array([1.0 / math.sqrt(2.0), 1.0 / math.sqrt(2.0)], dtype=np.complex128)
+    
+    # Force no-jump: r = 0.999 (since p_one = 0.5, p_jump = 0.5 * 0.36 = 0.18 < 0.999)
+    mock_rng_no_jump = MagicMock()
+    mock_rng_no_jump.random.return_value = 0.999
+    
+    apply_amplitude_damping_mcwf(state, target=0, num_qubits=1, gamma=gamma, rng=mock_rng_no_jump)
+    
+    # Verify state norm is exactly 1.0 +- 1e-12
+    norm_sq = float(np.sum(np.abs(state) ** 2))
+    assert abs(norm_sq - 1.0) < 1e-12, f"Norm squared {norm_sq} != 1.0"
+    
+    # Verify amplitude ratio |psi[1]| / |psi[0]| == sqrt(1 - gamma)
+    ratio = abs(state[1]) / abs(state[0])
+    assert abs(ratio - sqrt_1_minus_gamma) < 1e-12, f"Ratio {ratio} != {sqrt_1_minus_gamma}"
+    
+    # 2. Test Jump Branch (r < p_jump)
+    state_jump = np.array([1.0 / math.sqrt(2.0), 1.0 / math.sqrt(2.0)], dtype=np.complex128)
+    mock_rng_jump = MagicMock()
+    mock_rng_jump.random.return_value = 0.05  # < 0.18
+    
+    apply_amplitude_damping_mcwf(state_jump, target=0, num_qubits=1, gamma=gamma, rng=mock_rng_jump)
+    
+    # Jump must collapse target to |0>
+    assert abs(state_jump[0]) == pytest.approx(1.0, abs=1e-12)
+    assert abs(state_jump[1]) == pytest.approx(0.0, abs=1e-12)
+    norm_jump_sq = float(np.sum(np.abs(state_jump) ** 2))
+    assert abs(norm_jump_sq - 1.0) < 1e-12
+
+
