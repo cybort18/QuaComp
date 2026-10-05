@@ -32,3 +32,15 @@ When writing or editing Markdown files (`README.md`, `PRD.md`, docs, etc.) that 
 - Maintain 100% test coverage across all test suites (`pytest`).
 - Preserve Graceful Fallback: All native accelerations (C++ extension, Apple Metal, NVIDIA CUDA) must fall back cleanly to CPU/Python if native libraries or GPUs are unavailable.
 - Do not bump the version beyond `1.0.0` unless explicitly requested.
+
+---
+
+## 3. Professional Tone & No Emojis / Emotes Policy (Strict)
+
+- **Zero Emojis / Emotes Across Entire Project**:
+  - **NEVER** use emojis or unicode emotes (e.g., ⚡, 🚀, 🔬, ⚠️, ℹ️, ✨, 🛠️) in documentation (`README.md`, `PRD.md`), docstrings, code comments, or CLI terminal output messages.
+  - *Rationale*: Emojis can create the impression of unvetted, AI-generated content. Use clean, professional text tags instead (e.g., `[INFO]`, `[WARNING]`, `[ERROR]`).
+- **Objective, Non-Hyperbolic Language**:
+  - Avoid hyperbolic, sensationalized, or marketing-style language (e.g., "zero crashes", "push boundaries", "revolutionary", "flawless", "instantaneous").
+  - Maintain a measured, rigorous, scientific, and engineering-grounded tone. State capabilities, operational limits, complexity bounds, and fallback behaviors factually and transparently to prevent misunderstandings.
+

@@ -10,8 +10,8 @@
 
 # QuaComp
 
-**High-Performance Quantum Computer Simulation Benchmark on Local Hardware**  
-*Profile, stress-test, and push simulation boundaries up to 28+ qubits with native GPU/SIMD acceleration, Monte Carlo trajectory noise, and zero Out-Of-Memory crashes.*
+**Quantum Computing Simulation Benchmark on Local Hardware**  
+*Profile and benchmark quantum circuit simulations across statevector and Matrix Product State (MPS) representations with native GPU/SIMD acceleration, Monte Carlo trajectory noise, and automated memory management.*
 
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![CI](https://github.com/cybort18/QuaComp/actions/workflows/ci.yml/badge.svg)](https://github.com/cybort18/QuaComp/actions)
@@ -24,24 +24,24 @@
 ---
 
 ## Table of Contents
-- [⚡ Quick Start (Under 30 Seconds)](#-quick-start-under-30-seconds)
-- [✨ Why QuaComp? (Key Highlights)](#-why-quacomp-key-highlights)
-- [🚀 Common CLI Recipes](#-common-cli-recipes)
-- [🛠️ Hardware Compatibility Matrix](#️-hardware-compatibility-matrix)
-- [📖 Command Flags Reference](#-command-flags-reference)
-- [🔬 Architectural & Scientific Deep-Dives](#-architectural--scientific-deep-dives)
+- [Quick Start](#quick-start)
+- [Key Capabilities](#key-capabilities)
+- [Common CLI Usage](#common-cli-usage)
+- [Hardware Compatibility Matrix](#hardware-compatibility-matrix)
+- [Command Flags Reference](#command-flags-reference)
+- [Architecture & Scientific Methodology](#architecture--scientific-methodology)
   - [1. Monte Carlo Wavefunction (MCWF) Trajectory Noise Formalism](#1-monte-carlo-wavefunction-mcwf-trajectory-noise-formalism)
   - [2. Native Kernel Acceleration & Multi-Tier Fallback Hierarchy](#2-native-kernel-acceleration--multi-tier-fallback-hierarchy)
   - [3. Tensor Network Matrix Product State (MPS) & Entanglement Entropy](#3-tensor-network-matrix-product-state-mps--entanglement-entropy)
   - [4. Scoring Engine: QuaComp Synthetic Index (QSI) & Academic Suite](#4-scoring-engine-quacomp-synthetic-index-qsi--academic-suite)
   - [5. Project Repository Architecture](#5-project-repository-architecture)
-- [🧪 Running Tests](#-running-tests)
-- [📊 Reference Hardware Benchmarks](#-reference-hardware-benchmarks)
-- [🤝 Contribution Guide & License](#-contribution-guide--license)
+- [Running Tests](#running-tests)
+- [Reference Hardware Benchmarks](#reference-hardware-benchmarks)
+- [Contribution Guide & License](#contribution-guide--license)
 
 ---
 
-## ⚡ Quick Start (Under 30 Seconds)
+## Quick Start
 
 ### 1. Install QuaComp
 ```bash
@@ -52,7 +52,7 @@ cd QuaComp
 # Install in editable mode (auto-compiles C++ extension if MSVC/GCC/Clang is available)
 pip install -e .
 ```
-*(No C++ compiler? No problem. QuaComp automatically falls back to optimized NumPy/CPython with zero installation errors).*
+*(If a C++ compiler is not present, QuaComp automatically uses the vectorized NumPy/CPython implementation).*
 
 ### 2. Run Your First Benchmark
 ```bash
@@ -60,7 +60,7 @@ pip install -e .
 quacomp --quick --chart
 ```
 
-Output charts are instantly generated at 300 DPI in `results/`:
+Benchmark plots are saved at 300 DPI in `results/`:
 
 | Execution Latency Scaling (Mean ± Std Dev) | Memory Footprint & RAM Safety Threshold |
 | :---: | :---: |
@@ -68,53 +68,53 @@ Output charts are instantly generated at 300 DPI in `results/`:
 
 ---
 
-## ✨ Why QuaComp? (Key Highlights)
+## Key Capabilities
 
-| Dimension / Feature | QuaComp Capability | Traditional Simulators / Benefit |
+| Dimension / Feature | QuaComp Implementation | Standard Approach / Context |
 | :--- | :--- | :--- |
-| **Noise Simulation** | **Monte Carlo Wavefunction (MCWF)**: O(2^n) memory, up to 28 qubits on 16 GB RAM | Density Matrix O(4^n) collapses at 14–15 qubits due to exponential memory wall |
-| **Hardware Acceleration** | Multi-tier: NVIDIA CUDA (`fusion.cu`), Apple Metal (`fusion.metal`), C++ SIMD, NumPy fallback | Single-vendor locked or CPU-only with no graceful multi-tier fallback |
-| **Memory Safety** | Pre-flight RAM & VRAM guard (85% RAM limit, 90% VRAM headroom) | Unchecked allocations cause silent OOM system freezes and OS crashes |
-| **Large-Scale Circuits** | Matrix Product State (MPS, bond dimension χ ≤ 128) up to 100+ qubits | Statevectors exceed physical RAM above 30 qubits |
-| **Standard Circuit Input** | Zero-dependency native OpenQASM 2.0 parser & bi-directional Qiskit bridge | Locked to proprietary circuit builders |
-| **Scientific Standards** | Dual-Mode Scoring: QSI (hardware index) & Academic Suite (kGates/s, QV, EDP) | Proprietary, uncalibrated, or single-dimension metrics |
-| **Green Computing** | Hardware energy profiling (Linux RAPL microjoules / Windows Dynamic TDP) | No power or Energy-per-Quantum-Operation (EQO) telemetry |
+| **Noise Simulation** | **Monte Carlo Wavefunction (MCWF)**: O(2^n) memory, up to 28 qubits on 16 GB RAM | Density Matrix O(4^n) typically exceeds available RAM beyond 14–15 qubits |
+| **Hardware Acceleration** | Multi-tier: NVIDIA CUDA (`fusion.cu`), Apple Metal (`fusion.metal`), C++ SIMD, NumPy fallback | Often single-backend or lacks automated multi-tier fallback |
+| **Memory Safety** | Pre-flight RAM & VRAM guard (85% RAM limit, 90% VRAM headroom) | Unchecked allocations may cause out-of-memory errors or system termination |
+| **Large-Scale Circuits** | Matrix Product State (MPS, bond dimension χ ≤ 128) for low-entanglement circuits | Statevector memory scales exponentially (exceeding ~16 GB at 30 qubits) |
+| **Standard Circuit Input** | Built-in OpenQASM 2.0 parser & bi-directional Qiskit conversion | Often requires external converter scripts |
+| **Benchmarking Metrics** | Dual-Mode Scoring: QSI (hardware index) & Academic Suite (kGates/s, QV, EDP) | Often limited to single-dimension metrics (such as wall-clock time) |
+| **Energy Profiling** | Hardware energy profiling (Linux RAPL microjoules / Windows Dynamic TDP) | Energy telemetry typically not integrated |
 
 ---
 
-## 🚀 Common CLI Recipes
+## Common CLI Usage
 
 ```bash
-# 1. Quick Benchmark with Visual Plots
+# 1. Quick Benchmark with Telemetry Plots
 quacomp --quick --chart
 
-# 2. NVIDIA CUDA GPU Acceleration with Single-Pass Gate Fusion
+# 2. NVIDIA CUDA Acceleration with Gate Fusion
 quacomp --custom --qubits 24 --backend cuda
 
-# 3. Monte Carlo Wavefunction Quantum Trajectories (O(2^n) Memory, 1000 Shots)
+# 3. Monte Carlo Wavefunction Quantum Trajectories (1000 Shots)
 quacomp --custom --qubits 20 --noise-level medium --noise-method trajectory --shots 1000
 
-# 4. Real Physical QPU Noise Calibration (IBM Brisbane 127-Qubit Snapshot)
+# 4. Physical QPU Noise Calibration (IBM Brisbane Snapshot)
 quacomp --quick --noise-profile ibm_brisbane_sample
 
-# 5. Simulate 50-Qubit Circuit with Matrix Product State (MPS, 99.9% RAM Savings)
+# 5. Simulate 50-Qubit Circuit with Matrix Product State (MPS)
 quacomp --custom --qubits 50 --method mps --bond-dim 64
 
-# 6. Ingest & Benchmark an Industry-Standard OpenQASM 2.0 Circuit File
+# 6. Benchmark an OpenQASM 2.0 Circuit File
 quacomp --qasm benchmarks/bell_state.qasm --runs 3
 
-# 7. Quantum Volume Benchmark with Heavy Output Probability (h_prob > 2/3)
+# 7. Quantum Volume Benchmark with Heavy Output Probability
 quacomp --custom --qubits 4 --qv
 
-# 8. Compare Local Machine Performance Against an Enterprise Baseline
+# 8. Compare Local Machine Performance Against a Reference Baseline
 quacomp --quick --compare --target apple_m4_max
 ```
 
-> *Tip: You can also execute via `python -m cli`.*
+> *Note: Execution can also be invoked via `python -m cli`.*
 
 ---
 
-## 🛠️ Hardware Compatibility Matrix
+## Hardware Compatibility Matrix
 
 | Hardware Platform | Accelerator Engine | Runtime Technology | Supported OS | Graceful Fallback Mode |
 | :--- | :--- | :--- | :--- | :--- |
@@ -125,7 +125,7 @@ quacomp --quick --compare --target apple_m4_max
 
 ---
 
-## 📖 Command Flags Reference
+## Command Flags Reference
 
 | Flag | Options / Default | Description |
 | :--- | :--- | :--- |
@@ -143,10 +143,10 @@ quacomp --quick --compare --target apple_m4_max
 | `--shots` | `INT` (default: `1000`) | Number of stochastic quantum trajectories for Monte Carlo ensemble averaging. |
 | `--noise-profile` | `PATH` or alias | Ingest real physical QPU noise calibration profile with analytical Kraus representation. |
 | `--qasm` | `PATH` | Path to OpenQASM 2.0 file (`.qasm`) for standard circuit benchmark ingestion. |
-| `--entropy` | N/A | Calculates bipartite Von Neumann entanglement entropy (supports Native MPS up to 100+ qubits). |
+| `--entropy` | N/A | Calculates bipartite Von Neumann entanglement entropy (supports MPS for low-entanglement circuits). |
 | `--compare` | `[FILE1] [FILE2]` | Side-by-side relative benchmark comparison between two JSON runs or against a live run. |
 | `--target` | `apple_m3`, `apple_m4_max`, `nvidia_h100`, etc. | Target reference baseline alias or file path for `--compare`. |
-| `--fetch-baselines` | N/A | Synchronize enterprise comparison baselines from QuaComp remote registry. |
+| `--fetch-baselines` | N/A | Synchronizes reference comparison baselines from QuaComp repository registry. |
 | `--workers` | `INT` (default: `1`) | Parallel distributed worker threads/processes for batch trajectory sampling. |
 | `--runs` | `INT` (default: `3`) | Number of benchmark iterations per circuit for statistical mean/std calculation. |
 | `--chart` | N/A | Automatically generates PNG telemetry chart plots in `results/`. |
@@ -154,7 +154,7 @@ quacomp --quick --compare --target apple_m4_max
 
 ---
 
-## 🔬 Architectural & Scientific Deep-Dives
+## Architecture & Scientific Methodology
 
 Click any section below to expand in-depth mathematical formulations and architectural designs:
 
@@ -166,12 +166,12 @@ Standard open quantum systems model noisy evolution via the density matrix $\rho
 
 | Qubits (n) | Statevector (O(2^n), Trajectory) | Density Matrix (O(4^n), Classical) | Feasibility on 16 GB RAM |
 | :---: | :---: | :---: | :--- |
-| **10** | 16 KB | 16 MB | Both methods instantaneous |
-| **14** | 256 KB | 4 GB | Practical upper ceiling for Density Matrix |
-| **16** | 1.05 MB | 64 GB | Density Matrix triggers OOM (Blocked by Safety Guard) |
-| **20** | 16.78 MB | 16 TB | **MCWF Trajectory Runs Smoothly** |
-| **24** | 268.44 MB | 4.3 PB | **MCWF Trajectory Runs Smoothly** |
-| **28** | 4.29 GB | 1,099.5 PB | **MCWF Trajectory Runs Smoothly** (Safe on 16 GB RAM) |
+| **10** | 16 KB | 16 MB | Low memory footprint for both methods |
+| **14** | 256 KB | 4 GB | Practical limit for density matrix on standard systems |
+| **16** | 1.05 MB | 64 GB | Density matrix exceeds 16 GB RAM (Blocked by pre-flight guard) |
+| **20** | 16.78 MB | 16 TB | Supported via statevector trajectory scaling |
+| **24** | 268.44 MB | 4.3 PB | Supported via statevector trajectory scaling |
+| **28** | 4.29 GB | 1,099.5 PB | Supported on 16 GB RAM systems |
 
 ### Stochastic Kraus Sampling & Non-Unitary No-Jump Drift
 For each quantum gate $U$ with Kraus operators $\{K_0, K_1, \dots, K_m\}$ where $\sum_k K_k^\dagger K_k = I$:
@@ -206,10 +206,10 @@ QuaComp scans circuit DAGs to identify sequential 1-qubit and 2-qubit operations
 $$U_{\text{fused}} = U_k \times U_{k-1} \times \dots \times U_1$$
 
 ### Native Compute Engine Pipeline
-1. **NVIDIA CUDA Engine (`src/engine/cuda/fusion.cu`)**: Custom kernels manipulating 128-bit `cuDoubleComplex` with coalesced global memory access, unrolled bit twiddling, 90% safe VRAM headroom buffer, and automatic PyTorch/CuPy CUDA OOM fallback.
+1. **NVIDIA CUDA Engine (`src/engine/cuda/fusion.cu`)**: Custom CUDA kernels manipulating 128-bit `cuDoubleComplex` with coalesced memory access, pre-flight VRAM headroom checking, and fallback to CPU upon memory limits.
 2. **Apple Metal Engine (`src/engine/shaders/fusion.metal`)**: MSL compute pipeline executing unitary gate fusion on Apple Silicon GPU unified memory.
 3. **C++ SIMD Extension (`quacomp_cpp`)**: Pybind11-compiled unrolled complex matrix arithmetic.
-4. **CPython / NumPy Fallback**: Vectorized array operations guaranteeing 100% execution on any host environment.
+4. **CPython / NumPy Fallback**: Vectorized array operations providing baseline compatibility across platforms.
 
 </details>
 
@@ -221,7 +221,7 @@ Represents the quantum statevector as an entangled chain of tensors:
 
 $$|\psi\rangle = \sum_{i_1, \dots, i_n} A^{[1] i_1} A^{[2] i_2} \dots A^{[n] i_n} |i_1 \dots i_n\rangle$$
 
-Bond dimension $\chi$ is dynamically truncated via Singular Value Decomposition (SVD), compressing state memory from $2^n \times 16$ bytes down to $\mathcal{O}(n \cdot \chi^2)$ bytes (up to **99.9% RAM savings** for 30–100+ qubits).
+Bond dimension $\chi$ is dynamically truncated via Singular Value Decomposition (SVD), compressing state memory from $2^n \times 16$ bytes down to $\mathcal{O}(n \cdot \chi^2)$ bytes for low-entanglement quantum states.
 
 ### Bipartite Von Neumann Entanglement Entropy
 
@@ -267,10 +267,10 @@ QuaComp/
 ├── benchmarks/             # Standard OpenQASM 2.0 fixtures (Bell, GHZ, QFT, Teleportation)
 ├── cli/                    # CLI dispatcher, runners (Quick, Full, Custom), and comparison UI
 ├── results/
-│   ├── noise_profiles/     # Real physical QPU calibration snapshots (IBM Brisbane 127Q)
+│   ├── noise_profiles/     # Physical QPU calibration snapshots (IBM Brisbane 127Q)
 │   └── registry/           # Reference hardware benchmark baselines (Apple M3/M4, Ryzen, H100)
 ├── src/
-│   ├── comparator/         # Relative differencing engine and enterprise baseline registry
+│   ├── comparator/         # Relative comparison engine and reference baseline registry
 │   ├── engine/
 │   │   ├── accelerator.py  # Unified GPU (Metal/CUDA) and C++ accelerator dispatcher
 │   │   ├── circuits.py     # Procedural workloads (Shallow, Deep, QFT, VQE, QAOA, QV)
@@ -279,7 +279,7 @@ QuaComp/
 │   │   ├── entanglement.py # Von Neumann entropy & MPS topological router
 │   │   ├── mps.py          # Matrix Product State engine & RAM savings profiler
 │   │   ├── noise.py        # MCWF trajectory noise model & in-place statevector kernels
-│   │   ├── parser.py       # Zero-dependency OpenQASM 2.0 parser & AST evaluator
+│   │   ├── parser.py       # Built-in OpenQASM 2.0 parser & AST evaluator
 │   │   ├── physical_noise.py # Physical QPU noise ingestion & Kraus generator
 │   │   └── simulator.py    # Aer Simulator wrapper & multi-worker trajectory runner
 │   ├── profiler/           # Hardware energy (RAPL/TDP), pre-flight RAM/VRAM guard, and telemetry
@@ -292,7 +292,7 @@ QuaComp/
 
 ---
 
-## 🧪 Running Tests
+## Running Tests
 
 QuaComp maintains 100% test coverage across all features with `pytest`:
 
@@ -336,7 +336,7 @@ tests\test_variational_qv.py .....                                       [100%]
 
 ---
 
-## 📊 Reference Hardware Benchmarks
+## Reference Hardware Benchmarks
 
 Sample benchmark telemetry profiles are committed in `results/registry/`:
 
@@ -349,14 +349,14 @@ Sample benchmark telemetry profiles are committed in `results/registry/`:
 
 ---
 
-## 🤝 Contribution Guide & License
+## Contribution Guide & License
 
 Contributions are welcome! Please follow these steps:
 1. Fork the project.
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`).
+2. Create your feature branch (`git checkout -b feature/new-feature`).
 3. Verify all tests pass (`python -m pytest`).
-4. Commit your changes (`git commit -m 'feat: add AmazingFeature'`).
-5. Push to the branch (`git push origin feature/AmazingFeature`) and open a Pull Request.
+4. Commit your changes (`git commit -m 'feat: add new feature'`).
+5. Push to the branch (`git push origin feature/new-feature`) and open a Pull Request.
 
 For detailed technical specifications and design directives, refer to the [Product Requirement Document (PRD.md)](PRD.md).
 

@@ -19,3 +19,8 @@ To ensure 100% flawless LaTeX math rendering on GitHub:
    - Never place LaTeX math (`$...$`) inside Markdown table cells.
    - Table column separators (`|`) conflict with Dirac kets/bras (`|0\rangle`) and conditional probabilities (`P(A|B)`).
    - Use standard Unicode symbols instead: `→`, `±`, `μs`, `×`, `≤`, `≥`, `√`.
+
+4. **Zero Emojis / Emotes & Professional Tone**:
+   - Never use emojis or unicode emotes (e.g., ⚡, 🚀, 🔬, ⚠️, ℹ️, ✨, 🛠️) in documentation (`README.md`, `PRD.md`), docstrings, code comments, or CLI terminal output messages. Emojis can create an impression of unvetted, AI-generated code.
+   - Avoid hyperbolic, sensationalized, or marketing language. Keep all statements objective, mathematically accurate, and engineering-grounded.
+

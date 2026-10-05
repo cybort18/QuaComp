@@ -168,8 +168,8 @@ def run_single_simulation(
         if isinstance(e, RuntimeError) and "cuda out of memory" not in str(e).lower() and "out of memory" not in str(e).lower():
             raise
         default_console.print(
-            f"[bold yellow]⚠️  VRAM Limit Exceeded / CUDA OOM:[/] {e}\n"
-            f"[bold cyan]ℹ️  Automatically falling back to CPU / NumPy execution...[/]"
+            f"[bold yellow][WARNING] VRAM Limit Exceeded / CUDA OOM:[/] {e}\n"
+            f"[bold cyan][INFO] Automatically falling back to CPU / NumPy execution...[/]"
         )
         with EnergyProfiler() as energy_prof:
             sim_result = run_simulation(
