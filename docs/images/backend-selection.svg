@@ -1,0 +1,116 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 620" width="100%" height="100%">
+  <defs>
+    <style>
+      .bg { fill: #0d1117; }
+      .title { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 20px; font-weight: 700; fill: #f0f6fc; }
+      .subtitle { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 12px; fill: #8b949e; }
+      .node { rx: 6px; ry: 6px; stroke-width: 1.2px; }
+      .node-req { fill: #161b22; stroke: #58a6ff; }
+      .node-check { fill: #161b22; stroke: #d29922; }
+      .node-backend { fill: #12283a; stroke: #3fb950; }
+      .node-fallback { fill: #21262d; stroke: #8b949e; }
+      .text-head { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 13px; font-weight: 600; fill: #f0f6fc; }
+      .text-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11px; fill: #8b949e; }
+      .text-check { font-family: 'SFMono-Regular', Consolas, Menlo, monospace; font-size: 10px; fill: #d29922; }
+      .text-success { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11px; font-weight: 600; fill: #3fb950; }
+      .arrow { stroke: #58a6ff; stroke-width: 1.5; fill: none; marker-end: url(#bs-arrow-blue); }
+      .arrow-pass { stroke: #3fb950; stroke-width: 1.5; fill: none; marker-end: url(#bs-arrow-green); }
+      .arrow-fail { stroke: #8b949e; stroke-width: 1.5; stroke-dasharray: 4 3; fill: none; marker-end: url(#bs-arrow-gray); }
+    </style>
+    <marker id="bs-arrow-blue" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto">
+      <polygon points="0 0, 7 2.5, 0 5" fill="#58a6ff" />
+    </marker>
+    <marker id="bs-arrow-green" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto">
+      <polygon points="0 0, 7 2.5, 0 5" fill="#3fb950" />
+    </marker>
+    <marker id="bs-arrow-gray" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto">
+      <polygon points="0 0, 7 2.5, 0 5" fill="#8b949e" />
+    </marker>
+  </defs>
+
+  <rect width="960" height="620" class="bg" />
+
+  <text x="40" y="42" class="title">Hardware Backend Resolution &amp; Fallback Dispatch</text>
+  <text x="40" y="62" class="subtitle">Dynamic hardware detection hierarchy ensuring execution stability across diverse platforms</text>
+
+  <!-- User Request Input -->
+  <rect x="40" y="100" width="220" height="70" class="node node-req" />
+  <text x="55" y="126" class="text-head">Backend Request</text>
+  <text x="55" y="145" class="text-body">--backend auto (default)</text>
+  <text x="55" y="158" class="text-body">or explicit: cuda, metal, cpp, numpy</text>
+
+  <line x1="260" y1="135" x2="310" y2="135" class="arrow" />
+
+  <!-- Tier 1: CUDA Check -->
+  <rect x="310" y="100" width="280" height="74" class="node node-check" />
+  <text x="325" y="122" class="text-check">TIER 1: NVIDIA CUDA QUERY</text>
+  <text x="325" y="142" class="text-head">CuPy / PyTorch &amp; VRAM Headroom</text>
+  <text x="325" y="159" class="text-body">Driver active &amp; free VRAM &gt;= 10% safety buffer</text>
+
+  <!-- CUDA Success Branch -->
+  <line x1="590" y1="135" x2="670" y2="135" class="arrow-pass" />
+  <rect x="670" y="100" width="250" height="70" class="node node-backend" />
+  <text x="685" y="128" class="text-success">ACTIVE: CUDA ACCELERATOR</text>
+  <text x="685" y="148" class="text-head">Single-Pass GPU Gate Fusion</text>
+  <text x="685" y="161" class="text-body">NVRTC runtime or PyTorch cuBLAS</text>
+
+  <!-- CUDA Fail to Tier 2 -->
+  <line x1="450" y1="174" x2="450" y2="225" class="arrow-fail" />
+
+  <!-- Tier 2: Metal Check -->
+  <rect x="310" y="225" width="280" height="74" class="node node-check" />
+  <text x="325" y="247" class="text-check">TIER 2: APPLE METAL QUERY</text>
+  <text x="325" y="267" class="text-head">macOS Apple Silicon Metal</text>
+  <text x="325" y="284" class="text-body">Darwin OS &amp; queryable Metal.framework</text>
+
+  <!-- Metal Success Branch -->
+  <line x1="590" y1="260" x2="670" y2="260" class="arrow-pass" />
+  <rect x="670" y="225" width="250" height="70" class="node node-backend" />
+  <text x="685" y="253" class="text-success">ACTIVE: METAL ACCELERATOR</text>
+  <text x="685" y="273" class="text-head">Metal Shading Language (MSL)</text>
+  <text x="685" y="286" class="text-body">Unified Memory zero-copy buffers</text>
+
+  <!-- Metal Fail to Tier 3 -->
+  <line x1="450" y1="299" x2="450" y2="350" class="arrow-fail" />
+
+  <!-- Tier 3: C++ SIMD Check -->
+  <rect x="310" y="350" width="280" height="74" class="node node-check" />
+  <text x="325" y="372" class="text-check">TIER 3: C++ SIMD EXTENSION QUERY</text>
+  <text x="325" y="392" class="text-head">Compiled Native Extension</text>
+  <text x="325" y="409" class="text-body">AVX2 / NEON _fusion_cpp library</text>
+
+  <!-- C++ Success Branch -->
+  <line x1="590" y1="385" x2="670" y2="385" class="arrow-pass" />
+  <rect x="670" y="350" width="250" height="70" class="node node-backend" />
+  <text x="685" y="378" class="text-success">ACTIVE: C++ SIMD ACCELERATOR</text>
+  <text x="685" y="398" class="text-head">Single-Pass Matrix Fusion</text>
+  <text x="685" y="411" class="text-body">Native CPU vector extensions</text>
+
+  <!-- C++ Fail to Tier 4 -->
+  <line x1="450" y1="424" x2="450" y2="475" class="arrow-fail" />
+
+  <!-- Tier 4: NumPy Vectorized Fallback -->
+  <rect x="310" y="475" width="280" height="85" class="node node-check" />
+  <text x="325" y="497" class="text-check">TIER 4: NUMPY FALLBACK</text>
+  <text x="325" y="517" class="text-head">Default Pure Python / NumPy</text>
+  <text x="325" y="534" class="text-body">Runs universally across all OS/CPUs;</text>
+  <text x="325" y="547" class="text-body">zero external compiler requirements</text>
+
+  <!-- Fallback Final Branch -->
+  <line x1="590" y1="517" x2="670" y2="517" class="arrow-pass" />
+  <rect x="670" y="475" width="250" height="85" class="node node-fallback" />
+  <text x="685" y="503" class="text-body" fill="#f0f6fc">STANDARD BACKEND (CPU)</text>
+  <text x="685" y="523" class="text-head">NumPy Array Operations</text>
+  <text x="685" y="539" class="text-body">Standard Python runtime fallback</text>
+  <text x="685" y="552" class="text-body">Guaranteed operational baseline</text>
+
+  <!-- Graceful Notice Annotation -->
+  <rect x="40" y="350" width="220" height="150" class="node node-fallback" />
+  <text x="55" y="375" class="text-head">Explicit Request Notice</text>
+  <text x="55" y="398" class="text-body">If user requests an explicit</text>
+  <text x="55" y="414" class="text-body">backend (e.g. --backend cuda)</text>
+  <text x="55" y="430" class="text-body">on an unsupported host:</text>
+  <text x="55" y="452" class="text-check">[Hardware Notice] printed</text>
+  <text x="55" y="470" class="text-body">Clean fallback to optimal backend</text>
+  <text x="55" y="486" class="text-body">Zero unhandled crashes</text>
+</svg>

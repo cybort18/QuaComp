@@ -548,8 +548,10 @@ def calculate_state_fidelity(ideal_counts: Dict[str, int], noisy_counts: Dict[st
     if not isinstance(ideal_counts, dict) or not isinstance(noisy_counts, dict):
         raise TypeError("Counts inputs must be dictionaries.")
         
-    if not ideal_counts or not noisy_counts:
+    if not ideal_counts and not noisy_counts:
         return 100.0
+    if not ideal_counts or not noisy_counts:
+        return 0.0
         
     total_ideal = sum(ideal_counts.values())
     total_noisy = sum(noisy_counts.values())

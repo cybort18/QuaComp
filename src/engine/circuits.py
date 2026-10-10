@@ -362,8 +362,31 @@ def calculate_heavy_output_probability(
     if not ideal_probs or not sampled_counts:
         raise ValueError("ideal_probs and sampled_counts must not be empty.")
         
-    prob_values = list(ideal_probs.values())
-    p_med = float(np.median(prob_values))
+    # Determine total basis state count 2^n if keys are uniform binary strings
+    first_key = next(iter(ideal_probs.keys()))
+    n_qubits = len(first_key)
+    is_bitstring = all(len(k) == n_qubits and set(k).issubset({"0", "1"}) for k in ideal_probs.keys())
+
+    if is_bitstring and n_qubits <= 30:
+        total_basis_states = 1 << n_qubits
+        num_positive = len(ideal_probs)
+        num_zeros = max(0, total_basis_states - num_positive)
+
+        sorted_probs = sorted(ideal_probs.values())
+
+        def _get_val_at_rank(rank: int) -> float:
+            if rank < num_zeros:
+                return 0.0
+            return sorted_probs[rank - num_zeros]
+
+        if total_basis_states % 2 == 1:
+            p_med = float(_get_val_at_rank(total_basis_states // 2))
+        else:
+            mid = total_basis_states // 2
+            p_med = float(0.5 * (_get_val_at_rank(mid - 1) + _get_val_at_rank(mid)))
+    else:
+        prob_values = list(ideal_probs.values())
+        p_med = float(np.median(prob_values))
     
     heavy_bitstrings = {bs for bs, p in ideal_probs.items() if p > p_med}
     

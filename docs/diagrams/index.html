@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QuaComp Architecture &amp; System Diagrams</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 40px 20px;
+      background-color: #0a0e17;
+      color: #c9d1d9;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    }
+    .container {
+      max-width: 1040px;
+      margin: 0 auto;
+    }
+    h1 {
+      font-size: 28px;
+      color: #f0f6fc;
+      margin-bottom: 8px;
+    }
+    p.lead {
+      color: #8b949e;
+      font-size: 15px;
+      margin-bottom: 40px;
+    }
+    .diagram-card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 40px;
+    }
+    .diagram-card h2 {
+      font-size: 18px;
+      color: #58a6ff;
+      margin-top: 0;
+      margin-bottom: 8px;
+    }
+    .diagram-card p {
+      color: #8b949e;
+      font-size: 13px;
+      margin-bottom: 20px;
+    }
+    .diagram-wrapper {
+      background: #0d1117;
+      border-radius: 6px;
+      overflow: hidden;
+      border: 1px solid #21262d;
+    }
+    img {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>QuaComp Architectural &amp; Methodological Diagrams</h1>
+    <p class="lead">System design, execution lifecycle, backend dispatch, simulation scaling paradigms, and noise models.</p>
+
+    <div class="diagram-card">
+      <h2>Diagram 1: High-Level System Architecture</h2>
+      <p>Modular pipeline spanning CLI ingress, AST compilation, simulation engines, hardware dispatch, and telemetry reporting.</p>
+      <div class="diagram-wrapper">
+        <img src="../images/architecture.svg" alt="High-Level Architecture">
+      </div>
+    </div>
+
+    <div class="diagram-card">
+      <h2>Diagram 2: Benchmark Execution Lifecycle</h2>
+      <p>End-to-end workflow from argument validation, pre-flight safety checks, timed multi-run execution, to statistical analysis.</p>
+      <div class="diagram-wrapper">
+        <img src="../images/benchmark-workflow.svg" alt="Benchmark Lifecycle">
+      </div>
+    </div>
+
+    <div class="diagram-card">
+      <h2>Diagram 3: Backend Selection &amp; Graceful Fallback</h2>
+      <p>Automated hardware hierarchy checking CUDA, Apple Metal, C++ SIMD, and pure NumPy baselines.</p>
+      <div class="diagram-wrapper">
+        <img src="../images/backend-selection.svg" alt="Backend Selection">
+      </div>
+    </div>
+
+    <div class="diagram-card">
+      <h2>Diagram 4: Simulation Paradigms — Statevector vs. MPS</h2>
+      <p>Detailed comparison of exact exponential dense states versus linear tensor trains with singular value truncation.</p>
+      <div class="diagram-wrapper">
+        <img src="../images/statevector-vs-mps.svg" alt="Statevector vs MPS">
+      </div>
+    </div>
+
+    <div class="diagram-card">
+      <h2>Diagram 5: Noise Simulation Workflow</h2>
+      <p>Monte Carlo Wavefunction (MCWF) stochastic jumps vs. full density matrix superoperator evolution.</p>
+      <div class="diagram-wrapper">
+        <img src="../images/noise-workflow.svg" alt="Noise Workflow">
+      </div>
+    </div>
+  </div>
+</body>
+</html>

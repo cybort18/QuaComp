@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 620" width="100%" height="100%">
+  <defs>
+    <style>
+      .bg { fill: #0d1117; }
+      .title { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 20px; font-weight: 700; fill: #f0f6fc; }
+      .subtitle { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 12px; fill: #8b949e; }
+      .col-box { rx: 8px; ry: 8px; stroke-width: 1.5px; }
+      .col-sv { fill: #161b22; stroke: #388bfd; }
+      .col-mps { fill: #161b22; stroke: #a371f7; }
+      .col-head-sv { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 16px; font-weight: 700; fill: #58a6ff; }
+      .col-head-mps { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 16px; font-weight: 700; fill: #bc8cff; }
+      .feature-card { rx: 6px; ry: 6px; fill: #0d1117; stroke: #30363d; stroke-width: 1px; }
+      .card-title { font-family: 'SFMono-Regular', Consolas, Menlo, monospace; font-size: 10px; font-weight: 700; fill: #8b949e; text-transform: uppercase; letter-spacing: 0.05em; }
+      .card-val { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 12px; font-weight: 600; fill: #f0f6fc; }
+      .card-desc { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11px; fill: #8b949e; }
+      .card-code { font-family: 'SFMono-Regular', Consolas, Menlo, monospace; font-size: 11px; fill: #79c0ff; }
+      .card-code-purple { font-family: 'SFMono-Regular', Consolas, Menlo, monospace; font-size: 11px; fill: #d2a8ff; }
+    </style>
+  </defs>
+
+  <rect width="960" height="620" class="bg" />
+
+  <text x="40" y="42" class="title">Simulation Paradigms: Statevector vs. Matrix Product State (MPS)</text>
+  <text x="40" y="62" class="subtitle">Structural comparison of computational representation, memory scaling, approximation limits, and algorithmic domains</text>
+
+  <!-- Left Column: Statevector -->
+  <rect x="40" y="90" width="425" height="505" class="col-box col-sv" />
+  <text x="65" y="125" class="col-head-sv">Statevector Simulation (Dense)</text>
+  <text x="65" y="145" class="card-desc">Exact mathematical representation of the entire Hilbert space</text>
+
+  <!-- SV Feature 1: Mathematical Form -->
+  <rect x="65" y="165" width="375" height="65" class="feature-card" />
+  <text x="80" y="185" class="card-title">STATE REPRESENTATION</text>
+  <text x="80" y="205" class="card-code">|ψ⟩ = ∑ c_x |x⟩, where x ∈ {0, 1}^n</text>
+  <text x="80" y="220" class="card-desc">Vector of 2^n double-precision complex amplitudes (16 B / state)</text>
+
+  <!-- SV Feature 2: Memory Scaling -->
+  <rect x="65" y="240" width="375" height="75" class="feature-card" />
+  <text x="80" y="260" class="card-title">MEMORY COMPLEXITY &amp; SCALING</text>
+  <text x="80" y="280" class="card-code">Exact O(2^n × 16 Bytes)</text>
+  <text x="80" y="297" class="card-desc">10 qubits: ~16 KB | 20 qubits: 16 MB | 30 qubits: 16 GB</text>
+  <text x="80" y="309" class="card-desc">32 qubits: 64 GB | Hits physical RAM wall strictly at ~30–34 qubits</text>
+
+  <!-- SV Feature 3: Precision & Entanglement -->
+  <rect x="65" y="325" width="375" height="75" class="feature-card" />
+  <text x="80" y="345" class="card-title">ACCURACY &amp; ENTANGLEMENT HANDLING</text>
+  <text x="80" y="365" class="card-val">Exact: Zero Truncation Error (ε = 0)</text>
+  <text x="80" y="382" class="card-desc">Simulates arbitrary multi-qubit entanglement, volume-law states,</text>
+  <text x="80" y="394" class="card-desc">deep random Haar unitaries, and heavy all-to-all CX patterns</text>
+
+  <!-- SV Feature 4: Practical Sweet Spot -->
+  <rect x="65" y="410" width="375" height="70" class="feature-card" />
+  <text x="80" y="430" class="card-title">OPTIMAL APPLICATION DOMAIN</text>
+  <text x="80" y="450" class="card-val">Deep, highly-entangled circuits with n ≤ 30 qubits</text>
+  <text x="80" y="468" class="card-desc">Quantum Volume, QFT verification, dense VQE/QAOA benchmarks</text>
+
+  <!-- Right Column: MPS -->
+  <rect x="495" y="90" width="425" height="505" class="col-box col-mps" />
+  <text x="520" y="125" class="col-head-mps">Matrix Product State (MPS / Tensor Train)</text>
+  <text x="520" y="145" class="card-desc">Factorized 1D tensor contraction with singular value truncation</text>
+
+  <!-- MPS Feature 1: Mathematical Form -->
+  <rect x="520" y="165" width="375" height="65" class="feature-card" />
+  <text x="535" y="185" class="card-title">STATE REPRESENTATION</text>
+  <text x="535" y="205" class="card-code-purple">|ψ⟩ ≈ ∑ Tr(A^{[1]}_{s_1} A^{[2]}_{s_2} ... A^{[n]}_{s_n}) |s_1...s_n⟩</text>
+  <text x="535" y="220" class="card-desc">1D network of rank-3 tensors bonded by maximum dimension χ</text>
+
+  <!-- MPS Feature 2: Memory Scaling -->
+  <rect x="520" y="240" width="375" height="75" class="feature-card" />
+  <text x="535" y="260" class="card-title">MEMORY COMPLEXITY &amp; SCALING</text>
+  <text x="535" y="280" class="card-code-purple">Linear O(n · χ^2 × 16 Bytes)</text>
+  <text x="535" y="297" class="card-desc">Memory scales linearly with qubit count n for a fixed bond dim χ</text>
+  <text x="535" y="309" class="card-desc">Enables simulating 50–100+ qubits on commodity laptops</text>
+
+  <!-- MPS Feature 3: Precision & Entanglement -->
+  <rect x="520" y="325" width="375" height="75" class="feature-card" />
+  <text x="535" y="345" class="card-title">ACCURACY &amp; ENTANGLEMENT HANDLING</text>
+  <text x="535" y="365" class="card-val">Approximation: Truncated SVD (Singular Values &lt; threshold)</text>
+  <text x="535" y="382" class="card-desc">Accurate only when bipartite entanglement entropy S ≤ log2(χ);</text>
+  <text x="535" y="394" class="card-desc">suffers severe fidelity collapse on volume-law entanglement</text>
+
+  <!-- MPS Feature 4: Practical Sweet Spot -->
+  <rect x="520" y="410" width="375" height="70" class="feature-card" />
+  <text x="535" y="430" class="card-title">OPTIMAL APPLICATION DOMAIN</text>
+  <text x="535" y="450" class="card-val">Shallow or 1D-localized circuits with n ≥ 50 qubits</text>
+  <text x="535" y="468" class="card-desc">1D transverse-field Ising models, nearest-neighbor Clifford circuits</text>
+</svg>

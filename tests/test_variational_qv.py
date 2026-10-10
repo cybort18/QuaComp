@@ -109,3 +109,24 @@ def test_calculate_heavy_output_probability():
     res_fail = calculate_heavy_output_probability(ideal_probs, sampled_counts_fail)
     assert res_fail["heavy_output_probability"] == 0.5
     assert res_fail["qv_certified"] is False
+
+
+def test_calculate_heavy_output_probability_sparse_distribution():
+    """Verify that implicit zero-probability states in 2^n Hilbert space are included in median calculation."""
+    # 3 qubits -> 2^3 = 8 basis states. Only 2 states have non-zero probability.
+    sparse_ideal = {
+        "000": 0.60,
+        "001": 0.40
+    }
+    # Implicit zeros exist for '010', '011', '100', '101', '110', '111'.
+    # Full distribution: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.40, 0.60]
+    # Median of 8 elements is 0.5 * (val[3] + val[4]) = 0.0
+    sampled_counts = {
+        "000": 600,
+        "001": 400
+    }
+    res = calculate_heavy_output_probability(sparse_ideal, sampled_counts)
+    assert res["median_ideal_probability"] == 0.0
+    assert res["heavy_bitstrings_count"] == 2
+    assert res["heavy_output_probability"] == 1.0
+    assert res["qv_certified"] is True

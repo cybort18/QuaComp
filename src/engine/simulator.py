@@ -116,8 +116,6 @@ def simulate_trajectories(
     elif hasattr(noise_model, "to_trajectory_noise_model"):
         traj_model = noise_model.to_trajectory_noise_model(active_qubits=list(range(num_qubits)))
         
-    t0 = time.perf_counter()
-    
     # Clean circuit for execution (remove measurements for pure statevector propagation)
     circ_clean = circuit.copy()
     if len(circ_clean.clbits) > 0:
@@ -150,6 +148,9 @@ def simulate_trajectories(
         
     counts: Dict[str, int] = {}
     
+    active_be.device_synchronize()
+    t0 = time.perf_counter()
+
     if shots < 100 or effective_workers <= 1:
         # Serial execution in main thread
         counts = _trajectory_worker_batch(parsed_ops, num_qubits, shots, traj_model, seed)

@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 620" width="100%" height="100%">
+  <defs>
+    <style>
+      .bg { fill: #0d1117; }
+      .title { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 20px; font-weight: 700; fill: #f0f6fc; }
+      .subtitle { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 12px; fill: #8b949e; }
+      .layer-title { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11px; font-weight: 600; fill: #58a6ff; letter-spacing: 0.08em; text-transform: uppercase; }
+      .box { rx: 6px; ry: 6px; stroke-width: 1px; }
+      .box-ingress { fill: #161b22; stroke: #30363d; }
+      .box-workload { fill: #161b22; stroke: #388bfd; }
+      .box-engine { fill: #161b22; stroke: #7ee787; }
+      .box-backend { fill: #161b22; stroke: #d29922; }
+      .box-telemetry { fill: #161b22; stroke: #f0883e; }
+      .box-export { fill: #161b22; stroke: #a371f7; }
+      .box-text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 13px; font-weight: 600; fill: #c9d1d9; }
+      .box-sub { font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; font-size: 10px; fill: #8b949e; }
+      .arrow { stroke: #484f58; stroke-width: 1.5; fill: none; marker-end: url(#arrowhead); }
+      .arrow-accent { stroke: #58a6ff; stroke-width: 1.5; fill: none; marker-end: url(#arrowhead-accent); }
+    </style>
+    <marker id="arrowhead" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto">
+      <polygon points="0 0, 7 2.5, 0 5" fill="#484f58" />
+    </marker>
+    <marker id="arrowhead-accent" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto">
+      <polygon points="0 0, 7 2.5, 0 5" fill="#58a6ff" />
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="960" height="620" class="bg" />
+
+  <!-- Header -->
+  <text x="40" y="42" class="title">QuaComp System Architecture</text>
+  <text x="40" y="62" class="subtitle">Modular Quantum Circuit Benchmarking, Telemetry, Simulation &amp; Scoring Pipeline</text>
+
+  <!-- Layer 1: CLI & Ingress -->
+  <text x="40" y="105" class="layer-title">Layer 1: CLI Ingress &amp; Parameter Validation</text>
+  <rect x="40" y="115" width="260" height="70" class="box box-ingress" />
+  <text x="55" y="142" class="box-text">CLI Parser &amp; Argument Guards</text>
+  <text x="55" y="162" class="box-sub">cli/main.py (argparse &amp; Rich UI)</text>
+
+  <rect x="340" y="115" width="270" height="70" class="box box-ingress" />
+  <text x="355" y="142" class="box-text">Pre-Flight Resource Verifier</text>
+  <text x="355" y="162" class="box-sub">src/profiler/memory.py, gpu.py (85% limit)</text>
+
+  <rect x="650" y="115" width="270" height="70" class="box box-ingress" />
+  <text x="665" y="142" class="box-text">Baseline Registry &amp; Comparison</text>
+  <text x="665" y="162" class="box-sub">src/comparator/registry.py (Hardware Baselines)</text>
+
+  <!-- Connectors L1 to L2 -->
+  <line x1="170" y1="185" x2="170" y2="230" class="arrow-accent" />
+  <line x1="475" y1="185" x2="475" y2="230" class="arrow" />
+
+  <!-- Layer 2: Workload Generation & AST Parsing -->
+  <text x="40" y="220" class="layer-title">Layer 2: Workload Generation &amp; Circuit AST Parsing</text>
+  <rect x="40" y="230" width="410" height="70" class="box box-workload" />
+  <text x="55" y="257" class="box-text">Built-in Circuits (QFT, VQE, QAOA, QV)</text>
+  <text x="55" y="277" class="box-sub">src/engine/circuits.py (Variational &amp; Model Ansätze)</text>
+
+  <rect x="490" y="230" width="430" height="70" class="box box-workload" />
+  <text x="505" y="257" class="box-text">OpenQASM 2.0 Lexer &amp; Parser</text>
+  <text x="505" y="277" class="box-sub">src/engine/parser.py (Custom AST, Transpiler Bridge)</text>
+
+  <!-- Connectors L2 to L3 -->
+  <line x1="245" y1="300" x2="245" y2="345" class="arrow-accent" />
+  <line x1="705" y1="300" x2="705" y2="345" class="arrow" />
+
+  <!-- Layer 3: Simulation Engines -->
+  <text x="40" y="335" class="layer-title">Layer 3: Core Simulation Engines &amp; Noise Modeling</text>
+  <rect x="40" y="345" width="270" height="74" class="box box-engine" />
+  <text x="55" y="372" class="box-text">Statevector Simulation</text>
+  <text x="55" y="392" class="box-sub">AerSimulator / O(2^n) Dense State</text>
+
+  <rect x="340" y="345" width="270" height="74" class="box box-engine" />
+  <text x="355" y="372" class="box-text">Matrix Product State (MPS)</text>
+  <text x="355" y="392" class="box-sub">src/engine/mps.py / Bond Dim Truncation</text>
+
+  <rect x="640" y="345" width="280" height="74" class="box box-engine" />
+  <text x="655" y="372" class="box-text">MCWF Trajectory Engine</text>
+  <text x="655" y="392" class="box-sub">src/engine/noise.py (O(2^n) Stochastic Jumps)</text>
+
+  <!-- Connectors L3 to L4 -->
+  <line x1="175" y1="419" x2="175" y2="460" class="arrow" />
+  <line x1="475" y1="419" x2="475" y2="460" class="arrow-accent" />
+  <line x1="780" y1="419" x2="780" y2="460" class="arrow" />
+
+  <!-- Layer 4: Compute Accelerator Dispatch & Telemetry -->
+  <text x="40" y="450" class="layer-title">Layer 4: Accelerator Dispatch, Kernel Fusion &amp; Telemetry</text>
+  <rect x="40" y="460" width="570" height="65" class="box box-backend" />
+  <text x="55" y="485" class="box-text">Hardware Acceleration: CUDA | Apple Metal | C++ SIMD | NumPy</text>
+  <text x="55" y="505" class="box-sub">src/engine/accelerator.py, fusion.py (Dynamic Backend Dispatch &amp; Graceful Fallback)</text>
+
+  <rect x="640" y="460" width="280" height="65" class="box box-telemetry" />
+  <text x="655" y="485" class="box-text">Hardware Telemetry &amp; Energy</text>
+  <text x="655" y="505" class="box-sub">src/profiler/ (RAPL / TDP / CPU / VRAM)</text>
+
+  <!-- Connectors L4 to L5 -->
+  <line x1="325" y1="525" x2="325" y2="550" class="arrow-accent" />
+  <line x1="780" y1="525" x2="780" y2="550" class="arrow" />
+
+  <!-- Layer 5: Metrics & Exporters -->
+  <rect x="40" y="550" width="430" height="52" class="box box-export" />
+  <text x="55" y="572" class="box-text">Scorer &amp; Synthetic Index (QSI)</text>
+  <text x="55" y="589" class="box-sub">src/scorer/calculator.py (Throughput, Capacity, Fidelity, EDP)</text>
+
+  <rect x="490" y="550" width="430" height="52" class="box box-export" />
+  <text x="505" y="572" class="box-text">Reporting &amp; Visualizations</text>
+  <text x="505" y="589" class="box-sub">src/reporter/ (JSON schema, Markdown, Matplotlib PNG charts)</text>
+</svg>

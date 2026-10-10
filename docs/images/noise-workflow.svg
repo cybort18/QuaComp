@@ -1,0 +1,92 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 620" width="100%" height="100%">
+  <defs>
+    <style>
+      .bg { fill: #0d1117; }
+      .title { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 20px; font-weight: 700; fill: #f0f6fc; }
+      .subtitle { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 12px; fill: #8b949e; }
+      .box { rx: 6px; ry: 6px; stroke-width: 1.2px; }
+      .box-input { fill: #161b22; stroke: #58a6ff; }
+      .box-traj { fill: #12283a; stroke: #3fb950; }
+      .box-dm { fill: #2b1d1d; stroke: #f85149; }
+      .box-agg { fill: #161b22; stroke: #d29922; }
+      .text-head { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 13px; font-weight: 600; fill: #f0f6fc; }
+      .text-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11px; fill: #8b949e; }
+      .text-code { font-family: 'SFMono-Regular', Consolas, Menlo, monospace; font-size: 10px; fill: #79c0ff; }
+      .text-green { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11px; font-weight: 600; fill: #3fb950; }
+      .text-red { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11px; font-weight: 600; fill: #f85149; }
+      .arrow { stroke: #58a6ff; stroke-width: 1.5; fill: none; marker-end: url(#nw-arrow-blue); }
+      .arrow-green { stroke: #3fb950; stroke-width: 1.5; fill: none; marker-end: url(#nw-arrow-green); }
+      .arrow-red { stroke: #f85149; stroke-width: 1.5; fill: none; marker-end: url(#nw-arrow-red); }
+      .arrow-gold { stroke: #d29922; stroke-width: 1.5; fill: none; marker-end: url(#nw-arrow-gold); }
+    </style>
+    <marker id="nw-arrow-blue" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto">
+      <polygon points="0 0, 7 2.5, 0 5" fill="#58a6ff" />
+    </marker>
+    <marker id="nw-arrow-green" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto">
+      <polygon points="0 0, 7 2.5, 0 5" fill="#3fb950" />
+    </marker>
+    <marker id="nw-arrow-red" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto">
+      <polygon points="0 0, 7 2.5, 0 5" fill="#f85149" />
+    </marker>
+    <marker id="nw-arrow-gold" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto">
+      <polygon points="0 0, 7 2.5, 0 5" fill="#d29922" />
+    </marker>
+  </defs>
+
+  <rect width="960" height="620" class="bg" />
+
+  <text x="40" y="42" class="title">Noise Simulation Architecture: Trajectories vs. Density Matrix</text>
+  <text x="40" y="62" class="subtitle">Ingestion of calibration parameters into classical statevector jump sampling versus full superoperator evolution</text>
+
+  <!-- Noise Profile Sources -->
+  <rect x="40" y="95" width="410" height="78" class="box box-input" />
+  <text x="55" y="118" class="text-head">Synthetic Noise Presets</text>
+  <text x="55" y="137" class="text-body">--noise-level {none, low, medium, high}</text>
+  <text x="55" y="153" class="text-code">T1 / T2 relaxation, depolarizing channels, readout bit-flip</text>
+
+  <rect x="490" y="95" width="430" height="78" class="box box-input" />
+  <text x="505" y="118" class="text-head">Physical Hardware Calibration Profiles</text>
+  <text x="505" y="137" class="text-body">--noise-profile ibm_brisbane_sample</text>
+  <text x="505" y="153" class="text-code">Parsed into classical Kraus rates (no live cloud QPU execution)</text>
+
+  <!-- Branch connector -->
+  <line x1="245" y1="173" x2="245" y2="230" class="arrow" />
+  <line x1="705" y1="173" x2="705" y2="230" class="arrow" />
+
+  <!-- Dispatcher Decision Node -->
+  <rect x="230" y="230" width="500" height="52" class="box box-input" />
+  <text x="250" y="253" class="text-head">Algorithm Selection (--noise-method)</text>
+  <text x="250" y="271" class="text-body">Default: trajectory (MCWF) | Optional: density_matrix</text>
+
+  <line x1="330" y1="282" x2="240" y2="330" class="arrow-green" />
+  <line x1="630" y1="282" x2="720" y2="330" class="arrow-red" />
+
+  <!-- Branch 1: MCWF Trajectories -->
+  <rect x="40" y="330" width="425" height="175" class="box box-traj" />
+  <text x="55" y="355" class="text-green">RECOMMENDED: MONTE CARLO TRAJECTORIES</text>
+  <text x="55" y="377" class="text-head">Wavefunction Statevector Jumps (MCWF)</text>
+  <text x="55" y="397" class="text-body">Statevector memory scaling: Strict O(2^n)</text>
+  <text x="55" y="415" class="text-code">No-jump drift: K0 = diag(1, sqrt(1-gamma)) with state renorm</text>
+  <text x="55" y="433" class="text-code">Jump branches: Stochastic Pauli X/Y/Z, Kraus projection K1</text>
+  <text x="55" y="452" class="text-body">Parallel trajectory loop across CPU worker pool / GPU streams</text>
+  <text x="55" y="485" class="text-green">Bypasses O(4^n) density matrix memory wall</text>
+
+  <!-- Branch 2: Density Matrix -->
+  <rect x="495" y="330" width="425" height="175" class="box box-dm" />
+  <text x="510" y="355" class="text-red">CLASSICAL DENSITY MATRIX SIMULATION</text>
+  <text x="510" y="377" class="text-head">Full Superoperator Evolution (Aer density_matrix)</text>
+  <text x="510" y="397" class="text-body">Density matrix memory scaling: Exponential O(4^n) = O(2^{2n})</text>
+  <text x="510" y="415" class="text-code">ρ' = ∑_k E_k ρ E_k† (dimension 2^n × 2^n)</text>
+  <text x="510" y="433" class="text-body">Exact master equation evaluation for open quantum systems</text>
+  <text x="510" y="452" class="text-body">Strict hardware limit: 14–15 qubits on 16 GB RAM systems</text>
+  <text x="510" y="485" class="text-red">Severe memory barrier beyond 15 qubits</text>
+
+  <!-- Connect to Aggregation -->
+  <line x1="252" y1="505" x2="410" y2="540" class="arrow-gold" />
+  <line x1="707" y1="505" x2="550" y2="540" class="arrow-gold" />
+
+  <!-- Final Aggregation & Metrics -->
+  <rect x="230" y="540" width="500" height="60" class="box box-agg" />
+  <text x="250" y="563" class="text-head">Measurement Sampling &amp; Hellinger Fidelity</text>
+  <text x="250" y="582" class="text-body">Measurement counts histogram over N_shots; Classical Hellinger state fidelity (%)</text>
+</svg>

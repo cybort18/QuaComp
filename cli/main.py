@@ -148,10 +148,19 @@ def main():
     console.print(BANNER)
     
     # Check backend availability if explicitly requested
-    if getattr(args, "backend", "auto") == "cuda":
+    req_backend = getattr(args, "backend", "auto")
+    if req_backend == "cuda":
         from src.engine.accelerator import is_cuda_available
         if not is_cuda_available():
             console.print("[bold yellow]Hardware Notice:[/bold yellow] NVIDIA CUDA acceleration requested ('--backend cuda'), but no supported CUDA GPU was detected. Automatically falling back to optimal available backend.\n")
+    elif req_backend == "metal":
+        from src.engine.accelerator import is_metal_available
+        if not is_metal_available():
+            console.print("[bold yellow]Hardware Notice:[/bold yellow] Apple Metal acceleration requested ('--backend metal'), but Apple Silicon Metal was not detected. Automatically falling back to optimal available backend.\n")
+    elif req_backend == "cpp":
+        from src.engine.fusion import is_cpp_fusion_available
+        if not is_cpp_fusion_available():
+            console.print("[bold yellow]Hardware Notice:[/bold yellow] Native C++ SIMD acceleration requested ('--backend cpp'), but compiled C++ extension was not detected. Automatically falling back to optimal available backend.\n")
     
     results: List[Dict[str, Any]] = []
     

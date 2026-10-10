@@ -44,8 +44,13 @@ def test_calculate_state_fidelity():
     assert 0.0 < fid_mix < 100.0
     assert abs(fid_mix - 80.0) < 1e-5
     
-    # Empty counts -> 100% default
+    # Empty counts behavior:
+    # Both empty -> 100% default baseline
     assert calculate_state_fidelity({}, {}) == 100.0
+    # Asymmetric empty -> 0.0% fidelity
+    assert calculate_state_fidelity(ideal, {}) == 0.0
+    assert calculate_state_fidelity({}, ideal) == 0.0
+    assert calculate_state_fidelity({"00": 0}, {"00": 100}) == 0.0
     
     # Invalid types
     with pytest.raises(TypeError):
