@@ -49,23 +49,28 @@ def sample_data():
 def test_export_to_json(tmp_path, sample_data):
     results, system_metadata = sample_data
     output_dir = tmp_path / "results"
-    
+
     # Run exporter
     file_path = export_to_json(results, system_metadata, output_dir=str(output_dir))
-    
+
     assert os.path.exists(file_path)
     assert file_path.endswith(".json")
-    
+
     # Read and verify content
     with open(file_path, "r") as f:
         data = json.load(f)
-        
+
     assert "timestamp" in data
     assert data["final_score"] > 0.0
     assert data["final_composite_score"] > 0.0
     assert "scoring_breakdown" in data
     assert "capacity_metric" in data["scoring_breakdown"]
     assert "throughput_metric" in data["scoring_breakdown"]
+    assert "effective_bandwidth_gbps" in data["scoring_breakdown"]
+    assert "academic_benchmarks" in data
+    assert "effective_bandwidth_gbps" in data["academic_benchmarks"]
+    assert data["academic_benchmarks"]["effective_bandwidth_gbps"] > 0.0
+    assert data["academic_benchmarks"]["arithmetic_intensity_flops_per_byte"] == 0.4375
     assert "statistical_summary" in data
     assert data["performance_category"] == "Entry-Level"
     assert data["max_qubits_simulated"] == 10
@@ -83,17 +88,17 @@ def test_export_to_json_type_errors():
 def test_export_to_markdown(tmp_path, sample_data):
     results, system_metadata = sample_data
     output_path = tmp_path / "results" / "report.md"
-    
+
     # Run exporter
     file_path = export_to_markdown(results, system_metadata, output_path=str(output_path))
-    
+
     assert os.path.exists(file_path)
     assert file_path.endswith("report.md")
-    
+
     # Read and verify content
     with open(file_path, "r", encoding="utf-8") as f:
         md_text = f.read()
-        
+
     assert "# QuaComp Benchmark Report" in md_text
     assert "Test CPU" in md_text
     assert "16.00 GB" in md_text
@@ -101,6 +106,9 @@ def test_export_to_markdown(tmp_path, sample_data):
     assert "Entry-Level" in md_text
     assert "Capacity Metric" in md_text
     assert "Throughput Metric" in md_text
+    assert "Effective Memory Bandwidth" in md_text
+    assert "GB/s" in md_text
+    assert "0.4375 FLOPs/Byte" in md_text
 
 def test_export_to_markdown_type_errors():
     with pytest.raises(TypeError):
@@ -127,7 +135,7 @@ def test_export_to_json_all_failed_runs(tmp_path):
     ]
     metadata = {"cpu_name": "Test CPU", "total_ram_gb": 8.0}
     out_dir = tmp_path / "results"
-    
+
     file_path = export_to_json(failed_results, metadata, output_dir=str(out_dir))
     assert os.path.exists(file_path)
     with open(file_path, "r") as f:
@@ -153,7 +161,7 @@ def test_export_to_markdown_all_failed_runs(tmp_path):
     ]
     metadata = {"cpu_name": "Test CPU", "total_ram_gb": 8.0}
     out_path = tmp_path / "results" / "report.md"
-    
+
     file_path = export_to_markdown(failed_results, metadata, output_path=str(out_path))
     assert os.path.exists(file_path)
     with open(file_path, "r", encoding="utf-8") as f:
@@ -190,10 +198,10 @@ def test_export_to_markdown_energy_telemetry_rapl(tmp_path):
     metadata = {"cpu_name": "Intel Xeon", "total_ram_gb": 64.0}
     out_path = tmp_path / "report_rapl.md"
     file_path = export_to_markdown(results, metadata, output_path=str(out_path))
-    
+
     with open(file_path, "r", encoding="utf-8") as f:
         content = f.read()
-        
+
     assert "Hardware Power & Energy Telemetry (EQO)" in content
     assert "[Sensor: RAPL]" in content
     assert "Linux RAPL Hardware Interface" in content
@@ -228,10 +236,10 @@ def test_export_to_markdown_energy_telemetry_tdp_estimate(tmp_path):
     metadata = {"cpu_name": "AMD Ryzen 7", "total_ram_gb": 32.0}
     out_path = tmp_path / "report_tdp.md"
     file_path = export_to_markdown(results, metadata, output_path=str(out_path))
-    
+
     with open(file_path, "r", encoding="utf-8") as f:
         content = f.read()
-        
+
     assert "Hardware Power & Energy Telemetry (EQO)" in content
     assert "[Sensor: TDP Estimate]" in content
     assert "Windows Dynamic TDP Model" in content
@@ -260,11 +268,10 @@ def test_export_to_json_energy_telemetry(tmp_path):
     metadata = {"cpu_name": "Test CPU", "total_ram_gb": 16.0}
     out_dir = tmp_path / "json_out"
     file_path = export_to_json(results, metadata, output_dir=str(out_dir))
-    
+
     with open(file_path, "r", encoding="utf-8") as f:
         data = json.load(f)
-        
+
     assert "energy_metrics" in data
     assert data["energy_metrics"]["sensor_source"] == "[Sensor: RAPL]"
     assert data["energy_metrics"]["total_energy_joules"] == 2.5
-

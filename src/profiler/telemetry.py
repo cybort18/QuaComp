@@ -32,7 +32,7 @@ def get_cpu_name() -> str:
                             return line.split(":", 1)[1].strip()
         except Exception:
             pass
-            
+
     # Fallback to standard platform info
     processor = platform.processor()
     if processor:
@@ -42,7 +42,7 @@ def get_cpu_name() -> str:
 def get_system_metadata() -> Dict[str, Any]:
     """
     Collect system hardware and environment metadata.
-    
+
     Returns:
         dict: A dictionary containing:
             - "cpu_name" (str): Brand name of the CPU.
@@ -56,7 +56,7 @@ def get_system_metadata() -> Dict[str, Any]:
     vm = psutil.virtual_memory()
     from src.profiler.gpu import get_gpu_metadata
     gpu_meta = get_gpu_metadata()
-    
+
     return {
         "cpu_name": get_cpu_name(),
         "cpu_count_physical": psutil.cpu_count(logical=False) or 1,
@@ -78,7 +78,7 @@ def get_system_metadata() -> Dict[str, Any]:
 def get_cpu_utilization() -> Dict[str, Any]:
     """
     Collect current CPU utilization metrics.
-    
+
     Returns:
         dict: A dictionary containing:
             - "overall_percent" (float): Overall CPU usage percentage.
@@ -92,4 +92,59 @@ def get_cpu_utilization() -> Dict[str, Any]:
         "overall_percent": overall,
         "per_core_percent": per_core,
         "core_count": len(per_core)
+    }
+
+
+def calculate_effective_memory_bandwidth(
+    num_qubits: int,
+    total_gates: int,
+    execution_time: float
+) -> Dict[str, Any]:
+    """
+    Calculate effective memory bandwidth (GB/s) and arithmetic intensity for quantum statevector simulation.
+
+    Quantum statevector gate updates are memory-bandwidth bound. For an n-qubit system and G total gates,
+    each gate requires reading and writing the 2^n complex128 amplitudes (16 bytes read + 16 bytes write = 32 bytes/amplitude):
+        Total Bytes Transferred = G * (2^n) * 32 bytes
+        Effective Bandwidth (GB/s) = Total Bytes Transferred / (Delta_t * 10^9)
+        Arithmetic Intensity = 0.4375 FLOPs/Byte (14 FLOPs / 32 bytes for a 1-qubit gate)
+
+    Args:
+        num_qubits (int): Total simulated qubits.
+        total_gates (int): Total quantum gates executed.
+        execution_time (float): Simulation execution duration in seconds.
+
+    Returns:
+        dict: Memory bandwidth and roofline metrics dictionary.
+
+    Raises:
+        TypeError: If argument types are invalid.
+        ValueError: If num_qubits, total_gates, or execution_time are negative.
+    """
+    if not isinstance(num_qubits, int):
+        raise TypeError("num_qubits must be an integer.")
+    if not isinstance(total_gates, int):
+        raise TypeError("total_gates must be an integer.")
+    if not isinstance(execution_time, (int, float)):
+        raise TypeError("execution_time must be a real number.")
+
+    if num_qubits < 0:
+        raise ValueError("num_qubits must be non-negative.")
+    if total_gates < 0:
+        raise ValueError("total_gates must be non-negative.")
+    if execution_time < 0.0:
+        raise ValueError("execution_time must be non-negative.")
+
+    safe_time = max(float(execution_time), 1e-9)
+    total_bytes = float(total_gates * (2 ** num_qubits) * 32)
+    effective_bandwidth_gbps = total_bytes / (safe_time * 1e9)
+    arithmetic_intensity = 0.4375
+
+    return {
+        "num_qubits": num_qubits,
+        "total_gates": total_gates,
+        "execution_time_seconds": safe_time,
+        "total_bytes_transferred": total_bytes,
+        "effective_bandwidth_gbps": round(float(effective_bandwidth_gbps), 4),
+        "arithmetic_intensity_flops_per_byte": arithmetic_intensity
     }

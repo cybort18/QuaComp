@@ -27,7 +27,7 @@ def test_check_memory_safety_safe(mock_vm):
     # Set available memory to 1 GB (1024^3 bytes)
     available_ram = 1024 ** 3
     mock_vm.return_value = MockVirtualMemory(available=available_ram)
-    
+
     # 20 qubits requires 16 MB, which is way below 85% of 1 GB
     is_safe, message = check_memory_safety(20)
     assert is_safe is True
@@ -41,7 +41,7 @@ def test_check_memory_safety_warning(mock_vm):
     # 20 qubits requires 16 MB, which is between 15.3 MB and 18 MB.
     available_ram = 18 * (1024 ** 2)
     mock_vm.return_value = MockVirtualMemory(available=available_ram)
-    
+
     is_safe, message = check_memory_safety(20)
     assert is_safe is False
     assert "WARNING" in message
@@ -54,7 +54,7 @@ def test_check_memory_safety_critical(mock_vm):
     # 20 qubits requires 16 MB, which is > 10 MB.
     available_ram = 10 * (1024 ** 2)
     mock_vm.return_value = MockVirtualMemory(available=available_ram)
-    
+
     is_safe, message = check_memory_safety(20)
     assert is_safe is False
     assert "CRITICAL" in message
@@ -80,3 +80,36 @@ def test_check_memory_safety_mps_low_ram(mock_vm):
     assert is_safe is False
     assert "CRITICAL" in message
     assert "lower than the baseline threshold required for MPS" in message
+
+
+def test_calculate_effective_memory_bandwidth():
+    from src.profiler.telemetry import calculate_effective_memory_bandwidth
+
+    # 10 qubits, 100 gates, 0.05 seconds
+    # Total bytes = 100 * (2^10) * 32 = 3,276,800 bytes
+    # Effective BW = 3,276,800 / (0.05 * 10^9) = 0.065536 GB/s -> 0.0655 GB/s
+    res = calculate_effective_memory_bandwidth(10, 100, 0.05)
+    assert res["num_qubits"] == 10
+    assert res["total_gates"] == 100
+    assert res["total_bytes_transferred"] == 3276800.0
+    assert res["effective_bandwidth_gbps"] == 0.0655
+    assert res["arithmetic_intensity_flops_per_byte"] == 0.4375
+
+    # Safe division clamp for 0 time
+    res_zero_time = calculate_effective_memory_bandwidth(4, 10, 0.0)
+    assert res_zero_time["execution_time_seconds"] == 1e-9
+    assert res_zero_time["effective_bandwidth_gbps"] > 0.0
+
+    # Type and value errors
+    with pytest.raises(TypeError):
+        calculate_effective_memory_bandwidth("10", 100, 0.05)  # type: ignore
+    with pytest.raises(TypeError):
+        calculate_effective_memory_bandwidth(10, "100", 0.05)  # type: ignore
+    with pytest.raises(TypeError):
+        calculate_effective_memory_bandwidth(10, 100, "0.05")  # type: ignore
+    with pytest.raises(ValueError):
+        calculate_effective_memory_bandwidth(-1, 100, 0.05)
+    with pytest.raises(ValueError):
+        calculate_effective_memory_bandwidth(10, -5, 0.05)
+    with pytest.raises(ValueError):
+        calculate_effective_memory_bandwidth(10, 100, -0.01)

@@ -13,7 +13,8 @@ from src.engine.noise import (
     TrajectoryNoiseModel,
     get_trajectory_noise_model,
     apply_gate_1q_to_statevector,
-    apply_gate_2q_to_statevector
+    apply_gate_2q_to_statevector,
+    fuse_consecutive_1q_gates
 )
 
 
@@ -29,7 +30,7 @@ def _trajectory_worker_batch(
     """
     rng = np.random.default_rng(seed_seq)
     worker_counts: Dict[str, int] = {}
-    
+
     if traj_model is None:
         sv = np.zeros(1 << num_qubits, dtype=np.complex128)
         sv[0] = 1.0 + 0.0j
@@ -38,7 +39,7 @@ def _trajectory_worker_batch(
                 apply_gate_1q_to_statevector(sv, mat, q_idx[0], num_qubits)
             elif len(q_idx) == 2:
                 apply_gate_2q_to_statevector(sv, mat, q_idx[0], q_idx[1], num_qubits)
-                
+
         probs = np.abs(sv) ** 2
         p_sum = float(np.sum(probs))
         if p_sum > 0:
@@ -57,17 +58,17 @@ def _trajectory_worker_batch(
                 elif len(q_idx) == 2:
                     apply_gate_2q_to_statevector(sv, mat, q_idx[0], q_idx[1], num_qubits)
                 traj_model.apply_stochastic_gate_noise(sv, q_idx, name, rng)
-                
+
             probs = np.abs(sv) ** 2
             p_sum = float(np.sum(probs))
             if p_sum > 0:
                 probs /= p_sum
-                
+
             sample_idx = int(rng.choice(1 << num_qubits, p=probs))
             raw_bs = f"{sample_idx:0{num_qubits}b}"
             noisy_bs = traj_model.apply_readout_error(raw_bs, rng)
             worker_counts[noisy_bs] = worker_counts.get(noisy_bs, 0) + 1
-            
+
     return worker_counts
 
 
@@ -82,7 +83,7 @@ def simulate_trajectories(
     """
     Execute quantum circuit simulation using the Monte Carlo Wavefunction (MCWF) /
     Quantum Trajectories method, strictly scaling memory at O(2^n).
-    
+
     Args:
         circuit (QuantumCircuit): The Qiskit quantum circuit to execute.
         noise_model (Any): TrajectoryNoiseModel, PhysicalNoiseModel, preset string ('low', 'medium', 'high'), or None.
@@ -90,7 +91,7 @@ def simulate_trajectories(
         backend (str): Compute accelerator backend ('auto', 'cuda', 'metal', 'cpp', 'numpy').
         seed (Optional[int]): Random seed for stochastic jump reproducibility.
         num_workers (Optional[int]): Number of parallel worker threads/processes for batch trajectory sampling.
-        
+
     Returns:
         Dict[str, Any]: Execution metrics and measurement counts.
     """
@@ -98,15 +99,15 @@ def simulate_trajectories(
         circuit = circuit.to_quantum_circuit()
     elif not isinstance(circuit, QuantumCircuit):
         raise TypeError("Input must be a Qiskit QuantumCircuit or ParsedQASMCircuit instance.")
-        
+
     num_qubits = circuit.num_qubits
     if num_qubits < 1:
         raise ValueError("Circuit must have at least 1 qubit.")
-        
+
     from src.engine.accelerator import get_best_backend
     active_be = get_best_backend(backend)
     active_be.device_synchronize()
-    
+
     # Resolve TrajectoryNoiseModel
     traj_model: Optional[TrajectoryNoiseModel] = None
     if isinstance(noise_model, TrajectoryNoiseModel):
@@ -115,15 +116,15 @@ def simulate_trajectories(
         traj_model = get_trajectory_noise_model(noise_model)
     elif hasattr(noise_model, "to_trajectory_noise_model"):
         traj_model = noise_model.to_trajectory_noise_model(active_qubits=list(range(num_qubits)))
-        
+
     # Clean circuit for execution (remove measurements for pure statevector propagation)
     circ_clean = circuit.copy()
     if len(circ_clean.clbits) > 0:
         circ_clean.remove_final_measurements(inplace=True)
-        
+
     basis_gates = ['h', 'x', 'y', 'z', 's', 't', 'rx', 'ry', 'rz', 'cx', 'cz', 'swap', 'u', 'u1', 'u2', 'u3', 'p', 'sx', 'id']
     tqc = transpile(circ_clean, basis_gates=basis_gates)
-    
+
     # Pre-parse instructions once
     parsed_ops = []
     for inst in tqc.data:
@@ -136,7 +137,11 @@ def simulate_trajectories(
             parsed_ops.append((op.name, q_indices, mat))
         except Exception:
             pass
-            
+
+    # Apply pre-execution 1Q gate contraction if noiseless trajectory mode
+    if traj_model is None:
+        parsed_ops = fuse_consecutive_1q_gates(parsed_ops)
+
     # Determine parallel worker allocation:
     # On CUDA GPU, force single-process to avoid CUDA context multi-processing collisions
     if backend.lower() == 'cuda' or getattr(active_be, "name", "").lower() == "cuda":
@@ -145,9 +150,9 @@ def simulate_trajectories(
         effective_workers = max(1, int(num_workers))
     else:
         effective_workers = min(os.cpu_count() or 1, 8)
-        
+
     counts: Dict[str, int] = {}
-    
+
     active_be.device_synchronize()
     t0 = time.perf_counter()
 
@@ -161,10 +166,10 @@ def simulate_trajectories(
         batch_sizes = [base_shots + (1 if i < rem else 0) for i in range(effective_workers)]
         batch_sizes = [b for b in batch_sizes if b > 0]
         actual_workers = len(batch_sizes)
-        
+
         ss = np.random.SeedSequence(seed)
         child_seeds = ss.spawn(actual_workers)
-        
+
         batch_results = []
         try:
             with ProcessPoolExecutor(max_workers=actual_workers) as executor:
@@ -183,15 +188,15 @@ def simulate_trajectories(
                 ]
                 for fut in as_completed(futures):
                     batch_results.append(fut.result())
-                    
+
         for b_counts in batch_results:
             for bs, cnt in b_counts.items():
                 counts[bs] = counts.get(bs, 0) + cnt
-            
+
     active_be.device_synchronize()
     latency = time.perf_counter() - t0
     saved_ratio = 1 << num_qubits
-    
+
     metadata = {
         "backend_name": "QuaComp Trajectory Engine (MCWF)",
         "backend_version": "1.0.0",
@@ -204,7 +209,7 @@ def simulate_trajectories(
         "noise_model": traj_model.name if traj_model else "None",
         "counts": counts
     }
-    
+
     return {
         "success": True,
         "qubits": num_qubits,
@@ -231,8 +236,8 @@ def simulate_trajectories(
 
 
 def run_simulation(
-    circuit: QuantumCircuit, 
-    method: str = 'statevector', 
+    circuit: QuantumCircuit,
+    method: str = 'statevector',
     bond_dimension: int = 64,
     device: str = 'CPU',
     noise_model: Any = None,
@@ -251,9 +256,9 @@ def run_simulation(
     """
     Execute a Qiskit quantum circuit using AerSimulator across multiple benchmark runs for statistical repeatability,
     with multi-GPU, native kernel gate fusion (C++/Metal/CUDA), physical QPU noise calibration, and parallel distributed worker pool support.
-    
+
     Measures execution latency across `runs` iterations and calculates Mean, Median, and Standard Deviation.
-    
+
     Args:
         circuit (QuantumCircuit): The Qiskit quantum circuit to execute.
         method (str): The simulation method ('statevector' or 'mps'/'matrix_product_state').
@@ -264,7 +269,7 @@ def run_simulation(
         shots (int): Number of measurement shots (default 1024).
         runs (int): Number of benchmark iterations (default 3).
         workers (int): Number of parallel distributed worker processes/threads (default 1).
-        
+
     Returns:
         dict: A dictionary containing execution telemetry and statistical metrics:
             - "success" (bool): True if simulation succeeded, False otherwise.
@@ -279,7 +284,7 @@ def run_simulation(
             - "error" (str or None): Error message if failed, None if succeeded.
             - "counts" (dict): Measurement counts dictionary from final run.
             - "metadata" (dict): Simulator execution metadata if succeeded, empty dict otherwise.
-            
+
     Raises:
         TypeError: If the input circuit is not a Qiskit QuantumCircuit.
         ValueError: If runs is less than 1 or device is invalid.
@@ -288,17 +293,17 @@ def run_simulation(
         circuit = circuit.to_quantum_circuit()
     elif not isinstance(circuit, QuantumCircuit):
         raise TypeError("Input must be a Qiskit QuantumCircuit or ParsedQASMCircuit instance.")
-        
+
     if not isinstance(runs, int) or runs < 1:
         raise ValueError("Number of runs must be an integer >= 1.")
-        
+
     if not isinstance(workers, int) or workers < 1:
         raise ValueError("Number of workers must be an integer >= 1.")
-        
+
     dev_clean = str(device).upper()
     is_multi_gpu = dev_clean in ("MULTI_GPU", "GPU:ALL", "MULTI-GPU")
     is_gpu_req = dev_clean.startswith("GPU") or is_multi_gpu
-    
+
     valid_devices = ("CPU", "GPU", "MULTI_GPU", "GPU:ALL", "MULTI-GPU")
     if dev_clean not in valid_devices:
         raise ValueError(f"Invalid device '{device}'. Must be one of {valid_devices}.")
@@ -314,13 +319,13 @@ def run_simulation(
             f"(~{req_gb:,.1f} GB), which exceeds the physical memory safety threshold for n >= 16 qubits. "
             f"Please use '--noise-method trajectory' (Monte Carlo Wavefunction) to maintain O(2^n) memory scaling."
         )
-        
+
     try:
         # Check available devices in AerSimulator
 
         temp_sim = AerSimulator()
         avail_devices = [str(d).upper() for d in temp_sim.available_devices()]
-        
+
         if is_gpu_req and "GPU" not in avail_devices:
             return {
                 "success": False,
@@ -336,7 +341,7 @@ def run_simulation(
                 "error": f"GPU device requested, but Qiskit Aer on this system does not have GPU/CUDA backend support enabled. Available devices: {avail_devices}",
                 "metadata": {}
             }
-            
+
         # Resolve Physical QPU Noise Model if requested
         active_noise_profile = None
         if physical_noise_profile:
@@ -346,13 +351,13 @@ def run_simulation(
             active_noise_profile = pnm.backend_name
             if noise_level == 'none':
                 noise_level = f"physical:{pnm.backend_name}"
-                
+
         # Resolve Native Kernel Acceleration (Single-Pass Gate Fusion: C++/Metal/CUDA)
         circ_to_run = circuit.copy()
         fusion_metrics = None
         accelerator_backend = None
         accelerator_badge = None
-        
+
         from src.engine.accelerator import get_best_backend, get_accelerator_badge, InsufficientVRAMError
         is_backend_req = bool(backend and str(backend).lower() != "auto")
         active_backend_obj = get_best_backend(backend if is_backend_req else ("cuda" if is_gpu_req else None))
@@ -362,21 +367,21 @@ def run_simulation(
             circ_to_run, fusion_metrics = fuse_circuit_single_pass(circ_to_run)
             accelerator_backend = active_backend_obj.tier_label
             accelerator_badge = get_accelerator_badge(accelerator_backend)
-            
+
         # Prepare circuit with measurements for count extraction if needed
         if len(circ_to_run.cregs) == 0:
             circ_to_run.measure_all()
-            
+
         # Initialize AerSimulator based on simulation method, device, multi-GPU options & noise model
         aer_device_target = "GPU" if is_gpu_req else "CPU"
         sim_kwargs: Dict[str, Any] = {"device": aer_device_target}
-        
+
         # Configure multi-device / parallel cluster options & distributed statevector slicing
         num_q = circ_to_run.num_qubits
         use_slicing = is_multi_gpu or state_slicing
         effective_blocking = None
         chunk_count = 1
-        
+
         if use_slicing:
             sim_kwargs["batched_shots_gpu"] = True
             sim_kwargs["blocking_enable"] = True
@@ -390,7 +395,7 @@ def run_simulation(
                 chunk_count = 2 ** (num_q - effective_blocking)
 
         is_dm = is_dm_check
-            
+
         # Trajectory Simulation Path (Monte Carlo Wavefunction)
         if noise_method == 'trajectory' and method not in ('mps', 'matrix_product_state'):
             traj_model = None
@@ -402,7 +407,7 @@ def run_simulation(
                 traj_model = noise_model
             elif noise_level != 'none':
                 traj_model = get_trajectory_noise_model(noise_level)
-                
+
             if traj_model is not None:
                 latencies: List[float] = []
                 last_counts: Dict[str, int] = {}
@@ -417,13 +422,13 @@ def run_simulation(
                     )
                     latencies.append(t_res["latency"])
                     last_counts = t_res["counts"]
-                    
+
                 mean_latency = float(np.mean(latencies))
                 median_latency = float(np.median(latencies))
                 std_latency = float(np.std(latencies, ddof=1)) if len(latencies) > 1 else 0.0
                 device_label = "MULTI_GPU" if is_multi_gpu else aer_device_target
                 saved_ratio = 1 << num_q
-                
+
                 metadata = {
                     "backend_name": "QuaComp Trajectory Engine (MCWF)",
                     "backend_version": "1.0.0",
@@ -448,7 +453,7 @@ def run_simulation(
                     "memory_saved_ratio": saved_ratio,
                     "counts": last_counts
                 }
-                
+
                 return {
                     "success": True,
                     "latency": mean_latency,
@@ -478,18 +483,18 @@ def run_simulation(
             sim_kwargs['method'] = 'density_matrix'
         else:
             sim_kwargs['method'] = 'statevector'
-            
+
         if noise_model is not None and not isinstance(noise_model, TrajectoryNoiseModel):
             sim_kwargs['noise_model'] = noise_model
-            
+
         simulator = AerSimulator(**sim_kwargs)
         transpiled_circuit = transpile(circ_to_run, simulator)
 
-        
+
         latencies: List[float] = []
         last_counts: Dict[str, int] = {}
         last_result = None
-        
+
         def _execute_single_run(_):
             if active_backend_obj is not None:
                 active_backend_obj.device_synchronize()
@@ -500,7 +505,7 @@ def run_simulation(
                 active_backend_obj.device_synchronize()
             lat = time.perf_counter() - t0
             return lat, res
-            
+
         # Multi-worker parallel execution vs serial execution
         if workers > 1 and runs > 1:
             with ThreadPoolExecutor(max_workers=min(workers, runs)) as executor:
@@ -514,16 +519,16 @@ def run_simulation(
                 run_lat, res = _execute_single_run(_)
                 latencies.append(run_lat)
                 last_result = res
-            
+
         if last_result is not None:
             last_counts = last_result.get_counts()
-            
+
         mean_latency = float(np.mean(latencies))
         median_latency = float(np.median(latencies))
         std_latency = float(np.std(latencies, ddof=1)) if len(latencies) > 1 else 0.0
-        
+
         device_label = "MULTI_GPU" if is_multi_gpu else aer_device_target
-        
+
         # Extract metadata from result
         metadata = {
             "backend_name": last_result.backend_name if last_result else "AerSimulator",
@@ -547,7 +552,7 @@ def run_simulation(
             "state_slicing": use_slicing,
             "counts": last_counts
         }
-        
+
         return {
             "success": True,
             "latency": mean_latency,
@@ -567,7 +572,7 @@ def run_simulation(
             "error": None,
             "metadata": metadata
         }
-        
+
     except Exception as e:
         return {
             "success": False,

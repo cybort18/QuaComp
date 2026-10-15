@@ -26,10 +26,10 @@ def test_mps_topology_bell_state_fidelity():
     qc = QuantumCircuit(2)
     qc.h(0)
     qc.cx(0, 1)
-    
+
     res_opt = _calculate_mps_bipartite_entropy(qc, subsystem_size=1, optimize_topology=True)
     res_naive = _calculate_mps_bipartite_entropy(qc, subsystem_size=1, optimize_topology=False)
-    
+
     assert pytest.approx(res_opt["von_neumann_entropy"], 0.001) == 1.0
     assert pytest.approx(res_naive["von_neumann_entropy"], 0.001) == 1.0
     assert res_opt["schmidt_rank"] == 2
@@ -43,10 +43,10 @@ def test_mps_topology_non_adjacent_deferred_unswap():
     qc = QuantumCircuit(4)
     qc.h(0)
     qc.cx(0, 3)
-    
+
     res_opt = _calculate_mps_bipartite_entropy(qc, subsystem_size=2, optimize_topology=True)
     res_sv = calculate_bipartite_entropy(qc, subsystem_size=2, method="statevector")
-    
+
     assert pytest.approx(res_opt["von_neumann_entropy"], 0.01) == pytest.approx(res_sv["von_neumann_entropy"], 0.01)
     assert res_opt["schmidt_rank"] == res_sv["schmidt_rank"]
     assert "routing_swaps" in res_opt
@@ -62,10 +62,10 @@ def test_mps_topology_bipartition_alignment():
     # Interleaved entangling gates that shuffle order
     qc.cx(0, 2)
     qc.cx(1, 3)
-    
+
     res_opt = calculate_bipartite_entropy(qc, subsystem_size=2, method="mps", optimize_topology=True)
     res_sv = calculate_bipartite_entropy(qc, subsystem_size=2, method="statevector")
-    
+
     assert pytest.approx(res_opt["von_neumann_entropy"], 0.01) == pytest.approx(res_sv["von_neumann_entropy"], 0.01)
     assert res_opt["topology_optimized"] is True
 
@@ -74,6 +74,28 @@ def test_mps_topology_truncation_error_under_low_bond():
     # Deep circuit with 6 qubits produces bond dimension > 2
     qc = generate_deep_circuit(6, depth=4)
     res_low_bond = _calculate_mps_bipartite_entropy(qc, subsystem_size=3, max_bond_dimension=2)
-    
+
     assert res_low_bond["truncation_error"] >= 0.0
     assert "computation_engine" in res_low_bond
+
+
+def test_native_mps_swap_routing_topology():
+    """Verify MatrixProductState handles non-adjacent 2-qubit interactions across 5 qubits."""
+    from src.engine.mps import simulate_mps
+    from qiskit.quantum_info import Statevector
+
+    qc = QuantumCircuit(5)
+    qc.h(0)
+    qc.cx(0, 4)  # Distance 4 non-adjacent gate
+    qc.cx(1, 3)  # Distance 2 non-adjacent gate
+
+    res = simulate_mps(qc, bond_dimension=64)
+    assert res["success"] is True
+    assert res["qubits"] == 5
+    assert res["swap_count"] > 0
+    assert res["mps_fidelity"] >= 0.9999
+
+    sv_exact = np.array(Statevector.from_instruction(qc))
+    p_exact = np.abs(sv_exact) ** 2
+    p_mps = res["probabilities"]
+    assert float(np.max(np.abs(p_mps - p_exact))) < 1e-6
