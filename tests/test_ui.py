@@ -4,7 +4,7 @@ from cli.ui import print_system_info, display_results, display_help_notice
 def test_display_results_with_energy_telemetry():
     """Verify display_results renders correctly with RAPL and TDP energy telemetry."""
     console = Console(record=True, width=120)
-    
+
     results = [
         {
             "qubits": 10,
@@ -54,10 +54,10 @@ def test_display_results_with_energy_telemetry():
             }
         }
     ]
-    
+
     display_results(results, console=console)
     output = console.export_text()
-    
+
     # Verify tables rendered
     assert "Simulation Benchmark Results" in output
     assert "Hardware Power & Energy Telemetry (EQO)" in output
@@ -93,7 +93,7 @@ def test_print_system_info_and_help():
     print_system_info(console=console)
     output_info = console.export_text()
     assert "System Metadata & Telemetry" in output_info
-    
+
     console_help = Console(record=True, width=120)
     display_help_notice(console=console_help)
     output_help = console_help.export_text()
@@ -137,3 +137,44 @@ def test_display_results_with_qasm_telemetry():
     assert "bell_state" in output
     assert "Total Gates" in output
 
+
+def test_display_results_with_mps_telemetry():
+    """Verify display_results correctly renders Matrix Product State (MPS) Tensor Telemetry table."""
+    console = Console(record=True, width=120)
+    results = [
+        {
+            "qubits": 4,
+            "success": True,
+            "latency": 0.045,
+            "mean_latency": 0.045,
+            "std_latency": 0.0,
+            "runs_count": 1,
+            "latencies": [0.045],
+            "gates": 10,
+            "cpu_usage": 40.0,
+            "fidelity": 100.0,
+            "ram_status": "SAFE",
+            "workload_label": "QASM: qft_4qubit",
+            "method": "mps",
+            "bond_dimension": 64,
+            "max_active_bond_dim": 4,
+            "mps_fidelity": 0.999995,
+            "cumulative_truncation_error": 5.2e-6,
+            "swap_count": 6,
+            "mps_ram_savings": {
+                "savings_percent": 62.5
+            },
+            "device": "CPU",
+            "noise_level": "none"
+        }
+    ]
+    display_results(results, console=console)
+    output = console.export_text()
+    assert "Matrix Product State (MPS) Tensor Telemetry" in output
+    assert "Max Bond Dim" in output
+    assert "Active Bond" in output
+    assert "SVD Fidelity" in output
+    assert "Truncation Error" in output
+    assert "SWAP Count" in output
+    assert "RAM Savings" in output
+    assert "62.5%" in output

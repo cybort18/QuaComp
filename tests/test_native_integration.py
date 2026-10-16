@@ -12,16 +12,39 @@ from src.reporter.md_exporter import export_to_markdown
 def test_cli_parser_native_and_noise_flags():
     """Verify that CLI argument parser correctly parses --use-native-kernels and --noise-profile."""
     parser = build_argument_parser()
-    
+
     # Defaults
     args = parser.parse_args(["--quick"])
     assert args.use_native_kernels is False
     assert args.noise_profile is None
-    
+
     # Explicit flags
     args = parser.parse_args(["--quick", "--use-native-kernels", "--noise-profile", "ibm_brisbane_sample"])
     assert args.use_native_kernels is True
     assert args.noise_profile == "ibm_brisbane_sample"
+
+
+def test_cli_parser_mps_flags():
+    """Verify that CLI argument parser correctly parses --sim-method, --mps, --max-bond-dim, and --svd-cutoff."""
+    parser = build_argument_parser()
+
+    # Defaults
+    args = parser.parse_args(["--quick"])
+    assert args.sim_method == "statevector"
+    assert args.mps is False
+    assert args.max_bond_dim == 64
+    assert args.svd_cutoff == 1e-9
+
+    # Explicit MPS method and bond dimension
+    args_mps = parser.parse_args(["--quick", "--sim-method", "mps", "--max-bond-dim", "128", "--svd-cutoff", "1e-12"])
+    assert args_mps.sim_method == "mps"
+    assert args_mps.max_bond_dim == 128
+    assert args_mps.svd_cutoff == 1e-12
+
+    # Boolean flag --mps
+    args_flag = parser.parse_args(["--quick", "--mps"])
+    assert args_flag.mps is True
+
 
 
 def test_simulation_with_native_kernels_flag():
@@ -32,7 +55,7 @@ def test_simulation_with_native_kernels_flag():
     qc.h(2)
     qc.cx(0, 1)
     qc.cx(1, 2)
-    
+
     res = run_simulation(qc, method="statevector", use_native_kernels=True, runs=1)
     assert res["success"] is True
     assert res["native_kernel_used"] is True
@@ -47,7 +70,7 @@ def test_simulation_with_physical_noise_profile():
     qc.h(0)
     qc.cx(0, 1)
     qc.cx(1, 2)
-    
+
     res = run_simulation(
         qc,
         method="statevector",
@@ -65,7 +88,7 @@ def test_simulation_combined_native_and_physical_noise():
     qc = QuantumCircuit(2)
     qc.h(0)
     qc.cx(0, 1)
-    
+
     res = run_simulation(
         qc,
         method="statevector",
@@ -82,7 +105,7 @@ def test_simulation_combined_native_and_physical_noise():
 def test_json_and_markdown_export_includes_native_and_noise_info(tmp_path):
     """Verify that export_to_json and export_to_markdown output accelerator badges and noise profiles."""
     from cli.runner import run_single_simulation
-    
+
     # Run full runner simulation pipeline to populate complete benchmark result schema
     bench_res = run_single_simulation(
         qubits=2,
@@ -95,7 +118,7 @@ def test_json_and_markdown_export_includes_native_and_noise_info(tmp_path):
         runs=1
     )
     bench_res["workload_label"] = "Shallow Circuit"
-    
+
     dummy_system_metadata = {
         "cpu_name": "Test CPU",
         "cpu_count_physical": 4,
@@ -105,7 +128,7 @@ def test_json_and_markdown_export_includes_native_and_noise_info(tmp_path):
         "os_release": "1.0",
         "python_version": "3.13"
     }
-    
+
     # Test JSON export
     json_path = export_to_json([bench_res], dummy_system_metadata, output_dir=str(tmp_path))
     assert os.path.exists(json_path)
@@ -115,7 +138,7 @@ def test_json_and_markdown_export_includes_native_and_noise_info(tmp_path):
     assert "accelerator_backend" in data
     assert "accelerator_badge" in data
     assert "ibm_brisbane" in data["physical_noise_profile"]
-    
+
     # Test Markdown export
     md_file = tmp_path / "report.md"
     md_path = export_to_markdown([bench_res], dummy_system_metadata, output_path=str(md_file))

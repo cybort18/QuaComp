@@ -273,13 +273,20 @@ def fuse_circuit_single_pass(
     orig_gates = len(circuit.data)
     fused_gates = len(fused_circuit.data)
     reduction = (orig_gates - fused_gates) / orig_gates if orig_gates > 0 else 0.0
+    comp_ratio = round(orig_gates / fused_gates, 2) if fused_gates > 0 else 1.0
     
     active_backend = "C++ Native Engine" if ((force_backend != "python") and HAS_CPP_FUSION) else "CPython Fallback Engine"
     
     metrics = {
         "original_gate_count": orig_gates,
+        "logical_gates": orig_gates,
+        "logical_gate_count": orig_gates,
         "fused_gate_count": fused_gates,
+        "fused_gates": fused_gates,
+        "executed_gate_count": fused_gates,
         "reduction_ratio": round(reduction, 4),
+        "fusion_reduction_pct": round(reduction * 100.0, 2),
+        "gate_fusion_compression_ratio": comp_ratio,
         "fused_blocks_count": fused_blocks_count,
         "elapsed_seconds": round(elapsed, 6),
         "backend": active_backend

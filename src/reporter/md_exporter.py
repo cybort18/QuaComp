@@ -172,6 +172,10 @@ def export_to_markdown(
         savings_gb = ram_savings["savings_bytes"] / (1024 ** 3)
         md_content.append(f"> **MPS RAM Efficiency:** `{ram_savings['savings_percent']:.2f}%` savings (Saved ~`{savings_gb:.4f} GB` vs Statevector)")
 
+    if successful_runs and best_run.get("mps_fidelity") is not None:
+        trunc_err = best_run.get("cumulative_truncation_error", 0.0)
+        md_content.append(f"> **MPS SVD Fidelity:** `{best_run['mps_fidelity'] * 100.0:.4f}%` (Truncation Error: `{trunc_err:.2e}` | Active Bond: `{best_run.get('max_active_bond_dim', 1)}` | SWAPs: `{best_run.get('swap_count', 0)}`)")
+
     if best_entanglement and "von_neumann_entropy" in best_entanglement:
         md_content.append(f"> **Entanglement Entropy:** `S_vN = {best_entanglement['von_neumann_entropy']:.4f} bits` (Schmidt Rank: `{best_entanglement['schmidt_rank']}` | `{best_entanglement['entanglement_regime']}`)")
         md_content.append(f"> **MPS Simulation Complexity:** `{best_entanglement['mps_hardness']}`")
@@ -225,6 +229,29 @@ def export_to_markdown(
         )
 
     md_content.append("\n---\n")
+
+    # Matrix Product State (MPS) Tensor Telemetry Table (if available)
+    mps_runs = [r for r in results if r.get("success", False) and (r.get("method") in ('mps', 'matrix_product_state') or r.get("mps_fidelity") is not None)]
+    if mps_runs:
+        md_content.append("## Matrix Product State (MPS) Tensor Telemetry")
+        md_content.append("| Qubits | Workload | Max Bond Dim (χ) | Active Bond (χ_act) | SVD Fidelity | Truncation Error (ε) | SWAP Count | RAM Savings vs SV |")
+        md_content.append("| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |")
+        for mr in mps_runs:
+            fid_val = mr.get("mps_fidelity")
+            if fid_val is None:
+                fid_val = 1.0
+            trunc_err = mr.get("cumulative_truncation_error")
+            if trunc_err is None:
+                trunc_err = 0.0
+            max_b = mr.get("max_bond_dim") or mr.get("bond_dimension", 64)
+            act_b = mr.get("max_active_bond_dim", 1)
+            swaps = mr.get("swap_count", 0)
+            ram_s = mr.get("mps_ram_savings") or mr.get("ram_savings", {})
+            savings_pct = f"{ram_s['savings_percent']:.1f}%" if (ram_s and "savings_percent" in ram_s) else "-"
+            md_content.append(
+                f"| {mr['qubits']} | {mr.get('workload_label', 'MPS')} | {max_b} | {act_b} | {fid_val * 100.0:.4f}% | {trunc_err:.2e} | {swaps} | {savings_pct} |"
+            )
+        md_content.append("\n---\n")
 
     # Entanglement Entropy Table (if available)
     entropy_runs = [r for r in results if r.get("success", False) and r.get("entanglement_metrics") and "von_neumann_entropy" in r["entanglement_metrics"]]

@@ -1,23 +1,13 @@
 {
-  "timestamp": "2026-09-05T14:53:09.111638",
+  "timestamp": "2026-10-16T15:00:09.812626",
   "report_type": "QuaComp Relative Benchmark Comparison",
   "base_label": "AMD Ryzen 3 5300U with Radeon Graphics",
   "target_label": "Apple M4 Max (16-core CPU)",
   "base_metadata": {
     "cpu_name": "AMD Ryzen 3 5300U with Radeon Graphics",
-    "cpu_count_physical": 4,
-    "cpu_count_logical": 8,
-    "gpu_name": "AMD Radeon(TM) Graphics",
-    "has_gpu": true,
-    "gpu_count": 1,
-    "multi_gpu_supported": false,
-    "aer_gpu_supported": false,
-    "total_vram_gb": 0.0,
-    "total_ram_bytes": 12160622592,
-    "total_ram_gb": 11.325462341308594,
+    "total_ram_gb": 11.33,
     "os_name": "Windows",
     "os_release": "11",
-    "os_version": "10.0.26200",
     "python_version": "3.13.3"
   },
   "target_metadata": {
@@ -28,22 +18,26 @@
     "python_version": "3.13.0"
   },
   "score_summary": {
-    "score_base": 0.0,
+    "score_base": 10486120.47,
     "score_target": 671089200.0,
-    "score_ratio": 1.0,
-    "score_delta_pct": 0.0,
-    "category_base": "Unknown",
+    "score_ratio": 63.99785334528013,
+    "score_delta_pct": 6299.785334528013,
+    "category_base": "High-Performance",
     "category_target": "Extreme Workstation",
-    "capacity_metric_base": 0.0,
+    "capacity_metric_base": 1048576.0,
     "capacity_metric_target": 67108864.0,
-    "capacity_ratio": 1.0,
-    "throughput_metric_base": 0.0,
+    "capacity_ratio": 64.0,
+    "throughput_metric_base": 360.47,
     "throughput_metric_target": 1200.0,
-    "throughput_speedup": 1.0,
-    "throughput_delta_pct": 0.0,
-    "max_qubits_base": 0,
+    "throughput_speedup": 3.3289871556578907,
+    "throughput_delta_pct": 232.89871556578908,
+    "bandwidth_base": 28.52,
+    "bandwidth_target": 442.8,
+    "bandwidth_speedup": 15.525946704067321,
+    "bandwidth_delta_pct": 1452.5946704067323,
+    "max_qubits_base": 20,
     "max_qubits_target": 26,
-    "qubit_gap": 26
+    "qubit_gap": 6
   },
   "matched_qubits": [
     {
@@ -53,15 +47,15 @@
       "device_base": "CPU",
       "device_target": "CPU",
       "gates": 60,
-      "latency_base": 0.021093800009111874,
+      "latency_base": 0.312,
       "latency_target": 0.042,
-      "latency_delta_pct": 99.11063905914199,
-      "speedup_factor": 0.5022333335502827,
-      "cpu_base": 47.9,
+      "latency_delta_pct": -86.53846153846155,
+      "speedup_factor": 7.428571428571428,
+      "cpu_base": 82.8,
       "cpu_target": 85.0,
       "fidelity_base": 100.0,
       "fidelity_target": 100.0,
-      "is_faster": false
+      "is_faster": true
     },
     {
       "qubits": 20,
@@ -70,16 +64,16 @@
       "device_base": "CPU",
       "device_target": "CPU",
       "gates": 220,
-      "latency_base": 0.15075930001330562,
+      "latency_base": 0.6103,
       "latency_target": 0.125,
-      "latency_delta_pct": -17.08637544153639,
-      "speedup_factor": 1.206074400106445,
-      "cpu_base": 45.8,
+      "latency_delta_pct": -79.51826970342455,
+      "speedup_factor": 4.8824,
+      "cpu_base": 43.9,
       "cpu_target": 91.0,
       "fidelity_base": 100.0,
       "fidelity_target": 100.0,
       "is_faster": true
     }
   ],
-  "verdict": "Apple M4 Max (16-core CPU) demonstrates virtually identical simulation throughput (~par) with a +26 qubit capacity advantage (2^26x statevector space) compared to AMD Ryzen 3 5300U with Radeon Graphics."
+  "verdict": "Apple M4 Max (16-core CPU) demonstrates 3.33x faster simulation throughput (+232.9%) with a +6 qubit capacity advantage (2^6x statevector space) compared to AMD Ryzen 3 5300U with Radeon Graphics."
 }

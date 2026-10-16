@@ -2,10 +2,15 @@
   "timestamp": "2026-08-16T14:00:00",
   "final_score": 1342178000.0,
   "final_composite_score": 1342178000.0,
-  "score_type": "project-specific composite heuristic score",
+  "score_type": "QuaComp Synthetic Index (QSI)",
   "scoring_breakdown": {
     "capacity_metric": 134217728.0,
-    "throughput_metric": 3800.0
+    "throughput_metric": 3800.0,
+    "effective_bandwidth_gbps": 2450.00
+  },
+  "academic_benchmarks": {
+    "effective_bandwidth_gbps": 2450.00,
+    "arithmetic_intensity_flops_per_byte": 0.4375
   },
   "performance_category": "Data Center GPU",
   "max_qubits_simulated": 27,

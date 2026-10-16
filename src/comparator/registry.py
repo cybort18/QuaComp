@@ -23,8 +23,16 @@ ENTERPRISE_BASELINES: Dict[str, Dict[str, Any]] = {
             "timestamp": "2026-08-12T10:15:00",
             "final_score": 335544830.0,
             "final_composite_score": 335544830.0,
-            "score_type": "project-specific composite heuristic score",
-            "scoring_breakdown": {"capacity_metric": 33554432.0, "throughput_metric": 510.0},
+            "score_type": "QuaComp Synthetic Index (QSI)",
+            "scoring_breakdown": {
+                "capacity_metric": 33554432.0,
+                "throughput_metric": 510.0,
+                "effective_bandwidth_gbps": 82.64
+            },
+            "academic_benchmarks": {
+                "effective_bandwidth_gbps": 82.64,
+                "arithmetic_intensity_flops_per_byte": 0.4375
+            },
             "performance_category": "Extreme Workstation",
             "max_qubits_simulated": 25,
             "system_metadata": {
@@ -50,8 +58,16 @@ ENTERPRISE_BASELINES: Dict[str, Dict[str, Any]] = {
             "timestamp": "2026-08-10T21:02:55",
             "final_score": 10486120.47,
             "final_composite_score": 10486120.47,
-            "score_type": "project-specific composite heuristic score",
-            "scoring_breakdown": {"capacity_metric": 1048576.0, "throughput_metric": 360.47},
+            "score_type": "QuaComp Synthetic Index (QSI)",
+            "scoring_breakdown": {
+                "capacity_metric": 1048576.0,
+                "throughput_metric": 360.47,
+                "effective_bandwidth_gbps": 28.52
+            },
+            "academic_benchmarks": {
+                "effective_bandwidth_gbps": 28.52,
+                "arithmetic_intensity_flops_per_byte": 0.4375
+            },
             "performance_category": "High-Performance",
             "max_qubits_simulated": 20,
             "system_metadata": {
@@ -77,8 +93,16 @@ ENTERPRISE_BASELINES: Dict[str, Dict[str, Any]] = {
             "timestamp": "2026-08-11T14:30:00",
             "final_score": 167772480.0,
             "final_composite_score": 167772480.0,
-            "score_type": "project-specific composite heuristic score",
-            "scoring_breakdown": {"capacity_metric": 16777216.0, "throughput_metric": 320.0},
+            "score_type": "QuaComp Synthetic Index (QSI)",
+            "scoring_breakdown": {
+                "capacity_metric": 16777216.0,
+                "throughput_metric": 320.0,
+                "effective_bandwidth_gbps": 38.45
+            },
+            "academic_benchmarks": {
+                "effective_bandwidth_gbps": 38.45,
+                "arithmetic_intensity_flops_per_byte": 0.4375
+            },
             "performance_category": "Extreme Workstation",
             "max_qubits_simulated": 24,
             "system_metadata": {
@@ -104,8 +128,16 @@ ENTERPRISE_BASELINES: Dict[str, Dict[str, Any]] = {
             "timestamp": "2026-08-15T12:00:00",
             "final_score": 671089200.0,
             "final_composite_score": 671089200.0,
-            "score_type": "project-specific composite heuristic score",
-            "scoring_breakdown": {"capacity_metric": 67108864.0, "throughput_metric": 1200.0},
+            "score_type": "QuaComp Synthetic Index (QSI)",
+            "scoring_breakdown": {
+                "capacity_metric": 67108864.0,
+                "throughput_metric": 1200.0,
+                "effective_bandwidth_gbps": 442.80
+            },
+            "academic_benchmarks": {
+                "effective_bandwidth_gbps": 442.80,
+                "arithmetic_intensity_flops_per_byte": 0.4375
+            },
             "performance_category": "Extreme Workstation",
             "max_qubits_simulated": 26,
             "system_metadata": {
@@ -131,8 +163,16 @@ ENTERPRISE_BASELINES: Dict[str, Dict[str, Any]] = {
             "timestamp": "2026-08-16T14:00:00",
             "final_score": 1342178000.0,
             "final_composite_score": 1342178000.0,
-            "score_type": "project-specific composite heuristic score",
-            "scoring_breakdown": {"capacity_metric": 134217728.0, "throughput_metric": 3800.0},
+            "score_type": "QuaComp Synthetic Index (QSI)",
+            "scoring_breakdown": {
+                "capacity_metric": 134217728.0,
+                "throughput_metric": 3800.0,
+                "effective_bandwidth_gbps": 2450.00
+            },
+            "academic_benchmarks": {
+                "effective_bandwidth_gbps": 2450.00,
+                "arithmetic_intensity_flops_per_byte": 0.4375
+            },
             "performance_category": "Data Center GPU",
             "max_qubits_simulated": 27,
             "system_metadata": {
@@ -160,8 +200,16 @@ ENTERPRISE_BASELINES: Dict[str, Dict[str, Any]] = {
             "timestamp": "2026-08-18T08:00:00",
             "final_score": 536872000.0,
             "final_composite_score": 536872000.0,
-            "score_type": "project-specific composite heuristic score",
-            "scoring_breakdown": {"capacity_metric": 53687091.0, "throughput_metric": 1850.0},
+            "score_type": "QuaComp Synthetic Index (QSI)",
+            "scoring_breakdown": {
+                "capacity_metric": 53687091.0,
+                "throughput_metric": 1850.0,
+                "effective_bandwidth_gbps": 395.20
+            },
+            "academic_benchmarks": {
+                "effective_bandwidth_gbps": 395.20,
+                "arithmetic_intensity_flops_per_byte": 0.4375
+            },
             "performance_category": "Cloud Server",
             "max_qubits_simulated": 26,
             "system_metadata": {

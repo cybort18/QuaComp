@@ -28,11 +28,11 @@ def print_system_info(console: Optional[Console] = None) -> None:
     table = Table(title="System Metadata & Telemetry", show_header=True, header_style="bold magenta", expand=False)
     table.add_column("Parameter", style="cyan")
     table.add_column("System Value", style="green")
-    
+
     table.add_row("CPU Name", metadata["cpu_name"])
     table.add_row("CPU Physical / Logical Cores", f"{metadata['cpu_count_physical']} cores / {metadata['cpu_count_logical']} threads")
     table.add_row("Total Physical RAM", f"{metadata['total_ram_gb']:.2f} GB")
-    
+
     if gpu_meta["has_gpu"]:
         aer_status = "Available (CUDA)" if gpu_meta["aer_gpu_supported"] else "CPU-only Backend"
         gpu_label = gpu_meta["gpu_name"]
@@ -41,10 +41,10 @@ def print_system_info(console: Optional[Console] = None) -> None:
         table.add_row("GPU Hardware", f"{gpu_label} [dim](Aer: {aer_status})[/dim]")
         if gpu_meta["total_vram_gb"] > 0:
             table.add_row("Total GPU VRAM", f"{gpu_meta['total_vram_gb']:.2f} GB" + (" (Aggregated)" if gpu_meta.get("multi_gpu_supported") else ""))
-            
+
     table.add_row("Operating System", f"{metadata['os_name']} ({metadata['os_release']})")
     table.add_row("Python Version", metadata["python_version"])
-    
+
     c.print(table)
     c.print()
 
@@ -63,37 +63,37 @@ def display_results(results: List[Dict[str, Any]], console: Optional[Console] = 
     table.add_column("Fidelity", style="green", justify="right")
     table.add_column("RAM", style="bold", justify="center")
     table.add_column("Outcome", style="bold", justify="center")
-    
+
     successful_runs = [r for r in results if r["success"]]
-    
+
     for r in results:
         ram_style = "green" if r["ram_status"] == "SAFE" else "red"
         outcome_str = "[bold green]PASS[/bold green]" if r["success"] else "[bold red]FAIL[/bold red]"
-        
+
         method_label = r.get("method", "statevector").upper()
         if method_label == "MATRIX_PRODUCT_STATE":
             method_label = "MPS"
         if r.get("bond_dimension"):
             method_label += f" (chi={r['bond_dimension']})"
-            
+
         if r.get("physical_noise_profile"):
             noise_label = f"QPU:{r['physical_noise_profile'][:8]}"
         else:
             noise_label = r.get("noise_level", "none").upper()
-            
+
         fidelity_str = f"{r['fidelity']:.1f}%" if (noise_label != "NONE" or r.get("physical_noise_profile")) else "100.0%"
-        
+
         runs_count = r.get("runs_count", 1)
         mean_lat = r.get("mean_latency", r.get("latency", 0.0))
         std_lat = r.get("std_latency", 0.0)
-        
+
         if runs_count > 1 and r["success"]:
             latency_str = f"{mean_lat:.4f}s [dim]+/-{std_lat:.3f}s[/dim]"
         elif r["success"]:
             latency_str = f"{mean_lat:.4f}s"
         else:
             latency_str = "-"
-            
+
         device_label = r.get("device", "CPU").upper()
         if r.get("accelerator_badge"):
             device_display = f"{r['accelerator_badge']} {device_label}"
@@ -103,7 +103,7 @@ def display_results(results: List[Dict[str, Any]], console: Optional[Console] = 
             device_display = "[bold magenta]MULTI-GPU[/bold magenta]"
         else:
             device_display = "[dim]CPU[/dim]"
-        
+
         table.add_row(
             str(r["qubits"]),
             r["workload_label"],
@@ -117,13 +117,52 @@ def display_results(results: List[Dict[str, Any]], console: Optional[Console] = 
             f"[{ram_style}]{r['ram_status']}[/{ram_style}]",
             outcome_str
         )
-        
+
     c.print(table)
     c.print()
-    
+
     if not successful_runs:
         c.print(Panel("[bold red]No simulations completed successfully. Unable to calculate benchmark score.[/bold red]", title="Score Summary", border_style="red", expand=False))
         return
+
+    # Render Matrix Product State (MPS) Tensor Telemetry Table if present
+    mps_runs = [r for r in successful_runs if r.get("method") in ('mps', 'matrix_product_state') or r.get("mps_fidelity") is not None]
+    if mps_runs:
+        mps_table = Table(title="Matrix Product State (MPS) Tensor Telemetry", show_header=True, header_style="bold cyan", expand=False)
+        mps_table.add_column("Qubits", style="cyan", justify="center")
+        mps_table.add_column("Workload", style="white", justify="center")
+        mps_table.add_column("Max Bond Dim (chi)", style="bold yellow", justify="center")
+        mps_table.add_column("Active Bond (chi_act)", style="yellow", justify="center")
+        mps_table.add_column("SVD Fidelity", style="bold green", justify="right")
+        mps_table.add_column("Truncation Error (eps)", style="magenta", justify="right")
+        mps_table.add_column("SWAP Count", style="cyan", justify="center")
+        mps_table.add_column("RAM Savings vs SV", style="bold green", justify="right")
+
+        for mr in mps_runs:
+            fid_val = mr.get("mps_fidelity")
+            if fid_val is None:
+                fid_val = 1.0
+            trunc_err = mr.get("cumulative_truncation_error")
+            if trunc_err is None:
+                trunc_err = 0.0
+            max_b = mr.get("max_bond_dim") or mr.get("bond_dimension", 64)
+            act_b = mr.get("max_active_bond_dim", 1)
+            swaps = mr.get("swap_count", 0)
+            ram_s = mr.get("mps_ram_savings") or mr.get("ram_savings", {})
+            savings_pct = f"{ram_s['savings_percent']:.1f}%" if (ram_s and "savings_percent" in ram_s) else "-"
+
+            mps_table.add_row(
+                str(mr["qubits"]),
+                mr.get("workload_label", "MPS"),
+                str(max_b),
+                str(act_b),
+                f"{fid_val * 100.0:.4f}%",
+                f"{trunc_err:.2e}",
+                str(swaps),
+                savings_pct
+            )
+        c.print(mps_table)
+        c.print()
 
     # Render Entanglement & Simulation Hardness Table if metrics are present
     entropy_runs = [r for r in successful_runs if r.get("entanglement_metrics") and "von_neumann_entropy" in r["entanglement_metrics"]]
@@ -136,7 +175,7 @@ def display_results(results: List[Dict[str, Any]], console: Optional[Console] = 
         ent_table.add_column("Schmidt Rank", style="cyan", justify="center")
         ent_table.add_column("Entanglement Regime", style="green", justify="center")
         ent_table.add_column("MPS Complexity Tier", style="bold magenta", justify="center")
-        
+
         for er in entropy_runs:
             em = er["entanglement_metrics"]
             ent_table.add_row(
@@ -161,7 +200,7 @@ def display_results(results: List[Dict[str, Any]], console: Optional[Console] = 
         en_table.add_column("Total Energy", style="bold yellow", justify="right")
         en_table.add_column("EQO (uJ/Gate)", style="bold green", justify="right")
         en_table.add_column("Telemetry Backend", style="dim cyan", justify="center")
-        
+
         for enr in energy_runs:
             enm = enr["energy_metrics"]
             backend_raw = str(enm.get("energy_backend", "Generic Model"))
@@ -242,11 +281,11 @@ def display_results(results: List[Dict[str, Any]], console: Optional[Console] = 
     best_fidelity = best_run.get("fidelity", 100.0)
     best_energy = best_run.get("energy_metrics", {})
     total_energy_j = best_energy.get("total_energy_joules") if best_energy else None
-    
+
     score = calculate_qsim_score(max_qubits, gates, mean_latency, fidelity=best_fidelity)
     category = categorize_score(score)
     breakdown = calculate_scoring_breakdown(max_qubits, gates, mean_latency, fidelity=best_fidelity, energy_joules=total_energy_j)
-    
+
     tier_colors = {
         "Entry-Level": "blue",
         "Mid-Range": "green",
@@ -254,7 +293,7 @@ def display_results(results: List[Dict[str, Any]], console: Optional[Console] = 
         "Extreme Workstation": "magenta"
     }
     color = tier_colors.get(category, "white")
-    
+
     panel_content = Text()
     panel_content.append("QuaComp Synthetic Index (QSI): ", style="bold")
     panel_content.append(f"{score:,.2f} pts\n", style=f"bold {color}")
@@ -267,15 +306,15 @@ def display_results(results: List[Dict[str, Any]], console: Optional[Console] = 
         panel_content.append(f"  - Energy-Delay Product:   {breakdown['energy_delay_product']:.6f} J·s\n", style="dim cyan")
     panel_content.append("Performance Category: ", style="bold")
     panel_content.append(f"{category}\n", style=f"bold {color}")
-    
+
     method_used = best_run.get("method", "statevector")
     if method_used in ('mps', 'matrix_product_state') and best_run.get("bond_dimension"):
         method_used = f"MPS (max_bond_dimension={best_run['bond_dimension']})"
     panel_content.append(f"Simulation Method: {method_used}\n", style="cyan")
-    
+
     if best_run.get("accelerator_badge"):
         panel_content.append(f"Acceleration Engine: {best_run['accelerator_badge']} (Backend: {best_run.get('accelerator_backend', 'N/A')})\n", style="bold cyan")
-        
+
     noise_used = best_run.get("noise_level", "none")
     if best_run.get("physical_noise_profile"):
         panel_content.append(f"Physical QPU Calibration: {best_run['physical_noise_profile']} (Realistic Kraus Operators)\n", style="bold yellow")
@@ -284,17 +323,24 @@ def display_results(results: List[Dict[str, Any]], console: Optional[Console] = 
         panel_content.append(f"NISQ Noise Profile: {noise_used} (synthetic representative)\n", style="bold yellow")
         panel_content.append(f"Quantum State Fidelity: {best_run['fidelity']:.2f}%\n", style="bold cyan")
         panel_content.append(f"CPU Computation Overhead: +{best_run['overhead_ratio']:.2f}%\n", style="magenta")
-        
+
     ram_savings = best_run.get("ram_savings", {})
     if ram_savings:
         savings_gb = ram_savings["savings_bytes"] / (1024 ** 3)
         panel_content.append(f"MPS RAM Efficiency: {ram_savings['savings_percent']:.2f}% savings (Saved ~{savings_gb:.4f} GB vs Statevector)\n", style="bold green")
-        
+
+    if best_run.get("mps_fidelity") is not None:
+        trunc_err = best_run.get("cumulative_truncation_error", 0.0)
+        panel_content.append(
+            f"MPS SVD Fidelity: {best_run['mps_fidelity'] * 100.0:.4f}% (Truncation Error: {trunc_err:.2e} | Active Bond: {best_run.get('max_active_bond_dim', 1)} | SWAPs: {best_run.get('swap_count', 0)})\n",
+            style="bold cyan"
+        )
+
     if best_run.get("entanglement_metrics") and "von_neumann_entropy" in best_run["entanglement_metrics"]:
         em = best_run["entanglement_metrics"]
         panel_content.append(f"Entanglement Entropy: S_vN = {em['von_neumann_entropy']:.4f} bits (Schmidt Rank: {em['schmidt_rank']} | {em['entanglement_regime']})\n", style="bold red")
         panel_content.append(f"MPS Simulation Complexity: {em['mps_hardness']}\n", style="bold magenta")
-        
+
     if best_run.get("energy_metrics") and "total_energy_joules" in best_run["energy_metrics"]:
         enm = best_run["energy_metrics"]
         backend_raw = str(enm.get("energy_backend", "Generic Model"))
@@ -303,12 +349,12 @@ def display_results(results: List[Dict[str, Any]], console: Optional[Console] = 
             f"Hardware Energy Telemetry: {sensor_badge} {enm.get('total_energy_joules', 0.0):.4f} J (Avg: {enm.get('average_power_watts', 0.0):.2f}W | EQO: {enm.get('eqo_microjoules', 0.0):.2f} uJ/gate)\n",
             style="bold yellow"
         )
-        
+
     runs_cnt = best_run.get("runs_count", 1)
     std_lat = best_run.get("std_latency", 0.0)
     panel_content.append(f"Statistical Repeatability: {runs_cnt} runs (Mean: {mean_latency:.4f}s, Std Dev: {std_lat:.4f}s)\n", style="dim green")
     panel_content.append(f"Max Qubits Simulated: {max_qubits} qubits (using {gates} gates)", style="italic")
-    
+
     c.print(Panel(panel_content, title="[bold gold3]Final Benchmark Report[/bold gold3]", border_style=color, expand=False))
 
 def display_help_notice(console: Optional[Console] = None) -> None:

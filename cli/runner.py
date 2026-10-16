@@ -1,14 +1,15 @@
 from typing import List, Dict, Any, Optional
 import time
 import psutil
+import numpy as np
 from rich.console import Console
 from rich.status import Status
 
 from src.profiler.memory import check_memory_safety
 from src.profiler.telemetry import get_cpu_utilization
 from src.engine.circuits import (
-    generate_shallow_circuit, 
-    generate_deep_circuit, 
+    generate_shallow_circuit,
+    generate_deep_circuit,
     generate_qft_circuit,
     generate_vqe_circuit,
     profile_parameter_binding,
@@ -25,10 +26,10 @@ from src.engine.accelerator import get_best_backend, InsufficientVRAMError
 default_console = Console()
 
 def run_single_simulation(
-    qubits: int, 
-    workload_type: str, 
-    depth: int, 
-    method: str = 'statevector', 
+    qubits: int,
+    workload_type: str,
+    depth: int,
+    method: str = 'statevector',
     bond_dimension: int = 64,
     device: str = 'cpu',
     noise_level: str = 'none',
@@ -43,20 +44,21 @@ def run_single_simulation(
     qasm_metrics: Optional[Dict[str, Any]] = None,
     backend: str = 'auto',
     shots: int = 1000,
-    noise_method: str = 'trajectory'
+    noise_method: str = 'trajectory',
+    svd_cutoff: float = 1e-9
 ) -> Dict[str, Any]:
 
     """
     Execute a single quantum simulation workload with profiling.
-    
+
     Returns:
         dict: Simulation results and execution metrics.
     """
     # 1. Pre-flight memory safety check
     is_safe, msg = check_memory_safety(
-        qubits, 
-        method=method, 
-        bond_dimension=bond_dimension, 
+        qubits,
+        method=method,
+        bond_dimension=bond_dimension,
         device=device,
         state_slicing=state_slicing
     )
@@ -89,12 +91,12 @@ def run_single_simulation(
             "qv_metrics": {},
             "energy_metrics": {}
         }
-        
+
     # 2. Circuit generation
     circuit = None
     param_binding_metrics = {}
     qv_metrics = {}
-    
+
     if qasm_circuit is not None:
         circuit = qasm_circuit.to_quantum_circuit() if hasattr(qasm_circuit, 'to_quantum_circuit') else qasm_circuit
         qubits = circuit.num_qubits
@@ -108,14 +110,12 @@ def run_single_simulation(
         vqe_depth = max(1, depth // 5) if depth > 5 else depth
         raw_vqe = generate_vqe_circuit(qubits, depth=vqe_depth)
         param_binding_metrics = profile_parameter_binding(raw_vqe)
-        import numpy as np
         rng_vals = [float(v) for v in np.linspace(0.1, 3.14, raw_vqe.num_parameters)]
         circuit = raw_vqe.assign_parameters(rng_vals)
     elif workload_type == "qaoa":
         qaoa_steps = max(1, depth // 10) if depth > 10 else 1
         raw_qaoa = generate_qaoa_circuit(qubits, p_steps=qaoa_steps)
         param_binding_metrics = profile_parameter_binding(raw_qaoa)
-        import numpy as np
         rng_vals = [float(v) for v in np.linspace(0.1, 1.57, raw_qaoa.num_parameters)]
         circuit = raw_qaoa.assign_parameters(rng_vals)
     elif workload_type == "qv":
@@ -123,12 +123,12 @@ def run_single_simulation(
         circuit = generate_quantum_volume_circuit(qv_qubits, depth=depth if depth is not None else qv_qubits)
     else:
         circuit = generate_qft_circuit(qubits)
-        
+
     num_gates = sum(circuit.count_ops().values())
-    
+
     # 3. Energy and CPU measurement start
     get_cpu_utilization()
-    
+
     # 4. Simulation run with Energy Profiler, noise, multi-GPU/device, workers, and method support (multiple runs)
     from src.profiler.energy import EnergyProfiler
     noise_model = None
@@ -145,78 +145,131 @@ def run_single_simulation(
     active_be = get_best_backend(backend)
     active_be.device_synchronize()
 
-    try:
+    if method in ('mps', 'matrix_product_state'):
+        from src.engine.mps import simulate_mps
+        mps_latencies = []
+        last_mps_res = None
         with EnergyProfiler() as energy_prof:
-            sim_result = run_simulation(
-                circuit, 
-                method=method, 
-                bond_dimension=bond_dimension, 
-                device=device,
-                noise_model=noise_model,
-                noise_level=noise_level,
-                shots=shots,
-                runs=runs,
-                workers=workers,
-                state_slicing=state_slicing,
-                blocking_qubits=blocking_qubits,
-                use_native_kernels=use_native_kernels,
-                physical_noise_profile=noise_profile,
-                backend=backend,
-                noise_method=noise_method
+            for _ in range(runs):
+                mps_res = simulate_mps(
+                    circuit,
+                    bond_dimension=bond_dimension,
+                    cutoff=svd_cutoff,
+                    shots=shots
+                )
+                mps_latencies.append(mps_res["latency"])
+                last_mps_res = mps_res
+
+        mean_lat = float(np.mean(mps_latencies))
+        med_lat = float(np.median(mps_latencies))
+        std_lat = float(np.std(mps_latencies, ddof=1)) if len(mps_latencies) > 1 else 0.0
+
+        sim_result = {
+            "success": True,
+            "latency": mean_lat,
+            "mean_latency": mean_lat,
+            "median_latency": med_lat,
+            "std_latency": std_lat,
+            "latencies": mps_latencies,
+            "runs_count": len(mps_latencies),
+            "counts": last_mps_res["counts"],
+            "device": device.upper(),
+            "workers": workers,
+            "error": None,
+            "metadata": {
+                "backend_name": "QuaComp MPS Tensor Engine",
+                "backend_version": "1.0.0",
+                "method": "mps",
+                "bond_dimension": bond_dimension,
+                "cutoff": svd_cutoff,
+                "shots": shots,
+                "counts": last_mps_res["counts"]
+            },
+            "native_kernel_used": False,
+            "accelerator_backend": "CPU (MPS Tensor Network)",
+            "accelerator_badge": None,
+            "fusion_metrics": None,
+            "physical_noise_profile": None,
+            "mps_fidelity": last_mps_res["mps_fidelity"],
+            "cumulative_truncation_error": last_mps_res["cumulative_truncation_error"],
+            "max_active_bond_dim": last_mps_res["max_active_bond_dim"],
+            "swap_count": last_mps_res["swap_count"]
+        }
+    else:
+        try:
+            with EnergyProfiler() as energy_prof:
+                sim_result = run_simulation(
+                    circuit,
+                    method=method,
+                    bond_dimension=bond_dimension,
+                    device=device,
+                    noise_model=noise_model,
+                    noise_level=noise_level,
+                    shots=shots,
+                    runs=runs,
+                    workers=workers,
+                    state_slicing=state_slicing,
+                    blocking_qubits=blocking_qubits,
+                    use_native_kernels=use_native_kernels,
+                    physical_noise_profile=noise_profile,
+                    backend=backend,
+                    noise_method=noise_method
+                )
+        except (InsufficientVRAMError, MemoryError, RuntimeError) as e:
+            if isinstance(e, RuntimeError) and "cuda out of memory" not in str(e).lower() and "out of memory" not in str(e).lower():
+                raise
+            default_console.print(
+                f"[bold yellow][WARNING] VRAM Limit Exceeded / CUDA OOM:[/] {e}\n"
+                f"[bold cyan][INFO] Automatically falling back to CPU / NumPy execution...[/]"
             )
-    except (InsufficientVRAMError, MemoryError, RuntimeError) as e:
-        if isinstance(e, RuntimeError) and "cuda out of memory" not in str(e).lower() and "out of memory" not in str(e).lower():
-            raise
-        default_console.print(
-            f"[bold yellow][WARNING] VRAM Limit Exceeded / CUDA OOM:[/] {e}\n"
-            f"[bold cyan][INFO] Automatically falling back to CPU / NumPy execution...[/]"
-        )
-        with EnergyProfiler() as energy_prof:
-            sim_result = run_simulation(
-                circuit, 
-                method=method, 
-                bond_dimension=bond_dimension, 
-                device="cpu",
-                noise_model=noise_model,
-                noise_level=noise_level,
-                shots=shots,
-                runs=runs,
-                workers=workers,
-                state_slicing=False,
-                blocking_qubits=None,
-                use_native_kernels=False,
-                physical_noise_profile=noise_profile,
-                backend="numpy",
-                noise_method=noise_method
-            )
-    finally:
-        active_be.device_synchronize()
+            with EnergyProfiler() as energy_prof:
+                sim_result = run_simulation(
+                    circuit,
+                    method=method,
+                    bond_dimension=bond_dimension,
+                    device="cpu",
+                    noise_model=noise_model,
+                    noise_level=noise_level,
+                    shots=shots,
+                    runs=runs,
+                    workers=workers,
+                    state_slicing=False,
+                    blocking_qubits=None,
+                    use_native_kernels=False,
+                    physical_noise_profile=noise_profile,
+                    backend="numpy",
+                    noise_method=noise_method
+                )
+        finally:
+            active_be.device_synchronize()
 
     energy_metrics = energy_prof.get_metrics(num_gates=num_gates)
-    
+
     # 5. CPU measurement end
     cpu_metric = get_cpu_utilization()
     cpu_usage = float(cpu_metric.get("overall_percent", 0.0)) if isinstance(cpu_metric, dict) else float(cpu_metric)
-    
+
     # 6. Calculate MPS RAM savings if applicable
     ram_savings = {}
     if method in ('mps', 'matrix_product_state') and sim_result["success"]:
         process = psutil.Process()
         actual_ram_bytes = process.memory_info().rss
         ram_savings = calculate_mps_ram_savings(qubits, actual_ram_bytes)
-        
+
     # 7. Calculate NISQ metrics (Fidelity and CPU Overhead) if noisy
     fidelity = 100.0
     overhead_ratio = 0.0
-    if noise_level != "none" and sim_result["success"]:
+    if method in ('mps', 'matrix_product_state'):
+        fidelity = round(sim_result.get("mps_fidelity", 1.0) * 100.0, 4)
+    elif noise_level != "none" and sim_result["success"]:
         active_be.device_synchronize()
         try:
             ideal_sim_result = run_simulation(
-                circuit, 
-                method=method, 
-                bond_dimension=bond_dimension, 
+                circuit,
+                method=method,
+                bond_dimension=bond_dimension,
                 device=device,
-                noise_model=None, 
+                noise_model=None,
                 noise_level="none",
                 shots=shots,
                 runs=1,
@@ -230,11 +283,11 @@ def run_single_simulation(
             if isinstance(e, RuntimeError) and "cuda out of memory" not in str(e).lower() and "out of memory" not in str(e).lower():
                 raise
             ideal_sim_result = run_simulation(
-                circuit, 
-                method=method, 
-                bond_dimension=bond_dimension, 
+                circuit,
+                method=method,
+                bond_dimension=bond_dimension,
                 device="cpu",
-                noise_model=None, 
+                noise_model=None,
                 noise_level="none",
                 shots=shots,
                 runs=1,
@@ -249,20 +302,20 @@ def run_single_simulation(
         if ideal_sim_result["success"]:
             fidelity = calculate_state_fidelity(ideal_sim_result["counts"], sim_result["counts"])
             overhead_ratio = calculate_overhead_ratio(ideal_sim_result["latency"], sim_result["mean_latency"])
-            
+
     # 8. Calculate Entanglement Entropy Metrics if requested (Supports Native MPS Tensor for large qubits!)
     entanglement_metrics = {}
     if compute_entropy and sim_result["success"] and circuit is not None:
         try:
             ent_method = "mps" if method in ('mps', 'matrix_product_state') else "auto"
             entanglement_metrics = calculate_bipartite_entropy(
-                circuit, 
-                method=ent_method, 
+                circuit,
+                method=ent_method,
                 max_bond_dimension=bond_dimension
             )
         except Exception as ee:
             entanglement_metrics = {"error": str(ee)}
-    
+
     # 9. Calculate Quantum Volume Heavy Output Metrics if applicable
     if workload_type == "qv" and sim_result["success"] and sim_result.get("counts") and qubits <= 16:
         try:
@@ -284,7 +337,7 @@ def run_single_simulation(
     std_lat = sim_result["std_latency"]
     runs_cnt = sim_result["runs_count"]
     sim_meta = sim_result.get("metadata", {})
-    
+
     return {
         "qubits": qubits,
         "method": method,
@@ -315,6 +368,7 @@ def run_single_simulation(
         "backend": backend,
         "cuda_telemetry": sim_result.get("cuda_telemetry"),
         "ram_savings": ram_savings,
+        "mps_ram_savings": ram_savings,
         "entanglement_metrics": entanglement_metrics,
         "parameter_binding_metrics": param_binding_metrics,
         "qv_metrics": qv_metrics,
@@ -322,12 +376,18 @@ def run_single_simulation(
         "shots": shots,
         "memory_saved_ratio": sim_meta.get("memory_saved_ratio", 2 ** qubits),
         "energy_metrics": energy_metrics,
-        "qasm_metrics": qasm_metrics
+        "qasm_metrics": qasm_metrics,
+        "mps_fidelity": sim_result.get("mps_fidelity") if method in ('mps', 'matrix_product_state') else None,
+        "cumulative_truncation_error": sim_result.get("cumulative_truncation_error") if method in ('mps', 'matrix_product_state') else None,
+        "max_active_bond_dim": sim_result.get("max_active_bond_dim") if method in ('mps', 'matrix_product_state') else None,
+        "swap_count": sim_result.get("swap_count") if method in ('mps', 'matrix_product_state') else None,
+        "max_bond_dim": bond_dimension if method in ('mps', 'matrix_product_state') else None,
+        "svd_cutoff": svd_cutoff if method in ('mps', 'matrix_product_state') else None
     }
 
 def run_quick_benchmark(
-    args: Any, 
-    effective_device: str, 
+    args: Any,
+    effective_device: str,
     console: Optional[Console] = None
 ) -> List[Dict[str, Any]]:
     """Execute Quick Benchmark Suite (Qubits: 10, 15, 20)."""
@@ -343,13 +403,13 @@ def run_quick_benchmark(
     slicing_label = " [Distributed State Slicing]" if state_slicing else ""
     native_label = " [Native Kernel Fusion]" if use_native_kernels else ""
     backend_label = f" [Backend: {backend.upper()}]" if backend != "auto" else ""
-    
+
     if backend == "cuda" or (backend == "auto" and effective_device in ("gpu", "multi_gpu")):
         from src.profiler.gpu import get_cuda_telemetry
         cuda_info = get_cuda_telemetry()
         if cuda_info.get("available"):
             c.print(f"[bold cyan]NVIDIA CUDA Hardware Active:[/bold cyan] {cuda_info['device_name']} (Compute: {cuda_info['compute_capability']}, VRAM: {cuda_info['vram_total_mb']:.1f} MB)")
-            
+
     if args.noise_level != 'none' or noise_profile is not None:
         noise_desc = "Monte Carlo Wavefunction (Trajectory)" if noise_method == "trajectory" else "Density Matrix"
         c.print(f"[bold cyan]Noise Simulation Mode:[/] [bold magenta]{noise_desc}[/] | Shots: [bold green]{shots:,}[/] | Preserving O(2^n) Scaling (Memory Saved: [bold yellow]~2^n x[/bold yellow])")
@@ -357,17 +417,18 @@ def run_quick_benchmark(
     c.print(f"[bold yellow]Executing Quick Benchmark Suite (Qubits: 10, 15, 20) [Method: {args.method.upper()}, Device: {effective_device.upper()}{slicing_label}{native_label}{backend_label}, Workers: {workers}, Noise: {args.noise_level.upper()} ({noise_method.upper()}, {shots} shots), Entropy: {args.entropy}, Runs: {args.runs}]...[/bold yellow]\n")
     qubits_list = [10, 15, 20]
     results = []
-    
-    workload = getattr(args, 'type', 'qft')
-    depth = getattr(args, 'depth', 10)
+
+    effective_bond_dim = getattr(args, 'max_bond_dim', None) or getattr(args, 'bond_dim', 64)
+    svd_cutoff = getattr(args, 'svd_cutoff', 1e-9)
     for q in qubits_list:
         with Status(f"Running simulation for {q} qubits on {effective_device.upper()} ({args.runs} runs, {workers} workers)...", console=c):
             res = run_single_simulation(
-                q, workload, depth, args.method, args.bond_dim, effective_device, 
+                q, workload, depth, args.method, effective_bond_dim, effective_device,
                 args.noise_level, args.runs, workers=workers, compute_entropy=args.entropy,
                 state_slicing=state_slicing, blocking_qubits=blocking_qubits,
                 use_native_kernels=use_native_kernels, noise_profile=noise_profile,
-                backend=backend, shots=shots, noise_method=noise_method
+                backend=backend, shots=shots, noise_method=noise_method,
+                svd_cutoff=svd_cutoff
             )
             res["workload_label"] = workload.upper()
             results.append(res)
@@ -377,8 +438,8 @@ def run_quick_benchmark(
     return results
 
 def run_full_stress_test(
-    args: Any, 
-    effective_device: str, 
+    args: Any,
+    effective_device: str,
     console: Optional[Console] = None
 ) -> List[Dict[str, Any]]:
     """Execute Full Incremental Stress Test starting from 10 qubits."""
@@ -394,7 +455,7 @@ def run_full_stress_test(
     slicing_label = " [Distributed State Slicing]" if state_slicing else ""
     native_label = " [Native Kernel Fusion]" if use_native_kernels else ""
     backend_label = f" [Backend: {backend.upper()}]" if backend != "auto" else ""
-    
+
     if backend == "cuda" or (backend == "auto" and effective_device in ("gpu", "multi_gpu")):
         from src.profiler.gpu import get_cuda_telemetry
         cuda_info = get_cuda_telemetry()
@@ -409,15 +470,18 @@ def run_full_stress_test(
     q = 10
     max_limit = 50 if args.method == 'mps' else 100
     results = []
-    
+
+    effective_bond_dim = getattr(args, 'max_bond_dim', None) or getattr(args, 'bond_dim', 64)
+    svd_cutoff = getattr(args, 'svd_cutoff', 1e-9)
     while q <= max_limit:
         with Status(f"Running simulation for {q} qubits on {effective_device.upper()} ({args.runs} runs, {workers} workers)...", console=c):
             res = run_single_simulation(
-                q, "qft", 0, args.method, args.bond_dim, effective_device, 
+                q, "qft", 0, args.method, effective_bond_dim, effective_device,
                 args.noise_level, args.runs, workers=workers, compute_entropy=args.entropy,
                 state_slicing=state_slicing, blocking_qubits=blocking_qubits,
                 use_native_kernels=use_native_kernels, noise_profile=noise_profile,
-                backend=backend, shots=shots, noise_method=noise_method
+                backend=backend, shots=shots, noise_method=noise_method,
+                svd_cutoff=svd_cutoff
             )
             res["workload_label"] = "QFT"
             results.append(res)
@@ -428,8 +492,8 @@ def run_full_stress_test(
     return results
 
 def run_custom_simulation(
-    args: Any, 
-    effective_device: str, 
+    args: Any,
+    effective_device: str,
     console: Optional[Console] = None
 ) -> List[Dict[str, Any]]:
     """Execute Custom Simulation configuration, supporting procedural workloads or loaded OpenQASM 2.0 circuits."""
@@ -445,17 +509,17 @@ def run_custom_simulation(
     slicing_label = " [Distributed State Slicing]" if state_slicing else ""
     native_label = " [Native Kernel Fusion]" if use_native_kernels else ""
     backend_label = f" [Backend: {backend.upper()}]" if backend != "auto" else ""
-    
+
     if backend == "cuda" or (backend == "auto" and effective_device in ("gpu", "multi_gpu")):
         from src.profiler.gpu import get_cuda_telemetry
         cuda_info = get_cuda_telemetry()
         if cuda_info.get("available"):
             c.print(f"[bold cyan]NVIDIA CUDA Hardware Active:[/bold cyan] {cuda_info['device_name']} (Compute: {cuda_info['compute_capability']}, VRAM: {cuda_info['vram_total_mb']:.1f} MB)")
-    
+
     parsed_qasm = None
     qasm_metrics = None
     qasm_path = getattr(args, 'qasm', None)
-    
+
     if qasm_path:
         from src.engine.parser import load_qasm
         t0_parse = time.perf_counter()
@@ -486,22 +550,25 @@ def run_custom_simulation(
     else:
         effective_qubits = args.qubits
         workload_desc = args.type.upper()
-        
+
     if args.noise_level != 'none' or noise_profile is not None:
         noise_desc = "Monte Carlo Wavefunction (Trajectory)" if noise_method == "trajectory" else "Density Matrix"
         c.print(f"[bold cyan]Noise Simulation Mode:[/] [bold magenta]{noise_desc}[/] | Shots: [bold green]{shots:,}[/] | Preserving O(2^n) Scaling (Memory Saved: [bold yellow]~2^{effective_qubits} = ~{1 << effective_qubits:,} x[/bold yellow])")
 
     c.print(f"[bold yellow]Executing Custom Simulation (Qubits: {effective_qubits}, Workload: {workload_desc}, Method: {args.method.upper()}, Device: {effective_device.upper()}{slicing_label}{native_label}{backend_label}, Workers: {workers}, Noise: {args.noise_level.upper()} ({noise_method.upper()}, {shots} shots), Entropy: {args.entropy}, Runs: {args.runs})...[/bold yellow]\n")
     results = []
-    
+
+    effective_bond_dim = getattr(args, 'max_bond_dim', None) or getattr(args, 'bond_dim', 64)
+    svd_cutoff = getattr(args, 'svd_cutoff', 1e-9)
     with Status(f"Running simulation for {effective_qubits} qubits on {effective_device.upper()} ({args.runs} runs, {workers} workers)...", console=c):
         res = run_single_simulation(
-            effective_qubits, args.type, args.depth, args.method, args.bond_dim, effective_device, 
+            effective_qubits, args.type, args.depth, args.method, effective_bond_dim, effective_device,
             args.noise_level, args.runs, workers=workers, compute_entropy=args.entropy,
             state_slicing=state_slicing, blocking_qubits=blocking_qubits,
             use_native_kernels=use_native_kernels, noise_profile=noise_profile,
             qasm_circuit=parsed_qasm, qasm_metrics=qasm_metrics,
-            backend=backend, shots=shots, noise_method=noise_method
+            backend=backend, shots=shots, noise_method=noise_method,
+            svd_cutoff=svd_cutoff
         )
         if parsed_qasm:
             res["workload_label"] = f"QASM: {parsed_qasm.name}"
@@ -513,4 +580,3 @@ def run_custom_simulation(
         if not res["success"]:
             c.print(f"[bold red]Simulation aborted:[/bold red] {res['error']}")
     return results
-

@@ -145,6 +145,11 @@ def compare_benchmarks(
     tput_target = float(breakdown_target.get("throughput_metric", 0.0))
     tput_speedup = (tput_target / tput_base) if tput_base > 0 else 1.0
     tput_delta_pct = ((tput_target - tput_base) / tput_base * 100.0) if tput_base > 0 else 0.0
+
+    bw_base = float(breakdown_base.get("effective_bandwidth_gbps", base.get("academic_benchmarks", {}).get("effective_bandwidth_gbps", 0.0)))
+    bw_target = float(breakdown_target.get("effective_bandwidth_gbps", target.get("academic_benchmarks", {}).get("effective_bandwidth_gbps", 0.0)))
+    bw_speedup = (bw_target / bw_base) if bw_base > 0 else 1.0
+    bw_delta_pct = ((bw_target - bw_base) / bw_base * 100.0) if bw_base > 0 else 0.0
     
     max_q_base = int(base.get("max_qubits_simulated", 0))
     max_q_target = int(target.get("max_qubits_simulated", 0))
@@ -239,6 +244,10 @@ def compare_benchmarks(
             "throughput_metric_target": tput_target,
             "throughput_speedup": tput_speedup,
             "throughput_delta_pct": tput_delta_pct,
+            "bandwidth_base": bw_base,
+            "bandwidth_target": bw_target,
+            "bandwidth_speedup": bw_speedup,
+            "bandwidth_delta_pct": bw_delta_pct,
             "max_qubits_base": max_q_base,
             "max_qubits_target": max_q_target,
             "qubit_gap": qubit_gap

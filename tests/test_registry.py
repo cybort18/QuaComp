@@ -21,12 +21,12 @@ def test_fetch_remote_baselines_and_caching(tmp_path):
     """Verify synchronization caches files locally and handles offline fallback."""
     cache_dir = str(tmp_path / "test_registry")
     rep = fetch_remote_baselines(cache_dir=cache_dir)
-    
+
     assert rep["total_available"] == len(ENTERPRISE_BASELINES)
     assert os.path.exists(cache_dir)
     assert os.path.exists(os.path.join(cache_dir, "example_apple_m4_max.json"))
     assert os.path.exists(os.path.join(cache_dir, "example_nvidia_h100.json"))
-    
+
     # Check repeated sync uses existing cache
     rep2 = fetch_remote_baselines(cache_dir=cache_dir, force_refresh=False)
     assert len(rep2["existing_cached"]) == len(ENTERPRISE_BASELINES)
@@ -46,7 +46,7 @@ def test_get_baseline_path():
     p_m3 = get_baseline_path("apple_m3")
     assert p_m3 is not None
     assert os.path.exists(p_m3)
-    
+
     p_nonexistent = get_baseline_path("non_existent_chip_xyz")
     assert p_nonexistent is None
 
@@ -55,7 +55,7 @@ def test_resolve_target_profile_with_registry():
     path_m4 = resolve_target_profile("apple_m4_max")
     assert os.path.exists(path_m4)
     assert path_m4.endswith(".json")
-    
+
     path_h100 = resolve_target_profile("nvidia_h100")
     assert os.path.exists(path_h100)
     assert path_h100.endswith(".json")
@@ -64,7 +64,7 @@ def test_fetch_remote_baselines_rate_limit(tmp_path, monkeypatch):
     """Verify GitHub rate limit (HTTP 403/429) triggers informative diagnostics and offline fallback."""
     import urllib.request
     import urllib.error
-    
+
     def mock_urlopen_rate_limit(req, timeout=5.0):
         raise urllib.error.HTTPError(
             url="https://api.github.com",
@@ -73,10 +73,10 @@ def test_fetch_remote_baselines_rate_limit(tmp_path, monkeypatch):
             hdrs={},
             fp=None
         )
-        
+
     monkeypatch.setattr(urllib.request, "urlopen", mock_urlopen_rate_limit)
     cache_dir = str(tmp_path / "rate_limit_cache")
-    
+
     rep = fetch_remote_baselines(target_alias="apple_m4_max", cache_dir=cache_dir, timeout=5.0)
     assert rep["rate_limited"] is True
     assert rep["offline_mode"] is True
@@ -88,13 +88,13 @@ def test_fetch_remote_baselines_rate_limit(tmp_path, monkeypatch):
 def test_fetch_remote_baselines_timeout_handling(tmp_path, monkeypatch):
     """Verify network timeout triggers informative timeout reporting and fallback."""
     import urllib.request
-    
+
     def mock_urlopen_timeout(req, timeout=5.0):
         raise TimeoutError("The read operation timed out")
-        
+
     monkeypatch.setattr(urllib.request, "urlopen", mock_urlopen_timeout)
     cache_dir = str(tmp_path / "timeout_cache")
-    
+
     rep = fetch_remote_baselines(target_alias="nvidia_h100", cache_dir=cache_dir, timeout=5.0)
     assert rep["offline_mode"] is True
     assert "nvidia_h100" in rep["offline_fallback"]
@@ -105,13 +105,13 @@ def test_fetch_remote_baselines_offline_network_error(tmp_path, monkeypatch):
     """Verify URLError triggers informative offline diagnostics."""
     import urllib.request
     import urllib.error
-    
+
     def mock_urlopen_offline(req, timeout=5.0):
         raise urllib.error.URLError("Temporary failure in name resolution")
-        
+
     monkeypatch.setattr(urllib.request, "urlopen", mock_urlopen_offline)
     cache_dir = str(tmp_path / "offline_cache")
-    
+
     rep = fetch_remote_baselines(target_alias="aws_graviton4", cache_dir=cache_dir)
     assert rep["offline_mode"] is True
     assert "aws_graviton4" in rep["offline_fallback"]
@@ -127,18 +127,18 @@ def test_ttl_cache_validity_and_expiration(tmp_path):
         save_cache_metadata,
         load_cache_metadata
     )
-    
+
     ttl_root = str(tmp_path / ".test_quacomp_cache")
     os.makedirs(ttl_root, exist_ok=True)
-    
+
     # 1. Non-existent cache is invalid
     assert not is_cache_valid("apple_m3", cache_root=ttl_root)
-    
+
     # 2. Create cached file with metadata
     test_file = os.path.join(ttl_root, "example_apple_m3.json")
     with open(test_file, "w", encoding="utf-8") as f:
         f.write('{"test": 1}')
-        
+
     save_cache_metadata(ttl_root, {
         "apple_m3": {
             "filename": "example_apple_m3.json",
@@ -146,13 +146,13 @@ def test_ttl_cache_validity_and_expiration(tmp_path):
             "source": "unit_test"
         }
     })
-    
+
     # 3. Active within 3600s TTL
     assert is_cache_valid("apple_m3", cache_root=ttl_root, ttl_seconds=3600.0) is True
-    
+
     # 4. Expired when TTL is 0s
     assert is_cache_valid("apple_m3", cache_root=ttl_root, ttl_seconds=0.0) is False
-    
+
     # 5. Invalidation clears cache
     invalidate_cache("apple_m3", cache_root=ttl_root)
     assert not os.path.exists(test_file)
@@ -163,16 +163,16 @@ def test_ttl_cache_prevents_repeated_network_request(tmp_path, monkeypatch):
     import urllib.request
     import time
     from src.comparator.registry import save_cache_metadata
-    
+
     ttl_dir = str(tmp_path / ".ttl_cache")
     target_dir = str(tmp_path / "target_reg")
     os.makedirs(ttl_dir, exist_ok=True)
-    
+
     # Pre-populate TTL cache with valid entry
     cached_content = '{"mock_baseline": "valid_ttl_cache"}'
     with open(os.path.join(ttl_dir, "example_apple_m4_max.json"), "w", encoding="utf-8") as f:
         f.write(cached_content)
-        
+
     save_cache_metadata(ttl_dir, {
         "apple_m4_max": {
             "filename": "example_apple_m4_max.json",
@@ -180,16 +180,16 @@ def test_ttl_cache_prevents_repeated_network_request(tmp_path, monkeypatch):
             "source": "test_preloaded"
         }
     })
-    
+
     # If network request is attempted, raise an error to prove it was never called
     network_called = False
     def mock_urlopen_forbidden(req, timeout=5.0):
         nonlocal network_called
         network_called = True
         raise AssertionError("Network HTTP request must NOT be performed when TTL cache is valid!")
-        
+
     monkeypatch.setattr(urllib.request, "urlopen", mock_urlopen_forbidden)
-    
+
     # Run fetch_remote_baselines with valid TTL
     rep = fetch_remote_baselines(
         target_alias="apple_m4_max",
@@ -198,7 +198,7 @@ def test_ttl_cache_prevents_repeated_network_request(tmp_path, monkeypatch):
         ttl_seconds=86400.0,
         force_refresh=False
     )
-    
+
     assert network_called is False
     assert "apple_m4_max" in rep["existing_cached"]
     assert os.path.exists(os.path.join(target_dir, "example_apple_m4_max.json"))
@@ -211,15 +211,15 @@ def test_ttl_cache_expiration_triggers_refetch(tmp_path, monkeypatch):
     from unittest.mock import MagicMock
     import time
     from src.comparator.registry import save_cache_metadata
-    
+
     ttl_dir = str(tmp_path / ".ttl_cache_stale")
     target_dir = str(tmp_path / "target_reg_stale")
     os.makedirs(ttl_dir, exist_ok=True)
-    
+
     # Pre-populate with stale timestamp (2 days ago)
     with open(os.path.join(ttl_dir, "example_apple_m3.json"), "w", encoding="utf-8") as f:
         f.write('{"old": true}')
-        
+
     save_cache_metadata(ttl_dir, {
         "apple_m3": {
             "filename": "example_apple_m3.json",
@@ -227,7 +227,7 @@ def test_ttl_cache_expiration_triggers_refetch(tmp_path, monkeypatch):
             "source": "stale"
         }
     })
-    
+
     network_called = False
     def mock_urlopen_success(req, timeout=5.0):
         nonlocal network_called
@@ -237,9 +237,9 @@ def test_ttl_cache_expiration_triggers_refetch(tmp_path, monkeypatch):
         mock_resp.read.return_value = b'{"refreshed": true, "timestamp": "2026-09-23T00:00:00"}'
         mock_resp.__enter__.return_value = mock_resp
         return mock_resp
-        
+
     monkeypatch.setattr(urllib.request, "urlopen", mock_urlopen_success)
-    
+
     rep = fetch_remote_baselines(
         target_alias="apple_m3",
         cache_dir=target_dir,
@@ -247,9 +247,74 @@ def test_ttl_cache_expiration_triggers_refetch(tmp_path, monkeypatch):
         ttl_seconds=86400.0,
         force_refresh=False
     )
-    
+
     assert network_called is True
     assert "apple_m3" in rep["synced_remote"]
     with open(os.path.join(target_dir, "example_apple_m3.json"), "r", encoding="utf-8") as f:
         data = f.read()
         assert "refreshed" in data
+
+
+def test_baseline_json_files_schema_and_bandwidth():
+    """Verify all 6 baseline profiles have valid memory bandwidth, arithmetic intensity, and QSI score schema."""
+    import json
+    registry_dir = os.path.join("results", "registry")
+    assert os.path.exists(registry_dir), "Registry directory results/registry must exist"
+
+    expected_baselines = [
+        "example_ryzen3_5300u.json",
+        "example_ryzen7_5800h.json",
+        "example_apple_m3.json",
+        "example_apple_m4_max.json",
+        "example_aws_graviton4.json",
+        "example_nvidia_h100.json"
+    ]
+
+    for fname in expected_baselines:
+        fpath = os.path.join(registry_dir, fname)
+        assert os.path.exists(fpath), f"Baseline file {fname} not found in {registry_dir}"
+
+        with open(fpath, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        assert data.get("score_type") == "QuaComp Synthetic Index (QSI)", (
+            f"{fname} must specify score_type as 'QuaComp Synthetic Index (QSI)'"
+        )
+
+        # Validate scoring_breakdown
+        sb = data.get("scoring_breakdown", {})
+        assert "effective_bandwidth_gbps" in sb, f"Missing effective_bandwidth_gbps in {fname} scoring_breakdown"
+        assert isinstance(sb["effective_bandwidth_gbps"], (int, float))
+        assert sb["effective_bandwidth_gbps"] > 0.0
+
+        # Validate academic_benchmarks
+        ab = data.get("academic_benchmarks", {})
+        assert "effective_bandwidth_gbps" in ab, f"Missing effective_bandwidth_gbps in {fname} academic_benchmarks"
+        assert isinstance(ab["effective_bandwidth_gbps"], (int, float))
+        assert ab["effective_bandwidth_gbps"] > 0.0
+        assert "arithmetic_intensity_flops_per_byte" in ab, f"Missing arithmetic_intensity in {fname} academic_benchmarks"
+        assert ab["arithmetic_intensity_flops_per_byte"] == 0.4375
+
+        # Validate results array
+        assert isinstance(data.get("results"), list)
+        assert len(data["results"]) > 0
+
+
+def test_enterprise_baselines_bandwidth_attributes():
+    """Verify ENTERPRISE_BASELINES catalog contains bandwidth and memory architecture metadata."""
+    for alias, meta in ENTERPRISE_BASELINES.items():
+        assert "default_data" in meta, f"Missing default_data for {alias}"
+        dd = meta["default_data"]
+
+        # Verify academic benchmarks in catalog
+        ab = dd.get("academic_benchmarks", {})
+        assert "effective_bandwidth_gbps" in ab, f"Missing effective_bandwidth_gbps in {alias} default_data"
+        assert isinstance(ab["effective_bandwidth_gbps"], (int, float))
+        assert ab["effective_bandwidth_gbps"] > 0.0
+        assert "arithmetic_intensity_flops_per_byte" in ab, f"Missing arithmetic_intensity in {alias} default_data"
+        assert ab["arithmetic_intensity_flops_per_byte"] == 0.4375
+
+        # Verify architecture description and device
+        assert "description" in meta, f"Missing description for {alias}"
+        assert len(meta["description"]) > 0
+        assert "device" in meta, f"Missing device for {alias}"

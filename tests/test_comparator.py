@@ -14,7 +14,9 @@ def mock_benchmark_pair():
         "max_qubits_simulated": 20,
         "scoring_breakdown": {
             "capacity_metric": 1048576.0,
-            "throughput_metric": 240.0
+            "throughput_metric": 240.0,
+            "effective_bandwidth_gbps": 28.52,
+            "arithmetic_intensity_flops_per_byte": 0.4375
         },
         "system_metadata": {
             "cpu_name": "Test Base CPU (4-core)",
@@ -56,7 +58,9 @@ def mock_benchmark_pair():
         "max_qubits_simulated": 25,
         "scoring_breakdown": {
             "capacity_metric": 33554432.0,
-            "throughput_metric": 510.0
+            "throughput_metric": 510.0,
+            "effective_bandwidth_gbps": 82.64,
+            "arithmetic_intensity_flops_per_byte": 0.4375
         },
         "system_metadata": {
             "cpu_name": "Test Target CPU (8-core)",
@@ -166,6 +170,12 @@ def test_compare_benchmarks(mock_benchmark_pair):
     # Throughput speedup: 510.0 / 240.0 = ~2.125x
     assert abs(summary["throughput_speedup"] - 2.125) < 1e-3
     assert summary["throughput_delta_pct"] > 100.0
+
+    # Effective memory bandwidth speedup: 82.64 / 28.52 = ~2.8976x
+    assert summary["bandwidth_base"] == 28.52
+    assert summary["bandwidth_target"] == 82.64
+    assert abs(summary["bandwidth_speedup"] - (82.64 / 28.52)) < 1e-3
+    assert summary["bandwidth_delta_pct"] > 180.0
     
     # Matched qubits (10 and 20 qubits)
     matched = diff["matched_qubits"]
@@ -188,6 +198,16 @@ def test_compare_benchmarks(mock_benchmark_pair):
     assert "faster simulation throughput" in diff["verdict"]
     assert "+5 qubit capacity advantage" in diff["verdict"]
 
+def test_compare_benchmarks_bandwidth_zero_fallback():
+    base = {"final_composite_score": 100.0, "max_qubits_simulated": 10, "results": []}
+    target = {"final_composite_score": 200.0, "max_qubits_simulated": 12, "results": []}
+    diff = compare_benchmarks(base, target)
+    summary = diff["score_summary"]
+    assert summary["bandwidth_base"] == 0.0
+    assert summary["bandwidth_target"] == 0.0
+    assert summary["bandwidth_speedup"] == 1.0
+    assert summary["bandwidth_delta_pct"] == 0.0
+
 def test_compare_benchmarks_type_error():
     with pytest.raises(TypeError):
         compare_benchmarks("not a dict", {})  # type: ignore
@@ -208,6 +228,8 @@ def test_export_comparison_to_json_and_markdown(tmp_path, mock_benchmark_pair):
         loaded = json.load(f)
     assert loaded["report_type"] == "QuaComp Relative Benchmark Comparison"
     assert loaded["score_summary"]["qubit_gap"] == 5
+    assert loaded["score_summary"]["bandwidth_base"] == 28.52
+    assert loaded["score_summary"]["bandwidth_target"] == 82.64
     
     # 2. Export Markdown
     md_path = export_comparison_to_markdown(diff, output_dir=str(out_dir))
@@ -219,6 +241,9 @@ def test_export_comparison_to_json_and_markdown(tmp_path, mock_benchmark_pair):
     assert "QuaComp Relative Benchmark Comparison Report" in md_text
     assert "Executive Summary & Verdict" in md_text
     assert "Per-Qubit Latency & Execution Breakdown" in md_text
+    assert "Effective Memory Bandwidth" in md_text
+    assert "28.52 GB/s" in md_text
+    assert "82.64 GB/s" in md_text
 
 def test_generate_comparison_charts(tmp_path, mock_benchmark_pair):
     base, target = mock_benchmark_pair

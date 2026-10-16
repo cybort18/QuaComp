@@ -138,9 +138,18 @@ def simulate_trajectories(
         except Exception:
             pass
 
+    logical_gates = len(parsed_ops)
+    fused_gates = logical_gates
+    fusion_reduction_pct = 0.0
+
     # Apply pre-execution 1Q gate contraction if noiseless trajectory mode
     if traj_model is None:
         parsed_ops = fuse_consecutive_1q_gates(parsed_ops)
+        fused_gates = len(parsed_ops)
+        if logical_gates > 0:
+            fusion_reduction_pct = round(((logical_gates - fused_gates) / logical_gates) * 100.0, 2)
+
+    comp_ratio = round(logical_gates / fused_gates, 2) if fused_gates > 0 else 1.0
 
     # Determine parallel worker allocation:
     # On CUDA GPU, force single-process to avoid CUDA context multi-processing collisions
@@ -197,6 +206,15 @@ def simulate_trajectories(
     latency = time.perf_counter() - t0
     saved_ratio = 1 << num_qubits
 
+    fusion_data = {
+        "logical_gates": logical_gates,
+        "logical_gate_count": logical_gates,
+        "fused_gates": fused_gates,
+        "executed_gate_count": fused_gates,
+        "fusion_reduction_pct": fusion_reduction_pct,
+        "gate_fusion_compression_ratio": comp_ratio
+    }
+
     metadata = {
         "backend_name": "QuaComp Trajectory Engine (MCWF)",
         "backend_version": "1.0.0",
@@ -207,7 +225,13 @@ def simulate_trajectories(
         "qubits": num_qubits,
         "memory_saved_ratio": saved_ratio,
         "noise_model": traj_model.name if traj_model else "None",
-        "counts": counts
+        "counts": counts,
+        "logical_gates": logical_gates,
+        "fused_gates": fused_gates,
+        "logical_gate_count": logical_gates,
+        "executed_gate_count": fused_gates,
+        "fusion_reduction_pct": fusion_reduction_pct,
+        "gate_fusion_compression_ratio": comp_ratio
     }
 
     return {
@@ -225,7 +249,11 @@ def simulate_trajectories(
         "native_kernel_used": False,
         "accelerator_backend": active_be.tier_label,
         "accelerator_badge": None,
-        "fusion_metrics": None,
+        "fusion_metrics": fusion_data if logical_gates > 0 else None,
+        "logical_gates": logical_gates,
+        "fused_gates": fused_gates,
+        "fusion_reduction_pct": fusion_reduction_pct,
+        "gate_fusion_compression_ratio": comp_ratio,
         "physical_noise_profile": traj_model.name if traj_model else None,
         "noise_method": "trajectory",
         "memory_saved_ratio": saved_ratio,
@@ -411,6 +439,7 @@ def run_simulation(
             if traj_model is not None:
                 latencies: List[float] = []
                 last_counts: Dict[str, int] = {}
+                last_t_res = None
                 for _ in range(runs):
                     t_res = simulate_trajectories(
                         circ_to_run,
@@ -422,12 +451,15 @@ def run_simulation(
                     )
                     latencies.append(t_res["latency"])
                     last_counts = t_res["counts"]
+                    last_t_res = t_res
 
                 mean_latency = float(np.mean(latencies))
                 median_latency = float(np.median(latencies))
                 std_latency = float(np.std(latencies, ddof=1)) if len(latencies) > 1 else 0.0
                 device_label = "MULTI_GPU" if is_multi_gpu else aer_device_target
                 saved_ratio = 1 << num_q
+
+                active_fusion_metrics = fusion_metrics or (last_t_res.get("fusion_metrics") if last_t_res else None)
 
                 metadata = {
                     "backend_name": "QuaComp Trajectory Engine (MCWF)",
@@ -444,7 +476,11 @@ def run_simulation(
                     "native_kernel_used": use_native_kernels,
                     "accelerator_backend": accelerator_backend,
                     "accelerator_badge": accelerator_badge,
-                    "fusion_metrics": fusion_metrics,
+                    "fusion_metrics": active_fusion_metrics,
+                    "logical_gates": last_t_res.get("logical_gates") if last_t_res else None,
+                    "fused_gates": last_t_res.get("fused_gates") if last_t_res else None,
+                    "fusion_reduction_pct": last_t_res.get("fusion_reduction_pct") if last_t_res else None,
+                    "gate_fusion_compression_ratio": last_t_res.get("gate_fusion_compression_ratio") if last_t_res else None,
                     "runs_count": runs,
                     "model_parallelism": "Distributed Statevector Slicing" if use_slicing else "None",
                     "blocking_qubits": effective_blocking,
@@ -468,7 +504,11 @@ def run_simulation(
                     "native_kernel_used": use_native_kernels or is_backend_req,
                     "accelerator_backend": accelerator_backend,
                     "accelerator_badge": accelerator_badge,
-                    "fusion_metrics": fusion_metrics,
+                    "fusion_metrics": active_fusion_metrics,
+                    "logical_gates": last_t_res.get("logical_gates") if last_t_res else None,
+                    "fused_gates": last_t_res.get("fused_gates") if last_t_res else None,
+                    "fusion_reduction_pct": last_t_res.get("fusion_reduction_pct") if last_t_res else None,
+                    "gate_fusion_compression_ratio": last_t_res.get("gate_fusion_compression_ratio") if last_t_res else None,
                     "physical_noise_profile": active_noise_profile,
                     "noise_method": "trajectory",
                     "memory_saved_ratio": saved_ratio,

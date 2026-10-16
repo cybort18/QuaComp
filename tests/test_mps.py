@@ -199,3 +199,65 @@ def test_mps_input_validation():
 
     with pytest.raises(TypeError):
         simulate_mps(12345)
+
+
+def test_runner_mps_execution_end_to_end():
+    """Verify run_single_simulation with method='mps' executes successfully and populates MPS metrics."""
+    from cli.runner import run_single_simulation
+
+    res = run_single_simulation(
+        qubits=4,
+        workload_type="shallow",
+        depth=2,
+        method="mps",
+        device="cpu",
+        bond_dimension=16,
+        runs=1
+    )
+    assert res["success"] is True
+    assert res["method"] == "mps"
+    assert res["max_bond_dim"] == 16
+    assert res["bond_dimension"] == 16
+    assert "mps_fidelity" in res
+    assert res["mps_fidelity"] >= 0.99
+    assert "cumulative_truncation_error" in res
+    assert res["cumulative_truncation_error"] <= 1e-4
+    assert "max_active_bond_dim" in res
+    assert "swap_count" in res
+    assert "mps_ram_savings" in res
+    assert res["runs_count"] == 1
+
+
+def test_runner_mps_qasm_execution_end_to_end():
+    """Verify run_single_simulation with OpenQASM file executes using MPS engine."""
+    from cli.runner import run_single_simulation
+    from src.engine.parser import load_qasm
+
+    parsed = load_qasm("benchmarks/qft_4qubit.qasm")
+    summary = parsed.get_summary()
+    qasm_metrics = {
+        "name": summary["name"],
+        "depth": summary["depth"],
+        "total_gates": summary["total_gates"],
+        "one_qubit_gates": summary["one_qubit_gates"],
+        "two_qubit_gates": summary["two_qubit_gates"]
+    }
+    circ = parsed.to_quantum_circuit()
+    res_qasm = run_single_simulation(
+        qubits=circ.num_qubits,
+        workload_type="qasm",
+        depth=0,
+        qasm_circuit=circ,
+        qasm_metrics=qasm_metrics,
+        method="mps",
+        device="cpu",
+        bond_dimension=16,
+        runs=1
+    )
+    assert res_qasm["success"] is True
+    assert res_qasm["method"] == "mps"
+    assert res_qasm["max_bond_dim"] == 16
+    assert res_qasm["mps_fidelity"] > 0.95
+    assert res_qasm["swap_count"] > 0
+    assert "qasm_metrics" in res_qasm
+    assert res_qasm["qasm_metrics"]["total_gates"] > 0

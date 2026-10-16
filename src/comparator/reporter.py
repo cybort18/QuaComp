@@ -89,6 +89,16 @@ def render_comparison_terminal(diff_data: Dict[str, Any], console: Console) -> N
     t_delta_str = f"+{t_delta:.1f}%" if t_delta >= 0 else f"{t_delta:.1f}%"
     t_badge = f"[green]{t_speedup:.2f}x Faster ({t_delta_str})[/green]" if t_speedup >= 1.0 else f"[red]{1.0/t_speedup:.2f}x Slower ({t_delta_str})[/red]"
     score_table.add_row("Throughput Metric (T = G/t)", f"{t_base:,.2f} g/s", f"{t_target:,.2f} g/s", t_badge)
+
+    # Effective Memory Bandwidth
+    bw_base = summary.get("bandwidth_base", 0.0)
+    bw_target = summary.get("bandwidth_target", 0.0)
+    if bw_base > 0 or bw_target > 0:
+        bw_speedup = summary.get("bandwidth_speedup", 1.0)
+        bw_delta = summary.get("bandwidth_delta_pct", 0.0)
+        bw_delta_str = f"+{bw_delta:.1f}%" if bw_delta >= 0 else f"{bw_delta:.1f}%"
+        bw_badge = f"[green]{bw_speedup:.2f}x Bandwidth ({bw_delta_str})[/green]" if bw_speedup >= 1.0 else f"[red]{1.0/bw_speedup:.2f}x Bandwidth ({bw_delta_str})[/red]"
+        score_table.add_row("Effective Memory Bandwidth", f"{bw_base:.2f} GB/s", f"{bw_target:.2f} GB/s", bw_badge)
     
     console.print(score_table)
     console.print()
@@ -234,6 +244,18 @@ def export_comparison_to_markdown(
         f"| **Max Qubit Limit** | {summary['max_qubits_base']} Qubits | {summary['max_qubits_target']} Qubits | **{'+' if q_gap > 0 else ''}{q_gap} Qubits** ({2**q_gap:.0f}x space) |",
         f"| **Capacity Metric (C = 2ⁿ)** | {summary['capacity_metric_base']:,.0f} | {summary['capacity_metric_target']:,.0f} | **{summary['capacity_ratio']:.2f}x Capacity** |",
         f"| **Throughput (T = G/t)** | {t_base:,.2f} g/s | {t_target:,.2f} g/s | **{t_speedup:.2f}x Speedup** ({t_delta_str}) |",
+    ]
+
+    bw_base = summary.get("bandwidth_base", 0.0)
+    bw_target = summary.get("bandwidth_target", 0.0)
+    if bw_base > 0 or bw_target > 0:
+        bw_speedup = summary.get("bandwidth_speedup", 1.0)
+        bw_delta = summary.get("bandwidth_delta_pct", 0.0)
+        bw_delta_str = f"+{bw_delta:.1f}%" if bw_delta >= 0 else f"{bw_delta:.1f}%"
+        bw_badge_md = f"**{bw_speedup:.2f}x Bandwidth** ({bw_delta_str})" if bw_speedup >= 1.0 else f"**{1.0/bw_speedup:.2f}x Bandwidth** ({bw_delta_str})"
+        md_lines.append(f"| **Effective Memory Bandwidth** | {bw_base:.2f} GB/s | {bw_target:.2f} GB/s | {bw_badge_md} |")
+
+    md_lines.extend([
         "",
         "---",
         "",
@@ -251,7 +273,7 @@ def export_comparison_to_markdown(
         "",
         "## 3. Per-Qubit Latency & Execution Breakdown",
         ""
-    ]
+    ])
     
     if matched:
         md_lines.extend([

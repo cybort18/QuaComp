@@ -2,10 +2,15 @@
   "timestamp": "2026-08-18T08:00:00",
   "final_score": 536872000.0,
   "final_composite_score": 536872000.0,
-  "score_type": "project-specific composite heuristic score",
+  "score_type": "QuaComp Synthetic Index (QSI)",
   "scoring_breakdown": {
     "capacity_metric": 53687091.0,
-    "throughput_metric": 1850.0
+    "throughput_metric": 1850.0,
+    "effective_bandwidth_gbps": 395.20
+  },
+  "academic_benchmarks": {
+    "effective_bandwidth_gbps": 395.20,
+    "arithmetic_intensity_flops_per_byte": 0.4375
   },
   "performance_category": "Cloud Server",
   "max_qubits_simulated": 26,

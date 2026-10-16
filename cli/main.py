@@ -38,7 +38,11 @@ def build_argument_parser() -> argparse.ArgumentParser:
     param_group.add_argument("--qv", action="store_true", help="Shorthand for Quantum Volume square model benchmark (--type qv).")
     param_group.add_argument("--depth", type=int, default=10, help="Depth for deep workload (default 10).")
     param_group.add_argument("--method", choices=["statevector", "mps"], default="statevector", help="Simulation method (default statevector).")
+    param_group.add_argument("--sim-method", choices=["statevector", "mps"], default="statevector", help="Simulation method algorithm: statevector or mps (default: statevector).")
+    param_group.add_argument("--mps", action="store_true", help="Enable native Matrix Product State (MPS) tensor network simulation mode.")
     param_group.add_argument("--bond-dim", type=int, default=64, help="Max bond dimension for MPS simulation (default 64).")
+    param_group.add_argument("--max-bond-dim", type=int, default=64, help="Maximum bond dimension chi_max for SVD compression in MPS (default: 64).")
+    param_group.add_argument("--svd-cutoff", type=float, default=1e-9, help="Singular value truncation threshold for SVD compression in MPS (default: 1e-9).")
     param_group.add_argument("--device", choices=["cpu", "gpu", "multi_gpu"], default="cpu", help="Simulation compute device backend (default cpu).")
     param_group.add_argument("--gpu", action="store_true", help="Shorthand flag to enable GPU acceleration (--device gpu).")
     param_group.add_argument("--multi-gpu", action="store_true", help="Enable multi-GPU distributed simulation backend.")
@@ -76,6 +80,10 @@ def validate_cli_arguments(args: argparse.Namespace) -> None:
         raise ValueError("Argument --depth must be a non-negative integer >= 0.")
     if getattr(args, 'bond_dim', None) is not None and args.bond_dim < 1:
         raise ValueError("Argument --bond-dim must be a positive integer >= 1.")
+    if getattr(args, 'max_bond_dim', None) is not None and args.max_bond_dim < 1:
+        raise ValueError("Argument --max-bond-dim must be a positive integer >= 1.")
+    if getattr(args, 'svd_cutoff', None) is not None and args.svd_cutoff < 0.0:
+        raise ValueError("Argument --svd-cutoff must be non-negative >= 0.0.")
     if getattr(args, 'workers', None) is not None and args.workers < 1:
         raise ValueError("Argument --workers must be a positive integer >= 1.")
     if getattr(args, 'runs', None) is not None and args.runs < 1:
@@ -91,6 +99,20 @@ def main():
     parser = build_argument_parser()
     args = parser.parse_args()
     
+    # Resolve simulation method and MPS parameters
+    if getattr(args, 'mps', False):
+        args.sim_method = "mps"
+        args.method = "mps"
+    elif getattr(args, 'sim_method', None) and args.sim_method != "statevector":
+        args.method = args.sim_method
+    elif getattr(args, 'method', None) == "mps":
+        args.sim_method = "mps"
+
+    if getattr(args, 'max_bond_dim', None) is not None:
+        args.bond_dim = args.max_bond_dim
+    else:
+        args.max_bond_dim = args.bond_dim
+
     # Resolve baseline synchronization
     if getattr(args, 'fetch_baselines', False):
         from src.comparator.registry import fetch_remote_baselines, list_available_baselines

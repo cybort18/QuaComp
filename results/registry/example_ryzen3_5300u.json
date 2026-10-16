@@ -2,10 +2,15 @@
   "timestamp": "2026-08-10T21:02:55",
   "final_score": 10486120.47,
   "final_composite_score": 10486120.47,
-  "score_type": "project-specific composite heuristic score",
+  "score_type": "QuaComp Synthetic Index (QSI)",
   "scoring_breakdown": {
     "capacity_metric": 1048576.0,
-    "throughput_metric": 360.47
+    "throughput_metric": 360.47,
+    "effective_bandwidth_gbps": 28.52
+  },
+  "academic_benchmarks": {
+    "effective_bandwidth_gbps": 28.52,
+    "arithmetic_intensity_flops_per_byte": 0.4375
   },
   "performance_category": "High-Performance",
   "max_qubits_simulated": 20,
