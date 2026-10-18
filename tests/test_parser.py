@@ -141,6 +141,37 @@ def test_bell_state_simulator_execution():
     assert len(res["latencies"]) == 2
 
 
+def test_gate_count_properties_exclude_non_gate_directives():
+    """Gate-count properties exclude barrier, measure, reset, and delay directives.
+
+    OpenQASM 2.0 has no delay statement (delays are scheduling directives), so the
+    delay case is exercised on the instruction-list representation directly.
+    """
+    circuit = ParsedQASMCircuit()
+    circuit.qregs["q"] = 3
+    circuit.cregs["c"] = 1
+    circuit.instructions = [
+        QASMInstruction(name="x", qargs=[("q", 0)]),
+        QASMInstruction(name="delay", qargs=[("q", 0)]),
+        QASMInstruction(name="cx", qargs=[("q", 0), ("q", 1)]),
+        QASMInstruction(name="ccx", qargs=[("q", 0), ("q", 1), ("q", 2)]),
+        QASMInstruction(name="barrier", qargs=[("q", 0), ("q", 1)]),
+        QASMInstruction(name="reset", qargs=[("q", 0)]),
+        QASMInstruction(name="measure", qargs=[("q", 0)], cargs=[("c", 0)]),
+    ]
+
+    assert circuit.total_gates == 3
+    assert circuit.one_qubit_gates == 1
+    assert circuit.two_qubit_gates == 1
+    assert circuit.multi_qubit_gates == 1
+
+    summary = circuit.get_summary()
+    assert summary["total_gates"] == 3
+    assert summary["one_qubit_gates"] == 1
+    assert summary["two_qubit_gates"] == 1
+    assert summary["multi_qubit_gates"] == 1
+
+
 # ==============================================================================
 # 3. Parameterized & Multi-Qubit Gates
 # ==============================================================================

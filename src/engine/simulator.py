@@ -16,6 +16,7 @@ from src.engine.noise import (
     apply_gate_2q_to_statevector,
     fuse_consecutive_1q_gates
 )
+from src.engine.parser import NON_GATE_INSTRUCTIONS
 
 
 def _trajectory_worker_batch(
@@ -39,6 +40,11 @@ def _trajectory_worker_batch(
                 apply_gate_1q_to_statevector(sv, mat, q_idx[0], num_qubits)
             elif len(q_idx) == 2:
                 apply_gate_2q_to_statevector(sv, mat, q_idx[0], q_idx[1], num_qubits)
+            else:
+                raise ValueError(
+                    f"Trajectory engine cannot execute operation '{name}' on {len(q_idx)} qubits; "
+                    f"only 1-qubit and 2-qubit unitary gates are supported."
+                )
 
         probs = np.abs(sv) ** 2
         p_sum = float(np.sum(probs))
@@ -57,6 +63,11 @@ def _trajectory_worker_batch(
                     apply_gate_1q_to_statevector(sv, mat, q_idx[0], num_qubits)
                 elif len(q_idx) == 2:
                     apply_gate_2q_to_statevector(sv, mat, q_idx[0], q_idx[1], num_qubits)
+                else:
+                    raise ValueError(
+                        f"Trajectory engine cannot execute operation '{name}' on {len(q_idx)} qubits; "
+                        f"only 1-qubit and 2-qubit unitary gates are supported."
+                    )
                 traj_model.apply_stochastic_gate_noise(sv, q_idx, name, rng)
 
             probs = np.abs(sv) ** 2
@@ -84,6 +95,17 @@ def simulate_trajectories(
     Execute quantum circuit simulation using the Monte Carlo Wavefunction (MCWF) /
     Quantum Trajectories method, strictly scaling memory at O(2^n).
 
+    Terminal measurements are removed and sampled from the final statevector at the end
+    of each trajectory. Instructions whose effect cannot be modeled raise ValueError
+    instead of being skipped silently: mid-circuit measurements (no collapse or
+    classical-register semantics), resets and classical control flow (not representable
+    as unitaries), and delays when a trajectory noise model is active (idle-time
+    decoherence is not modeled). Barriers are skipped because they never change the
+    simulated state. Identity instructions that reach the engine are executed as 1-qubit
+    unitaries so that an active noise model is applied to them; note that Qiskit's
+    default transpilation removes identity-equivalent operations before this stage, so
+    explicit ``id`` gates in an input circuit normally do not survive to execution.
+
     Args:
         circuit (QuantumCircuit): The Qiskit quantum circuit to execute.
         noise_model (Any): TrajectoryNoiseModel, PhysicalNoiseModel, preset string ('low', 'medium', 'high'), or None.
@@ -93,7 +115,18 @@ def simulate_trajectories(
         num_workers (Optional[int]): Number of parallel worker threads/processes for batch trajectory sampling.
 
     Returns:
-        Dict[str, Any]: Execution metrics and measurement counts.
+        Dict[str, Any]: Execution metrics and measurement counts. Gate accounting:
+        original_gates counts the gate operations of the input circuit (barrier,
+        measure, reset, and delay directives excluded); logical_gates counts the
+        unitary operations after transpilation into the 1-qubit / 2-qubit basis,
+        before fusion; fused_gates / executed_gate_count counts the unitary blocks
+        actually applied to the statevector (with an active noise model, fusion is
+        disabled and this equals logical_gates).
+
+    Raises:
+        ValueError: If an instruction cannot be executed as a 1-qubit or 2-qubit
+            unitary gate, if a mid-circuit measurement is present, or if a delay is
+            requested while a trajectory noise model is active.
     """
     if hasattr(circuit, "to_quantum_circuit"):
         circuit = circuit.to_quantum_circuit()
@@ -117,26 +150,82 @@ def simulate_trajectories(
     elif hasattr(noise_model, "to_trajectory_noise_model"):
         traj_model = noise_model.to_trajectory_noise_model(active_qubits=list(range(num_qubits)))
 
-    # Clean circuit for execution (remove measurements for pure statevector propagation)
+    # Clean circuit for execution: terminal measurements are sampled from the final
+    # statevector at the end of each trajectory.
     circ_clean = circuit.copy()
     if len(circ_clean.clbits) > 0:
         circ_clean.remove_final_measurements(inplace=True)
 
+    # Every measurement still present is mid-circuit. The trajectory engine has no
+    # measurement-collapse or classical-register semantics, so ignoring it would
+    # preserve coherence that should have been destroyed and silently change the
+    # sampled distribution; reject it explicitly instead.
+    for inst in circ_clean.data:
+        if inst.operation.name == "measure":
+            q_indices = [circ_clean.find_bit(q).index for q in inst.qubits]
+            raise ValueError(
+                f"Mid-circuit measurement on qubit(s) {q_indices} is not supported by the "
+                f"trajectory engine: measurement collapse and classical feed-forward are not "
+                f"modeled, and skipping the measurement would change the output distribution. "
+                f"Remove the mid-circuit measurement or run with noise_method='density_matrix'."
+            )
+
+    # Count the gate operations of the input circuit (identity gates included, since
+    # they execute in the trajectory engine). Non-gate directives (barrier, measure,
+    # reset, delay) are excluded through the shared NON_GATE_INSTRUCTIONS convention
+    # also used by the ParsedQASMCircuit gate-count properties. Terminal measurements
+    # were already removed above.
+    original_gates = sum(
+        1 for inst in circ_clean.data
+        if inst.operation.name not in NON_GATE_INSTRUCTIONS
+    )
+
     basis_gates = ['h', 'x', 'y', 'z', 's', 't', 'rx', 'ry', 'rz', 'cx', 'cz', 'swap', 'u', 'u1', 'u2', 'u3', 'p', 'sx', 'id']
     tqc = transpile(circ_clean, basis_gates=basis_gates)
 
-    # Pre-parse instructions once
+    # Pre-parse instructions once. Operations that cannot be represented as
+    # 1-qubit or 2-qubit unitary matrices are rejected with an explicit error:
+    # silently skipping them would change the simulated circuit semantics and
+    # produce unannounced wrong results. Identity instructions are deliberately not
+    # skipped: executing the identity matrix applies the single-qubit noise of an
+    # active trajectory model, and noiseless runs absorb it in gate fusion. This
+    # path is only reached when an identity instruction survives transpilation,
+    # since Qiskit removes identity-equivalent operations at its default
+    # optimization level.
     parsed_ops = []
     for inst in tqc.data:
         op = inst.operation
-        if op.name in ('barrier', 'measure', 'id'):
+        if op.name == "barrier":
+            # Scheduling bookkeeping only: barriers never change the simulated state.
             continue
         q_indices = [tqc.find_bit(q).index for q in inst.qubits]
+        if op.name == "delay":
+            if traj_model is not None:
+                raise ValueError(
+                    f"Delay on qubit(s) {q_indices} cannot be modeled while a trajectory noise "
+                    f"model is active: idle-time decoherence during delays is not simulated, so "
+                    f"the delayed evolution would be misreported as noise-free. Remove the delay "
+                    f"or run without a noise model."
+                )
+            # Noiseless runs: an idle delay does not change the ideal statevector.
+            continue
+        if len(q_indices) not in (1, 2):
+            raise ValueError(
+                f"Unsupported operation '{op.name}' acting on {len(q_indices)} qubits in the "
+                f"trajectory engine: only 1-qubit and 2-qubit unitary gates are executable. "
+                f"Decompose the operation into supported basis gates."
+            )
         try:
             mat = op.to_matrix()
-            parsed_ops.append((op.name, q_indices, mat))
-        except Exception:
-            pass
+        except Exception as exc:
+            raise ValueError(
+                f"Unsupported operation '{op.name}' on qubit(s) {q_indices} in trajectory "
+                f"simulation: the Monte Carlo Wavefunction engine executes 1-qubit and 2-qubit "
+                f"unitary gates only, and this operation has no unitary matrix representation. "
+                f"Decompose or remove the operation (for example reset, initialize, and classical "
+                f"control flow are unsupported), or run with noise_method='density_matrix'."
+            ) from exc
+        parsed_ops.append((op.name, q_indices, mat))
 
     logical_gates = len(parsed_ops)
     fused_gates = logical_gates
@@ -207,6 +296,7 @@ def simulate_trajectories(
     saved_ratio = 1 << num_qubits
 
     fusion_data = {
+        "original_gates": original_gates,
         "logical_gates": logical_gates,
         "logical_gate_count": logical_gates,
         "fused_gates": fused_gates,
@@ -226,6 +316,7 @@ def simulate_trajectories(
         "memory_saved_ratio": saved_ratio,
         "noise_model": traj_model.name if traj_model else "None",
         "counts": counts,
+        "original_gates": original_gates,
         "logical_gates": logical_gates,
         "fused_gates": fused_gates,
         "logical_gate_count": logical_gates,
@@ -250,6 +341,7 @@ def simulate_trajectories(
         "accelerator_backend": active_be.tier_label,
         "accelerator_badge": None,
         "fusion_metrics": fusion_data if logical_gates > 0 else None,
+        "original_gates": original_gates,
         "logical_gates": logical_gates,
         "fused_gates": fused_gates,
         "fusion_reduction_pct": fusion_reduction_pct,
@@ -477,6 +569,7 @@ def run_simulation(
                     "accelerator_backend": accelerator_backend,
                     "accelerator_badge": accelerator_badge,
                     "fusion_metrics": active_fusion_metrics,
+                    "original_gates": last_t_res.get("original_gates") if last_t_res else None,
                     "logical_gates": last_t_res.get("logical_gates") if last_t_res else None,
                     "fused_gates": last_t_res.get("fused_gates") if last_t_res else None,
                     "fusion_reduction_pct": last_t_res.get("fusion_reduction_pct") if last_t_res else None,
@@ -505,6 +598,7 @@ def run_simulation(
                     "accelerator_backend": accelerator_backend,
                     "accelerator_badge": accelerator_badge,
                     "fusion_metrics": active_fusion_metrics,
+                    "original_gates": last_t_res.get("original_gates") if last_t_res else None,
                     "logical_gates": last_t_res.get("logical_gates") if last_t_res else None,
                     "fused_gates": last_t_res.get("fused_gates") if last_t_res else None,
                     "fusion_reduction_pct": last_t_res.get("fusion_reduction_pct") if last_t_res else None,

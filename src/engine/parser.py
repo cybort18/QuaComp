@@ -176,6 +176,20 @@ STANDARD_GATES_SPECS: Dict[str, Tuple[Optional[int], int]] = {
 }
 
 
+# Instructions that are directives rather than quantum gates. They are excluded from
+# every gate-count property (``total_gates``, ``one_qubit_gates``, ``two_qubit_gates``,
+# ``multi_qubit_gates``) and from trajectory gate accounting (``original_gates``):
+# - barrier: scheduling bookkeeping only.
+# - measure: classical readout; the trajectory engine samples terminal measurements and
+#   rejects mid-circuit measurements (no collapse semantics).
+# - reset: non-unitary state preparation, rejected by the trajectory engine.
+# - delay: idle-time scheduling directive; skipped in noiseless runs and rejected by the
+#   trajectory engine when a noise model is active because idle-time decoherence is not
+#   modeled. OpenQASM 2.0 has no delay statement, so delays only enter this representation
+#   when instructions are constructed programmatically.
+NON_GATE_INSTRUCTIONS: Tuple[str, ...] = ("barrier", "measure", "reset", "delay")
+
+
 class ParsedQASMCircuit:
     """
     Internal circuit data structure representing a parsed OpenQASM 2.0 program.
@@ -223,23 +237,32 @@ class ParsedQASMCircuit:
 
     @property
     def total_gates(self) -> int:
-        """Total count of quantum gates (excluding barrier, reset, and measurement)."""
-        return sum(1 for inst in self.instructions if inst.name not in ("barrier", "measure", "reset"))
+        """Total count of quantum gates (excluding barrier, measure, reset, and delay)."""
+        return sum(1 for inst in self.instructions if inst.name not in NON_GATE_INSTRUCTIONS)
 
     @property
     def one_qubit_gates(self) -> int:
-        """Count of single-qubit quantum gates."""
-        return sum(1 for inst in self.instructions if inst.name not in ("barrier", "measure", "reset") and len(inst.qargs) == 1)
+        """Count of single-qubit quantum gates (excluding barrier, measure, reset, and delay)."""
+        return sum(
+            1 for inst in self.instructions
+            if inst.name not in NON_GATE_INSTRUCTIONS and len(inst.qargs) == 1
+        )
 
     @property
     def two_qubit_gates(self) -> int:
-        """Count of two-qubit quantum gates."""
-        return sum(1 for inst in self.instructions if inst.name not in ("barrier", "measure", "reset") and len(inst.qargs) == 2)
+        """Count of two-qubit quantum gates (excluding barrier, measure, reset, and delay)."""
+        return sum(
+            1 for inst in self.instructions
+            if inst.name not in NON_GATE_INSTRUCTIONS and len(inst.qargs) == 2
+        )
 
     @property
     def multi_qubit_gates(self) -> int:
-        """Count of multi-qubit (>= 3 qubits) quantum gates."""
-        return sum(1 for inst in self.instructions if inst.name not in ("barrier", "measure", "reset") and len(inst.qargs) >= 3)
+        """Count of multi-qubit (>= 3 qubits) quantum gates (excluding barrier, measure, reset, and delay)."""
+        return sum(
+            1 for inst in self.instructions
+            if inst.name not in NON_GATE_INSTRUCTIONS and len(inst.qargs) >= 3
+        )
 
     @property
     def depth(self) -> int:

@@ -90,6 +90,31 @@ def test_extract_gate_matrix():
     assert barrier_mat is None
 
 
+def test_extract_gate_matrix_delay_is_directive():
+    """Delay exposes an identity to_matrix() but must be treated as a directive, not a gate."""
+    qc = QuantumCircuit(1)
+    qc.delay(100, 0, unit="ns")
+    delay_op = qc.data[0].operation
+
+    # The identity matrix exists, so fusion must special-case the scheduling directive.
+    assert delay_op.to_matrix().shape == (2, 2)
+    assert extract_gate_matrix(delay_op) is None
+
+
+def test_fuse_preserves_delays_verbatim():
+    """Fusion preserves delays as boundaries instead of absorbing them into unitary blocks."""
+    qc = QuantumCircuit(1)
+    qc.x(0)
+    qc.delay(100, 0, unit="ns")
+    qc.z(0)
+
+    fused, metrics = fuse_circuit_single_pass(qc)
+
+    assert [inst.operation.name for inst in fused.data] == ["x", "delay", "z"]
+    assert metrics["fused_gate_count"] == 3
+    assert metrics["reduction_ratio"] == pytest.approx(0.0, abs=1e-9)
+
+
 def test_fuse_circuit_single_pass_1q():
     """Verify single-pass fusion on consecutive 1-qubit gates and statevector fidelity."""
     qc = QuantumCircuit(2)

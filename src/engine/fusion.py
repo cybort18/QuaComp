@@ -2,7 +2,7 @@ import time
 from typing import List, Tuple, Dict, Any, Optional
 import numpy as np
 from qiskit import QuantumCircuit
-from qiskit.circuit import CircuitInstruction, Barrier, Measure, Reset
+from qiskit.circuit import CircuitInstruction, Barrier, Measure, Reset, Delay
 from qiskit.circuit.library import UnitaryGate
 from qiskit.quantum_info import Operator
 
@@ -121,15 +121,16 @@ def fuse_matrix_sequence(matrices: List[np.ndarray], force_backend: Optional[str
 def extract_gate_matrix(operation: Any) -> Optional[np.ndarray]:
     """
     Safely extract unitary matrix representation from a Qiskit gate operation.
-    
+
     Returns:
-        np.ndarray or None if the operation is non-unitary (barrier, measure, reset).
+        np.ndarray or None if the operation is not a gate (barrier, measure, reset)
+        or is a scheduling directive (delay) that must be preserved verbatim.
     """
-    if isinstance(operation, (Barrier, Measure, Reset)):
+    if isinstance(operation, (Barrier, Measure, Reset, Delay)):
         return None
-        
+
     name = getattr(operation, "name", "").lower()
-    if name in ("barrier", "measure", "reset"):
+    if name in ("barrier", "measure", "reset", "delay"):
         return None
         
     try:
@@ -156,7 +157,7 @@ def fuse_circuit_single_pass(
     
     Compresses consecutive 1-qubit operations on the same qubit and consecutive 2-qubit 
     operations on identical adjacent qubit pairs into unified unitary gates U_fused = U_k * ... * U_1.
-    Preserves all barriers, measurements, resets, and classical registers.
+    Preserves all barriers, measurements, resets, delays, and classical registers.
     
     Args:
         circuit (QuantumCircuit): Original Qiskit circuit.
@@ -222,7 +223,8 @@ def fuse_circuit_single_pass(
         q_indices = tuple(circuit.find_bit(q).index for q in inst.qubits)
         clbits = inst.clbits
         
-        # Check if operation is a non-unitary barrier / measure / reset
+        # Non-unitary operations (barrier / measure / reset) and scheduling directives
+        # (delay) act as fusion boundaries and are preserved verbatim.
         mat = extract_gate_matrix(op)
         if mat is None:
             # Flush affected qubits
