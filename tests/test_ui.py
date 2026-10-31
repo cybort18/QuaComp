@@ -178,3 +178,17 @@ def test_display_results_with_mps_telemetry():
     assert "SWAP Count" in output
     assert "RAM Savings" in output
     assert "62.5%" in output
+
+
+def test_run_quick_benchmark_smoke(monkeypatch):
+    """Verify run_quick_benchmark executes cleanly without NameError across all default arguments."""
+    from cli.main import build_argument_parser
+    from cli.runner import run_quick_benchmark
+
+    parser = build_argument_parser()
+    args = parser.parse_args(["--quick", "--runs", "1", "--type", "shallow"])
+    console = Console(record=True, width=120)
+    results = run_quick_benchmark(args, "cpu", console=console)
+    assert len(results) == 3
+    assert all(r["success"] for r in results)
+    assert [r["qubits"] for r in results] == [10, 15, 20]

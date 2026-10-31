@@ -528,6 +528,8 @@ def run_quick_benchmark(
     qubits_list = [10, 15, 20]
     results = []
 
+    workload = getattr(args, 'type', 'qft')
+    depth = getattr(args, 'depth', 10)
     effective_bond_dim = getattr(args, 'max_bond_dim', None) or getattr(args, 'bond_dim', 64)
     svd_cutoff = getattr(args, 'svd_cutoff', 1e-9)
     for q in qubits_list:
