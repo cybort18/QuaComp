@@ -440,6 +440,72 @@ def run_simulation(
             f"Please use '--noise-method trajectory' (Monte Carlo Wavefunction) to maintain O(2^n) memory scaling."
         )
 
+    from src.engine.complexity import analyze_circuit_complexity, select_optimal_solver
+    complexity_profile = analyze_circuit_complexity(circuit)
+    req_solver = method if method in ('auto', 'statevector', 'mps', 'matrix_product_state', 'stabilizer') else 'statevector'
+    solver_routing = select_optimal_solver(complexity_profile, requested_method=req_solver)
+    if method == 'auto':
+        method = solver_routing["selected_solver"]
+
+    if method == 'stabilizer':
+        from src.engine.stabilizer import simulate_stabilizer
+        stab_latencies: List[float] = []
+        last_stab_res: Optional[Dict[str, Any]] = None
+        for _ in range(runs):
+            s_res = simulate_stabilizer(circuit, shots=shots)
+            stab_latencies.append(s_res["latency"])
+            last_stab_res = s_res
+
+        mean_lat = float(np.mean(stab_latencies))
+        med_lat = float(np.median(stab_latencies))
+        std_lat = float(np.std(stab_latencies, ddof=1)) if len(stab_latencies) > 1 else 0.0
+        counts_out = last_stab_res["counts"] if last_stab_res else {}
+        mem_bytes = last_stab_res["tableau_memory_bytes"] if last_stab_res else 0
+        ram_sav = last_stab_res["ram_savings_vs_statevector"] if last_stab_res else {}
+        cliff_cnt = last_stab_res["clifford_gate_count"] if last_stab_res else 0
+
+        metadata = {
+            "backend_name": "QuaComp Stabilizer Tableau Engine (Aaronson-Gottesman CHP)",
+            "backend_version": "1.0.0",
+            "job_id": None,
+            "success": True,
+            "method": "stabilizer",
+            "device": "CPU",
+            "workers": workers,
+            "runs_count": len(stab_latencies),
+            "tableau_memory_bytes": mem_bytes,
+            "ram_savings_vs_statevector": ram_sav,
+            "clifford_gate_count": cliff_cnt,
+            "complexity_profile": complexity_profile,
+            "solver_routing": solver_routing,
+            "counts": counts_out
+        }
+        return {
+            "success": True,
+            "latency": mean_lat,
+            "latencies": stab_latencies,
+            "mean_latency": mean_lat,
+            "median_latency": med_lat,
+            "std_latency": std_lat,
+            "runs_count": len(stab_latencies),
+            "counts": counts_out,
+            "device": "CPU",
+            "workers": workers,
+            "method": "stabilizer",
+            "tableau_memory_bytes": mem_bytes,
+            "ram_savings_vs_statevector": ram_sav,
+            "clifford_gate_count": cliff_cnt,
+            "complexity_profile": complexity_profile,
+            "solver_routing": solver_routing,
+            "native_kernel_used": False,
+            "accelerator_backend": "CPU (Aaronson-Gottesman Stabilizer Tableau)",
+            "accelerator_badge": None,
+            "fusion_metrics": None,
+            "physical_noise_profile": None,
+            "error": None,
+            "metadata": metadata
+        }
+
     try:
         # Check available devices in AerSimulator
 
@@ -606,6 +672,8 @@ def run_simulation(
                     "physical_noise_profile": active_noise_profile,
                     "noise_method": "trajectory",
                     "memory_saved_ratio": saved_ratio,
+                    "complexity_profile": complexity_profile,
+                    "solver_routing": solver_routing,
                     "error": None,
                     "metadata": metadata
                 }
@@ -703,6 +771,8 @@ def run_simulation(
             "accelerator_badge": accelerator_badge,
             "fusion_metrics": fusion_metrics,
             "physical_noise_profile": active_noise_profile,
+            "complexity_profile": complexity_profile,
+            "solver_routing": solver_routing,
             "error": None,
             "metadata": metadata
         }

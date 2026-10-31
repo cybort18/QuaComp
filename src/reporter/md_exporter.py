@@ -126,7 +126,12 @@ def export_to_markdown(
     md_content.append("## Benchmark Summary")
 
     # 1. Block 1: Hardware Benchmark Overview
-    method_name = "Statevector" if best_method == "statevector" else f"MPS (chi={best_bond_dim})"
+    if best_method == "statevector":
+        method_name = "Statevector"
+    elif best_method == "stabilizer":
+        method_name = "Stabilizer Tableau O(n^2)"
+    else:
+        method_name = f"MPS (chi={best_bond_dim})"
     accel_str = f"`{best_accelerator_badge}` ({best_accelerator_backend})" if best_accelerator_badge else "Standard CPU"
     ram_status_str = "SAFE" if successful_runs else "UNSAFE"
     memory_str = f"{system_metadata.get('total_ram_gb', 0.0):.1f} GB RAM"
@@ -250,6 +255,21 @@ def export_to_markdown(
             savings_pct = f"{ram_s['savings_percent']:.1f}%" if (ram_s and "savings_percent" in ram_s) else "-"
             md_content.append(
                 f"| {mr['qubits']} | {mr.get('workload_label', 'MPS')} | {max_b} | {act_b} | {fid_val * 100.0:.4f}% | {trunc_err:.2e} | {swaps} | {savings_pct} |"
+            )
+        md_content.append("\n---\n")
+
+    # Circuit Complexity & Auto-Solver Routing Table (if available)
+    complexity_runs = [r for r in results if r.get("complexity_profile")]
+    if complexity_runs:
+        md_content.append("## Circuit Complexity & Auto-Solver Routing")
+        md_content.append("| Qubits | Workload | Clifford Gates | Non-Clifford Gates | Magic Density | Max Interaction Dist | Entanglement Topology | Selected Solver |")
+        md_content.append("| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |")
+        for cr in complexity_runs:
+            cp = cr["complexity_profile"]
+            sr = cr.get("solver_routing") or {}
+            solver_str = sr.get("selected_solver") or cr.get("method", "statevector")
+            md_content.append(
+                f"| {cr['qubits']} | {cr.get('workload_label', 'Circuit')} | {cp.get('clifford_gates', 0)} | {cp.get('non_clifford_gates', 0)} | {cp.get('magic_density', 0.0):.4f} | {cp.get('max_interaction_distance', 0)} | {cp.get('entanglement_topology', 'unentangled')} | `{solver_str}` |"
             )
         md_content.append("\n---\n")
 

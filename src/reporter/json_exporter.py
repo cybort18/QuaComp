@@ -56,6 +56,8 @@ def export_to_json(results: List[Dict[str, Any]], system_metadata: Dict[str, Any
     edp_val = None
     best_entanglement_metrics = {}
     best_energy_metrics = {}
+    best_complexity_profile = {}
+    best_solver_routing = {}
 
     qv_hprob = None
     qv_certified = None
@@ -98,6 +100,10 @@ def export_to_json(results: List[Dict[str, Any]], system_metadata: Dict[str, Any
         best_accelerator_badge = best_run.get("accelerator_badge", "")
         best_physical_noise = best_run.get("physical_noise_profile", None)
         best_entanglement_metrics = best_run.get("entanglement_metrics", {})
+        best_complexity_profile = dict(best_run.get("complexity_profile", {}) or {})
+        best_solver_routing = dict(best_run.get("solver_routing", {}) or {})
+        if best_complexity_profile and "selected_solver" not in best_complexity_profile:
+            best_complexity_profile["selected_solver"] = best_solver_routing.get("selected_solver", best_method)
 
         effective_bw = breakdown.get("effective_bandwidth_gbps", 0.0)
         arithmetic_intensity = breakdown.get("arithmetic_intensity_flops_per_byte", 0.4375)
@@ -145,6 +151,8 @@ def export_to_json(results: List[Dict[str, Any]], system_metadata: Dict[str, Any
         "cpu_overhead_ratio": best_overhead_ratio,
         "ram_savings": best_ram_savings,
         "entanglement_metrics": best_entanglement_metrics,
+        "complexity_profile": best_complexity_profile,
+        "solver_routing": best_solver_routing,
         "energy_metrics": best_energy_metrics if successful_runs else {},
         "statistical_summary": {
             "runs_count": best_runs_count,

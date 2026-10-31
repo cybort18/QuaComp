@@ -54,43 +54,51 @@ def run_single_simulation(
     Returns:
         dict: Simulation results and execution metrics.
     """
-    # 1. Pre-flight memory safety check
-    is_safe, msg = check_memory_safety(
-        qubits,
-        method=method,
-        bond_dimension=bond_dimension,
-        device=device,
-        state_slicing=state_slicing
-    )
-    if not is_safe:
-        return {
-            "qubits": qubits,
-            "method": method,
-            "bond_dimension": bond_dimension if method in ('mps', 'matrix_product_state') else None,
-            "device": device.upper(),
-            "workers": workers,
-            "noise_level": noise_level,
-            "model_parallelism": "Aggregated VRAM Slicing" if state_slicing else "None",
-            "chunk_count": 1,
-            "fidelity": 0.0,
-            "overhead_ratio": 0.0,
-            "success": False,
-            "latency": 0.0,
-            "mean_latency": 0.0,
-            "median_latency": 0.0,
-            "std_latency": 0.0,
-            "latencies": [],
-            "runs_count": 0,
-            "gates": 0,
-            "cpu_usage": 0.0,
-            "ram_status": "UNSAFE",
-            "error": msg,
-            "ram_savings": {},
-            "entanglement_metrics": {},
-            "parameter_binding_metrics": {},
-            "qv_metrics": {},
-            "energy_metrics": {}
-        }
+    # 1. Pre-flight memory safety check (deferred if method == 'auto' until solver is selected)
+    requested_method = method
+    is_safe = True
+    msg = "SAFE"
+    if method != "auto":
+        if qasm_circuit is not None and hasattr(qasm_circuit, "num_qubits"):
+            qubits = qasm_circuit.num_qubits
+        is_safe, msg = check_memory_safety(
+            qubits,
+            method=method,
+            bond_dimension=bond_dimension,
+            device=device,
+            state_slicing=state_slicing
+        )
+        if not is_safe:
+            return {
+                "qubits": qubits,
+                "method": method,
+                "bond_dimension": bond_dimension if method in ('mps', 'matrix_product_state') else None,
+                "device": device.upper(),
+                "workers": workers,
+                "noise_level": noise_level,
+                "model_parallelism": "Aggregated VRAM Slicing" if state_slicing else "None",
+                "chunk_count": 1,
+                "fidelity": 0.0,
+                "overhead_ratio": 0.0,
+                "success": False,
+                "latency": 0.0,
+                "mean_latency": 0.0,
+                "median_latency": 0.0,
+                "std_latency": 0.0,
+                "latencies": [],
+                "runs_count": 0,
+                "gates": 0,
+                "cpu_usage": 0.0,
+                "ram_status": "UNSAFE",
+                "error": msg,
+                "ram_savings": {},
+                "entanglement_metrics": {},
+                "parameter_binding_metrics": {},
+                "qv_metrics": {},
+                "energy_metrics": {},
+                "complexity_profile": {},
+                "solver_routing": {}
+            }
 
     # 2. Circuit generation
     circuit = None
@@ -125,6 +133,52 @@ def run_single_simulation(
         circuit = generate_qft_circuit(qubits)
 
     num_gates = sum(circuit.count_ops().values())
+
+    # 2b. Static Circuit Complexity Analysis & Auto-Solver Routing
+    from src.engine.complexity import analyze_circuit_complexity, select_optimal_solver
+    target_for_complexity = qasm_circuit if qasm_circuit is not None else circuit
+    complexity_profile = analyze_circuit_complexity(target_for_complexity)
+    solver_routing = select_optimal_solver(complexity_profile, requested_method=requested_method)
+    if requested_method == "auto":
+        method = solver_routing["selected_solver"]
+        is_safe, msg = check_memory_safety(
+            qubits,
+            method=method,
+            bond_dimension=bond_dimension,
+            device=device,
+            state_slicing=state_slicing
+        )
+        if not is_safe:
+            return {
+                "qubits": qubits,
+                "method": method,
+                "bond_dimension": bond_dimension if method in ('mps', 'matrix_product_state') else None,
+                "device": device.upper(),
+                "workers": workers,
+                "noise_level": noise_level,
+                "model_parallelism": "Aggregated VRAM Slicing" if state_slicing else "None",
+                "chunk_count": 1,
+                "fidelity": 0.0,
+                "overhead_ratio": 0.0,
+                "success": False,
+                "latency": 0.0,
+                "mean_latency": 0.0,
+                "median_latency": 0.0,
+                "std_latency": 0.0,
+                "latencies": [],
+                "runs_count": 0,
+                "gates": 0,
+                "cpu_usage": 0.0,
+                "ram_status": "UNSAFE",
+                "error": msg,
+                "ram_savings": {},
+                "entanglement_metrics": {},
+                "parameter_binding_metrics": {},
+                "qv_metrics": {},
+                "energy_metrics": {},
+                "complexity_profile": complexity_profile,
+                "solver_routing": solver_routing
+            }
 
     # 3. Energy and CPU measurement start
     get_cpu_utilization()
@@ -195,6 +249,54 @@ def run_single_simulation(
             "max_active_bond_dim": last_mps_res["max_active_bond_dim"],
             "swap_count": last_mps_res["swap_count"]
         }
+    elif method == 'stabilizer':
+        from src.engine.stabilizer import simulate_stabilizer
+        stab_latencies = []
+        last_stab_res = None
+        stab_input = qasm_circuit if qasm_circuit is not None else circuit
+        with EnergyProfiler() as energy_prof:
+            for _ in range(runs):
+                stab_res = simulate_stabilizer(
+                    stab_input,
+                    shots=shots
+                )
+                stab_latencies.append(stab_res["latency"])
+                last_stab_res = stab_res
+
+        mean_lat = float(np.mean(stab_latencies))
+        med_lat = float(np.median(stab_latencies))
+        std_lat = float(np.std(stab_latencies, ddof=1)) if len(stab_latencies) > 1 else 0.0
+
+        sim_result = {
+            "success": True,
+            "latency": mean_lat,
+            "mean_latency": mean_lat,
+            "median_latency": med_lat,
+            "std_latency": std_lat,
+            "latencies": stab_latencies,
+            "runs_count": len(stab_latencies),
+            "counts": last_stab_res["counts"],
+            "device": "CPU",
+            "workers": workers,
+            "error": None,
+            "metadata": {
+                "backend_name": "QuaComp Stabilizer Tableau Engine (Aaronson-Gottesman CHP)",
+                "backend_version": "1.0.0",
+                "method": "stabilizer",
+                "shots": shots,
+                "counts": last_stab_res["counts"],
+                "tableau_memory_bytes": last_stab_res["tableau_memory_bytes"],
+                "clifford_gate_count": last_stab_res["clifford_gate_count"]
+            },
+            "native_kernel_used": False,
+            "accelerator_backend": "CPU (Aaronson-Gottesman CHP Tableau)",
+            "accelerator_badge": "[CHP O(n^2)]",
+            "fusion_metrics": None,
+            "physical_noise_profile": None,
+            "tableau_memory_bytes": last_stab_res["tableau_memory_bytes"],
+            "clifford_gate_count": last_stab_res["clifford_gate_count"],
+            "ram_savings_vs_statevector": last_stab_res["ram_savings_vs_statevector"]
+        }
     else:
         try:
             with EnergyProfiler() as energy_prof:
@@ -249,18 +351,22 @@ def run_single_simulation(
     cpu_metric = get_cpu_utilization()
     cpu_usage = float(cpu_metric.get("overall_percent", 0.0)) if isinstance(cpu_metric, dict) else float(cpu_metric)
 
-    # 6. Calculate MPS RAM savings if applicable
+    # 6. Calculate MPS / Stabilizer RAM savings if applicable
     ram_savings = {}
     if method in ('mps', 'matrix_product_state') and sim_result["success"]:
         process = psutil.Process()
         actual_ram_bytes = process.memory_info().rss
         ram_savings = calculate_mps_ram_savings(qubits, actual_ram_bytes)
+    elif method == 'stabilizer' and sim_result["success"]:
+        ram_savings = sim_result.get("ram_savings_vs_statevector", {})
 
     # 7. Calculate NISQ metrics (Fidelity and CPU Overhead) if noisy
     fidelity = 100.0
     overhead_ratio = 0.0
     if method in ('mps', 'matrix_product_state'):
         fidelity = round(sim_result.get("mps_fidelity", 1.0) * 100.0, 4)
+    elif method == 'stabilizer':
+        fidelity = 100.0
     elif noise_level != "none" and sim_result["success"]:
         active_be.device_synchronize()
         try:
@@ -307,7 +413,7 @@ def run_single_simulation(
     entanglement_metrics = {}
     if compute_entropy and sim_result["success"] and circuit is not None:
         try:
-            ent_method = "mps" if method in ('mps', 'matrix_product_state') else "auto"
+            ent_method = "mps" if (method in ('mps', 'matrix_product_state') or qubits > 20) else "auto"
             entanglement_metrics = calculate_bipartite_entropy(
                 circuit,
                 method=ent_method,
@@ -374,9 +480,13 @@ def run_single_simulation(
         "qv_metrics": qv_metrics,
         "noise_method": sim_meta.get("noise_method", noise_method),
         "shots": shots,
-        "memory_saved_ratio": sim_meta.get("memory_saved_ratio", 2 ** qubits),
+        "memory_saved_ratio": sim_meta.get("memory_saved_ratio", (1 << qubits) if qubits < 1000 else float("inf")),
         "energy_metrics": energy_metrics,
         "qasm_metrics": qasm_metrics,
+        "complexity_profile": complexity_profile,
+        "solver_routing": solver_routing,
+        "tableau_memory_bytes": sim_result.get("tableau_memory_bytes") if method == "stabilizer" else None,
+        "clifford_gate_count": sim_result.get("clifford_gate_count") if method == "stabilizer" else None,
         "mps_fidelity": sim_result.get("mps_fidelity") if method in ('mps', 'matrix_product_state') else None,
         "cumulative_truncation_error": sim_result.get("cumulative_truncation_error") if method in ('mps', 'matrix_product_state') else None,
         "max_active_bond_dim": sim_result.get("max_active_bond_dim") if method in ('mps', 'matrix_product_state') else None,

@@ -73,6 +73,8 @@ def display_results(results: List[Dict[str, Any]], console: Optional[Console] = 
         method_label = r.get("method", "statevector").upper()
         if method_label == "MATRIX_PRODUCT_STATE":
             method_label = "MPS"
+        elif method_label == "STABILIZER":
+            method_label = "STABILIZER (CHP)"
         if r.get("bond_dimension"):
             method_label += f" (chi={r['bond_dimension']})"
 

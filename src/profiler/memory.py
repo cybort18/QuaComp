@@ -53,6 +53,21 @@ def check_memory_safety(
     available_ram = vm.available
     available_gb = available_ram / (1024 ** 3)
     
+    # Stabilizer Tableau O(n^2) safety check
+    if method == 'stabilizer':
+        tableau_bytes = (2 * num_qubits + 1) * (2 * num_qubits + 1)
+        min_ram_needed = max(50 * (1024 ** 2), tableau_bytes)
+        if available_ram < min_ram_needed:
+            min_gb = min_ram_needed / (1024 ** 3)
+            return False, (
+                f"CRITICAL: Available physical RAM ({available_gb:.4f} GB) is lower than "
+                f"the baseline threshold required for Stabilizer simulations ({min_gb:.4f} GB)."
+            )
+        return True, (
+            f"SAFE: Stabilizer Tableau O(n^2) simulation selected. Exponential Statevector RAM safety checks bypassed. "
+            f"Available RAM: {available_gb:.4f} GB."
+        )
+
     # MPS safety check
     if method in ('mps', 'matrix_product_state'):
         min_ram_needed = 200 * (1024 ** 2)  # 200 MB baseline

@@ -37,9 +37,10 @@ def build_argument_parser() -> argparse.ArgumentParser:
     param_group.add_argument("--qaoa", action="store_true", help="Shorthand for QAOA Max-Cut variational workload (--type qaoa).")
     param_group.add_argument("--qv", action="store_true", help="Shorthand for Quantum Volume square model benchmark (--type qv).")
     param_group.add_argument("--depth", type=int, default=10, help="Depth for deep workload (default 10).")
-    param_group.add_argument("--method", choices=["statevector", "mps"], default="statevector", help="Simulation method (default statevector).")
-    param_group.add_argument("--sim-method", choices=["statevector", "mps"], default="statevector", help="Simulation method algorithm: statevector or mps (default: statevector).")
+    param_group.add_argument("--method", choices=["auto", "statevector", "mps", "stabilizer"], default="statevector", help="Simulation method (default statevector).")
+    param_group.add_argument("--sim-method", choices=["auto", "statevector", "mps", "stabilizer"], default="statevector", help="Simulation method algorithm: auto, statevector, mps, or stabilizer (default: statevector).")
     param_group.add_argument("--mps", action="store_true", help="Enable native Matrix Product State (MPS) tensor network simulation mode.")
+    param_group.add_argument("--stabilizer", action="store_true", help="Enable Aaronson-Gottesman O(n^2) Stabilizer Tableau simulation mode.")
     param_group.add_argument("--bond-dim", type=int, default=64, help="Max bond dimension for MPS simulation (default 64).")
     param_group.add_argument("--max-bond-dim", type=int, default=64, help="Maximum bond dimension chi_max for SVD compression in MPS (default: 64).")
     param_group.add_argument("--svd-cutoff", type=float, default=1e-9, help="Singular value truncation threshold for SVD compression in MPS (default: 1e-9).")
@@ -99,14 +100,17 @@ def main():
     parser = build_argument_parser()
     args = parser.parse_args()
     
-    # Resolve simulation method and MPS parameters
-    if getattr(args, 'mps', False):
+    # Resolve simulation method and MPS/Stabilizer parameters
+    if getattr(args, 'stabilizer', False):
+        args.sim_method = "stabilizer"
+        args.method = "stabilizer"
+    elif getattr(args, 'mps', False):
         args.sim_method = "mps"
         args.method = "mps"
     elif getattr(args, 'sim_method', None) and args.sim_method != "statevector":
         args.method = args.sim_method
-    elif getattr(args, 'method', None) == "mps":
-        args.sim_method = "mps"
+    elif getattr(args, 'method', None) and args.method != "statevector":
+        args.sim_method = args.method
 
     if getattr(args, 'max_bond_dim', None) is not None:
         args.bond_dim = args.max_bond_dim
