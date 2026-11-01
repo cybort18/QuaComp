@@ -139,7 +139,10 @@ def calculate_scoring_breakdown(
     total_gates: int,
     execution_time: float,
     fidelity: float = 100.0,
-    energy_joules: Optional[float] = None
+    energy_joules: Optional[float] = None,
+    sim_method: str = "statevector",
+    precision: str = "fp64",
+    active_bond_dim: int = 16
 ) -> Dict[str, Any]:
     """
     Calculate detailed breakdown of QuaComp scoring: QSI composite score,
@@ -151,6 +154,9 @@ def calculate_scoring_breakdown(
         execution_time (float): The mean execution time in seconds.
         fidelity (float, optional): Quantum state fidelity percentage [0.0 - 100.0]. Default: 100.0.
         energy_joules (float, optional): Energy consumed in Joules during execution.
+        sim_method (str, optional): Active simulation paradigm ('statevector', 'mps', 'stabilizer').
+        precision (str, optional): Floating-point precision ('fp64' or 'fp32').
+        active_bond_dim (int, optional): Active bond dimension for MPS simulations.
 
     Returns:
         dict: Detailed scoring metrics breakdown dictionary.
@@ -170,17 +176,26 @@ def calculate_scoring_breakdown(
     # Prevent division by zero or negative times with safe floor
     safe_time = max(float(execution_time), 1e-6)
 
-    capacity_metric = float(2 ** max_qubits)
+    capacity_metric = float(2 ** max_qubits) if max_qubits < 1000 else float("inf")
     throughput_metric = float(total_gates / safe_time)
     throughput_kgps = calculate_gate_throughput_kgps(total_gates, safe_time)
 
     # Calculate EDP if energy data provided
     edp = calculate_energy_delay_product(safe_time, energy_joules) if energy_joules is not None else None
 
-    # Roofline Memory Bandwidth metrics (32 bytes per statevector amplitude per gate)
-    total_bytes_transferred = float(total_gates * (2 ** max_qubits) * 32)
-    effective_bandwidth_gbps = round(float(total_bytes_transferred / (safe_time * 1e9)), 4)
-    arithmetic_intensity = 0.4375
+    # Solver-aware and precision-aware Roofline Memory Bandwidth metrics
+    from src.profiler.telemetry import calculate_effective_memory_bandwidth
+    bw_metrics = calculate_effective_memory_bandwidth(
+        num_qubits=max_qubits,
+        total_gates=total_gates,
+        execution_time=safe_time,
+        sim_method=sim_method,
+        precision=precision,
+        active_bond_dim=active_bond_dim
+    )
+    total_bytes_transferred = bw_metrics["total_bytes_transferred"]
+    effective_bandwidth_gbps = bw_metrics["effective_bandwidth_gbps"]
+    arithmetic_intensity = bw_metrics["arithmetic_intensity_flops_per_byte"]
 
     # Normalized fidelity factor [0.0 - 1.0]
     fid_clamped = max(0.0, min(100.0, float(fidelity)))

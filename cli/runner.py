@@ -45,7 +45,8 @@ def run_single_simulation(
     backend: str = 'auto',
     shots: int = 1000,
     noise_method: str = 'trajectory',
-    svd_cutoff: float = 1e-9
+    svd_cutoff: float = 1e-9,
+    precision: str = 'fp64'
 ) -> Dict[str, Any]:
 
     """
@@ -209,7 +210,8 @@ def run_single_simulation(
                     circuit,
                     bond_dimension=bond_dimension,
                     cutoff=svd_cutoff,
-                    shots=shots
+                    shots=shots,
+                    precision=precision
                 )
                 mps_latencies.append(mps_res["latency"])
                 last_mps_res = mps_res
@@ -315,7 +317,8 @@ def run_single_simulation(
                     use_native_kernels=use_native_kernels,
                     physical_noise_profile=noise_profile,
                     backend=backend,
-                    noise_method=noise_method
+                    noise_method=noise_method,
+                    precision=precision
                 )
         except (InsufficientVRAMError, MemoryError, RuntimeError) as e:
             if isinstance(e, RuntimeError) and "cuda out of memory" not in str(e).lower() and "out of memory" not in str(e).lower():
@@ -340,7 +343,8 @@ def run_single_simulation(
                     use_native_kernels=False,
                     physical_noise_profile=noise_profile,
                     backend="numpy",
-                    noise_method=noise_method
+                    noise_method=noise_method,
+                    precision=precision
                 )
         finally:
             active_be.device_synchronize()
@@ -409,11 +413,16 @@ def run_single_simulation(
             fidelity = calculate_state_fidelity(ideal_sim_result["counts"], sim_result["counts"])
             overhead_ratio = calculate_overhead_ratio(ideal_sim_result["latency"], sim_result["mean_latency"])
 
-    # 8. Calculate Entanglement Entropy Metrics if requested (Supports Native MPS Tensor for large qubits!)
+    # 8. Calculate Entanglement Entropy Metrics if requested (Supports Native MPS & Stabilizer for large qubits)
     entanglement_metrics = {}
     if compute_entropy and sim_result["success"] and circuit is not None:
         try:
-            ent_method = "mps" if (method in ('mps', 'matrix_product_state') or qubits > 20) else "auto"
+            if method == "stabilizer" or sim_result.get("method_used") == "stabilizer_tableau":
+                ent_method = "stabilizer"
+            elif method in ('mps', 'matrix_product_state') or qubits > 20:
+                ent_method = "mps"
+            else:
+                ent_method = "auto"
             entanglement_metrics = calculate_bipartite_entropy(
                 circuit,
                 method=ent_method,
@@ -444,9 +453,27 @@ def run_single_simulation(
     runs_cnt = sim_result["runs_count"]
     sim_meta = sim_result.get("metadata", {})
 
+    from src.profiler.telemetry import calculate_effective_memory_bandwidth
+    active_bond = sim_result.get("max_active_bond_dim") or bond_dimension or 16
+    bw_telemetry = calculate_effective_memory_bandwidth(
+        num_qubits=qubits,
+        total_gates=num_gates,
+        execution_time=mean_lat,
+        sim_method=method,
+        precision=precision,
+        active_bond_dim=active_bond
+    ) if sim_result["success"] else {
+        "effective_bandwidth_gbps": 0.0,
+        "arithmetic_intensity_flops_per_byte": 0.4375,
+        "total_bytes_transferred": 0.0
+    }
+
     return {
         "qubits": qubits,
         "method": method,
+        "precision": precision,
+        "effective_bandwidth_gbps": bw_telemetry["effective_bandwidth_gbps"],
+        "arithmetic_intensity_flops_per_byte": bw_telemetry["arithmetic_intensity_flops_per_byte"],
         "bond_dimension": bond_dimension if method in ('mps', 'matrix_product_state') else None,
         "device": device.upper(),
         "workers": workers,
@@ -532,6 +559,7 @@ def run_quick_benchmark(
     depth = getattr(args, 'depth', 10)
     effective_bond_dim = getattr(args, 'max_bond_dim', None) or getattr(args, 'bond_dim', 64)
     svd_cutoff = getattr(args, 'svd_cutoff', 1e-9)
+    precision = getattr(args, 'precision', 'fp64')
     for q in qubits_list:
         with Status(f"Running simulation for {q} qubits on {effective_device.upper()} ({args.runs} runs, {workers} workers)...", console=c):
             res = run_single_simulation(
@@ -540,7 +568,7 @@ def run_quick_benchmark(
                 state_slicing=state_slicing, blocking_qubits=blocking_qubits,
                 use_native_kernels=use_native_kernels, noise_profile=noise_profile,
                 backend=backend, shots=shots, noise_method=noise_method,
-                svd_cutoff=svd_cutoff
+                svd_cutoff=svd_cutoff, precision=precision
             )
             res["workload_label"] = workload.upper()
             results.append(res)
@@ -585,6 +613,7 @@ def run_full_stress_test(
 
     effective_bond_dim = getattr(args, 'max_bond_dim', None) or getattr(args, 'bond_dim', 64)
     svd_cutoff = getattr(args, 'svd_cutoff', 1e-9)
+    precision = getattr(args, 'precision', 'fp64')
     while q <= max_limit:
         with Status(f"Running simulation for {q} qubits on {effective_device.upper()} ({args.runs} runs, {workers} workers)...", console=c):
             res = run_single_simulation(
@@ -593,7 +622,7 @@ def run_full_stress_test(
                 state_slicing=state_slicing, blocking_qubits=blocking_qubits,
                 use_native_kernels=use_native_kernels, noise_profile=noise_profile,
                 backend=backend, shots=shots, noise_method=noise_method,
-                svd_cutoff=svd_cutoff
+                svd_cutoff=svd_cutoff, precision=precision
             )
             res["workload_label"] = "QFT"
             results.append(res)
@@ -672,6 +701,7 @@ def run_custom_simulation(
 
     effective_bond_dim = getattr(args, 'max_bond_dim', None) or getattr(args, 'bond_dim', 64)
     svd_cutoff = getattr(args, 'svd_cutoff', 1e-9)
+    precision = getattr(args, 'precision', 'fp64')
     with Status(f"Running simulation for {effective_qubits} qubits on {effective_device.upper()} ({args.runs} runs, {workers} workers)...", console=c):
         res = run_single_simulation(
             effective_qubits, args.type, args.depth, args.method, effective_bond_dim, effective_device,
@@ -680,7 +710,7 @@ def run_custom_simulation(
             use_native_kernels=use_native_kernels, noise_profile=noise_profile,
             qasm_circuit=parsed_qasm, qasm_metrics=qasm_metrics,
             backend=backend, shots=shots, noise_method=noise_method,
-            svd_cutoff=svd_cutoff
+            svd_cutoff=svd_cutoff, precision=precision
         )
         if parsed_qasm:
             res["workload_label"] = f"QASM: {parsed_qasm.name}"

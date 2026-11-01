@@ -11,7 +11,13 @@ class MatrixProductState:
     2-qubit gates, and adaptive SVD singular value truncation error tracking.
     """
 
-    def __init__(self, num_qubits: int, max_bond_dim: int = 64, cutoff: float = 1e-12) -> None:
+    def __init__(
+        self,
+        num_qubits: int,
+        max_bond_dim: int = 64,
+        cutoff: float = 1e-12,
+        precision: str = "fp64"
+    ) -> None:
         """
         Initialize an MPS for an n-qubit system in state |0...0>.
 
@@ -19,6 +25,7 @@ class MatrixProductState:
             num_qubits (int): Total number of qubits.
             max_bond_dim (int): Maximum allowable bond dimension (chi_max).
             cutoff (float): Singular value truncation threshold.
+            precision (str): Floating-point precision ('fp64' for complex128, 'fp32' for complex64).
 
         Raises:
             TypeError: If types of arguments are invalid.
@@ -37,22 +44,38 @@ class MatrixProductState:
         if cutoff < 0.0:
             raise ValueError("cutoff must be non-negative.")
 
+        prec_norm = str(precision).lower().strip()
+        if prec_norm not in ("fp64", "fp32", "double", "single", "complex128", "complex64"):
+            raise ValueError(f"Unsupported precision '{precision}'. Must be 'fp64' or 'fp32'.")
+
         self.num_qubits: int = num_qubits
         self.max_bond_dim: int = max_bond_dim
         self.cutoff: float = float(cutoff)
+        self.precision: str = "fp32" if prec_norm in ("fp32", "single", "complex64") else "fp64"
+        self.dtype = np.complex64 if self.precision == "fp32" else np.complex128
 
         # Tensor chain: each tensor has shape (d_left, 2, d_right)
         # Initialized to product state |0...0>
         self.tensors: List[np.ndarray] = []
         for _ in range(num_qubits):
-            site_t = np.zeros((1, 2, 1), dtype=np.complex128)
+            site_t = np.zeros((1, 2, 1), dtype=self.dtype)
             site_t[0, 0, 0] = 1.0 + 0.0j
             self.tensors.append(site_t)
+
+        # Track normalized singular value spectrum on each internal bond (0 .. num_qubits - 2)
+        self.bond_singular_values: List[np.ndarray] = [
+            np.ones(1, dtype=np.float64) for _ in range(max(0, num_qubits - 1))
+        ]
 
         self.mps_fidelity: float = 1.0
         self.cumulative_truncation_error: float = 0.0
         self.max_active_bond_dim: int = 1
         self.swap_count: int = 0
+
+    @property
+    def memory_bytes(self) -> int:
+        """Total memory footprint of all MPS site tensors in bytes."""
+        return sum(int(t.nbytes) for t in self.tensors)
 
     def apply_1q(self, qubit: int, u_matrix: np.ndarray) -> None:
         """
@@ -72,7 +95,12 @@ class MatrixProductState:
             raise ValueError(f"u_matrix must have shape (2, 2), got {u_matrix.shape}.")
 
         # Contraction: lir = sum_s (u_is * lsr)
-        self.tensors[qubit] = np.einsum('is,lsr->lir', u_matrix, self.tensors[qubit])
+        u_cast = np.asarray(u_matrix, dtype=self.dtype)
+        self.tensors[qubit] = np.einsum('is,lsr->lir', u_cast, self.tensors[qubit]).astype(self.dtype, copy=False)
+
+    def apply_1q_gate(self, qubit: int, u_matrix: np.ndarray) -> None:
+        """Alias for apply_1q."""
+        self.apply_1q(qubit, u_matrix)
 
     def apply_2q_adjacent(
         self,
@@ -101,7 +129,7 @@ class MatrixProductState:
 
         # Qiskit basis ordering: |q1 q0>
         # Reshaped to (q1_out, q0_out, q1_in, q0_in)
-        u_reshaped = u_4x4.reshape(2, 2, 2, 2)
+        u_reshaped = np.asarray(u_4x4, dtype=self.dtype).reshape(2, 2, 2, 2)
 
         tensor_l = self.tensors[site_l]  # shape (l, 2, m)
         tensor_r = self.tensors[site_r]  # shape (m, 2, r)
@@ -162,9 +190,12 @@ class MatrixProductState:
         if s_trunc_norm > 0.0:
             s_trunc = s_trunc / s_trunc_norm
 
-        # Reassign tensors to MPS chain
-        self.tensors[site_l] = u_trunc.reshape(l_dim, 2, chi)
-        self.tensors[site_r] = (np.diag(s_trunc) @ vh_trunc).reshape(chi, 2, r_dim)
+        if 0 <= site_l < len(self.bond_singular_values):
+            self.bond_singular_values[site_l] = np.asarray(s_trunc, dtype=np.float64).copy()
+
+        # Reassign tensors to MPS chain (preserving configured floating-point precision)
+        self.tensors[site_l] = u_trunc.reshape(l_dim, 2, chi).astype(self.dtype, copy=False)
+        self.tensors[site_r] = (np.diag(s_trunc) @ vh_trunc).reshape(chi, 2, r_dim).astype(self.dtype, copy=False)
 
     def apply_2q(self, q0: int, q1: int, u_4x4: np.ndarray) -> None:
         """
@@ -230,6 +261,10 @@ class MatrixProductState:
                 self.apply_2q_adjacent(s, s + 1, swap_gate, reverse=False)
                 self.swap_count += 1
 
+    def apply_2q_gate(self, q0: int, q1: int, u_4x4: np.ndarray) -> None:
+        """Alias for apply_2q."""
+        self.apply_2q(q0, q1, u_4x4)
+
     def to_statevector(self) -> np.ndarray:
         """
         Contract all MPS tensors into an exact full statevector.
@@ -286,12 +321,48 @@ class MatrixProductState:
         Returns:
             Dict[str, int]: Measurement bitstrings and observed counts.
         """
-        probs = self.get_probabilities()
         rng = np.random.default_rng(seed)
-        samples = rng.choice(len(probs), size=shots, p=probs)
-        counts: Dict[str, int] = {}
-        for s in samples:
-            bs = f"{int(s):0{self.num_qubits}b}"
+        if self.num_qubits <= 20:
+            probs = self.get_probabilities()
+            samples = rng.choice(len(probs), size=shots, p=probs)
+            counts: Dict[str, int] = {}
+            for s in samples:
+                bs = f"{int(s):0{self.num_qubits}b}"
+                counts[bs] = counts.get(bs, 0) + 1
+            return counts
+
+        # Right-canonical sequential chain sampling O(n * chi^2) per shot for n > 20
+        rc_tensors = [t.copy() for t in self.tensors]
+        for k in range(self.num_qubits - 1, 0, -1):
+            t = rc_tensors[k]
+            d_l, p, d_r = t.shape
+            mat = t.reshape(d_l, p * d_r)
+            q_mat, r_mat = np.linalg.qr(mat.T)
+            rc_tensors[k] = q_mat.T.reshape(-1, p, d_r)
+            rc_tensors[k - 1] = np.einsum('ijk,kl->ijl', rc_tensors[k - 1], r_mat.T)
+
+        counts = {}
+        for _ in range(shots):
+            v_left = np.ones((1,), dtype=self.dtype)
+            bits = []
+            for k in range(self.num_qubits):
+                tk = rc_tensors[k]
+                v0 = v_left @ tk[:, 0, :]
+                v1 = v_left @ tk[:, 1, :]
+                w0 = float(np.real(np.vdot(v0, v0)))
+                w1 = float(np.real(np.vdot(v1, v1)))
+                w_tot = w0 + w1
+                p0 = w0 / w_tot if w_tot > 0.0 else 0.5
+                if float(rng.random()) < p0:
+                    bits.append("0")
+                    norm0 = float(np.linalg.norm(v0))
+                    v_left = v0 / norm0 if norm0 > 0.0 else v0
+                else:
+                    bits.append("1")
+                    norm1 = float(np.linalg.norm(v1))
+                    v_left = v1 / norm1 if norm1 > 0.0 else v1
+            # Reverse physical order (q0 .. q_{n-1}) to Qiskit little-endian (q_{n-1} .. q0)
+            bs = "".join(reversed(bits))
             counts[bs] = counts.get(bs, 0) + 1
         return counts
 
@@ -301,11 +372,13 @@ def simulate_mps(
     bond_dimension: int = 64,
     cutoff: float = 1e-12,
     shots: int = 1024,
-    seed: Optional[int] = None
+    seed: Optional[int] = None,
+    precision: str = "fp64",
+    max_bond_dim: Optional[int] = None
 ) -> Dict[str, Any]:
     """
     Execute quantum circuit simulation using the native Matrix Product State (MPS) engine,
-    supporting SWAP network routing and SVD truncation error tracking.
+    supporting SWAP network routing, SVD truncation error tracking, and mixed-precision emulation.
 
     Args:
         circuit: Qiskit QuantumCircuit, ParsedQASMCircuit, or path string to OpenQASM file.
@@ -313,15 +386,23 @@ def simulate_mps(
         cutoff (float): SVD truncation cutoff threshold.
         shots (int): Number of projective measurement shots.
         seed (Optional[int]): Random seed for sampling.
+        precision (str): Floating-point precision ('fp64' or 'fp32').
+        max_bond_dim (Optional[int]): Optional alias for bond_dimension.
 
     Returns:
         Dict[str, Any]: Simulation results containing counts, fidelity, bond dimension, and latency.
     """
+    if max_bond_dim is not None:
+        bond_dimension = max_bond_dim
     # Resolve circuit input
     qc: Optional[QuantumCircuit] = None
     if isinstance(circuit, str):
-        from src.engine.parser import load_qasm
-        parsed = load_qasm(circuit)
+        from src.engine.parser import load_qasm, parse_qasm
+        import os
+        if os.path.exists(circuit) or circuit.lower().endswith(".qasm"):
+            parsed = load_qasm(circuit)
+        else:
+            parsed = parse_qasm(circuit)
         qc = parsed.to_quantum_circuit()
     elif hasattr(circuit, "to_quantum_circuit"):
         qc = circuit.to_quantum_circuit()
@@ -342,7 +423,12 @@ def simulate_mps(
     basis_gates = ['h', 'x', 'y', 'z', 's', 't', 'rx', 'ry', 'rz', 'cx', 'cz', 'swap', 'u', 'u1', 'u2', 'u3', 'p', 'sx', 'id']
     tqc = transpile(circ_clean, basis_gates=basis_gates)
 
-    mps = MatrixProductState(num_qubits, max_bond_dim=bond_dimension, cutoff=cutoff)
+    mps = MatrixProductState(
+        num_qubits,
+        max_bond_dim=bond_dimension,
+        cutoff=cutoff,
+        precision=precision
+    )
 
     t0 = time.perf_counter()
 
@@ -378,11 +464,16 @@ def simulate_mps(
         "counts": counts,
         "probabilities": probs,
         "statevector": sv,
+        "mps": mps,
+        "mps_state": mps,
         "mps_fidelity": mps.mps_fidelity,
         "cumulative_truncation_error": mps.cumulative_truncation_error,
         "max_active_bond_dim": mps.max_active_bond_dim,
         "swap_count": mps.swap_count,
         "method": "mps",
+        "precision": mps.precision,
+        "dtype": str(mps.dtype),
+        "memory_bytes": mps.memory_bytes,
         "bond_dimension": bond_dimension,
         "cutoff": cutoff,
         "shots": shots,

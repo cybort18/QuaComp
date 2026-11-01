@@ -98,21 +98,24 @@ def get_cpu_utilization() -> Dict[str, Any]:
 def calculate_effective_memory_bandwidth(
     num_qubits: int,
     total_gates: int,
-    execution_time: float
+    execution_time: Any = None,
+    sim_method: str = "statevector",
+    precision: str = "fp64",
+    active_bond_dim: int = 16,
+    duration_sec: Any = None
 ) -> Dict[str, Any]:
     """
-    Calculate effective memory bandwidth (GB/s) and arithmetic intensity for quantum statevector simulation.
-
-    Quantum statevector gate updates are memory-bandwidth bound. For an n-qubit system and G total gates,
-    each gate requires reading and writing the 2^n complex128 amplitudes (16 bytes read + 16 bytes write = 32 bytes/amplitude):
-        Total Bytes Transferred = G * (2^n) * 32 bytes
-        Effective Bandwidth (GB/s) = Total Bytes Transferred / (Delta_t * 10^9)
-        Arithmetic Intensity = 0.4375 FLOPs/Byte (14 FLOPs / 32 bytes for a 1-qubit gate)
+    Calculate solver-aware and precision-aware effective memory bandwidth (GB/s)
+    and arithmetic intensity (FLOPs/Byte) for quantum circuit simulation.
 
     Args:
         num_qubits (int): Total simulated qubits.
         total_gates (int): Total quantum gates executed.
         execution_time (float): Simulation execution duration in seconds.
+        sim_method (str): Active simulation paradigm ('statevector', 'mps', or 'stabilizer').
+        precision (str): Floating-point precision ('fp64' for complex128, 'fp32' for complex64).
+        active_bond_dim (int): Active bond dimension chi_act for MPS contractions.
+        duration_sec (Optional[float]): Alias for execution_time.
 
     Returns:
         dict: Memory bandwidth and roofline metrics dictionary.
@@ -121,11 +124,14 @@ def calculate_effective_memory_bandwidth(
         TypeError: If argument types are invalid.
         ValueError: If num_qubits, total_gates, or execution_time are negative.
     """
-    if not isinstance(num_qubits, int):
+    if execution_time is None and duration_sec is not None:
+        execution_time = duration_sec
+
+    if not isinstance(num_qubits, int) or isinstance(num_qubits, bool):
         raise TypeError("num_qubits must be an integer.")
-    if not isinstance(total_gates, int):
+    if not isinstance(total_gates, int) or isinstance(total_gates, bool):
         raise TypeError("total_gates must be an integer.")
-    if not isinstance(execution_time, (int, float)):
+    if not isinstance(execution_time, (int, float)) or isinstance(execution_time, bool):
         raise TypeError("execution_time must be a real number.")
 
     if num_qubits < 0:
@@ -135,16 +141,41 @@ def calculate_effective_memory_bandwidth(
     if execution_time < 0.0:
         raise ValueError("execution_time must be non-negative.")
 
+    prec_norm = str(precision).lower().strip()
+    bytes_per_amplitude = 8 if prec_norm in ("fp32", "single", "complex64") else 16
+    method_norm = str(sim_method).lower().strip()
+    if method_norm == "matrix_product_state":
+        method_norm = "mps"
+
     safe_time = max(float(execution_time), 1e-9)
-    total_bytes = float(total_gates * (2 ** num_qubits) * 32)
-    effective_bandwidth_gbps = total_bytes / (safe_time * 1e9)
-    arithmetic_intensity = 0.4375
+
+    if method_norm == "mps":
+        chi = max(1, int(active_bond_dim) if active_bond_dim is not None else 16)
+        bytes_per_gate = 2 * 4 * (chi ** 2) * bytes_per_amplitude * 2
+        arithmetic_intensity = round(float(2 * chi) / float(bytes_per_amplitude), 4)
+    elif method_norm == "stabilizer":
+        bytes_per_gate = (2 * num_qubits + 1) * 4
+        arithmetic_intensity = 0.75
+    else:
+        method_norm = "statevector"
+        bytes_per_gate = (1 << num_qubits) * bytes_per_amplitude * 2
+        arithmetic_intensity = round(14.0 / float(bytes_per_amplitude * 2), 4)
+
+    total_bytes = float(total_gates * bytes_per_gate)
+    raw_bw_gbps = total_bytes / (safe_time * 1e9)
+    bw_rounded = round(float(raw_bw_gbps), 4)
+    if bw_rounded == 0.0 and raw_bw_gbps > 0.0:
+        bw_rounded = round(float(raw_bw_gbps), 8)
 
     return {
         "num_qubits": num_qubits,
         "total_gates": total_gates,
         "execution_time_seconds": safe_time,
+        "sim_method": method_norm,
+        "precision": "fp32" if bytes_per_amplitude == 8 else "fp64",
+        "bytes_per_gate": float(bytes_per_gate),
         "total_bytes_transferred": total_bytes,
-        "effective_bandwidth_gbps": round(float(effective_bandwidth_gbps), 4),
+        "effective_bandwidth_gbps": bw_rounded,
+        "arithmetic_intensity": arithmetic_intensity,
         "arithmetic_intensity_flops_per_byte": arithmetic_intensity
     }

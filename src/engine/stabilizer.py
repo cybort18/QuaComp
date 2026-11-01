@@ -915,6 +915,7 @@ def simulate_stabilizer(
             unitary_ops.append((name, q_idx, params))
 
     t0 = time.perf_counter()
+    active_tableau = None
 
     if not has_mid_circuit_nonunitary:
         # Fast-Path: Evolve unitary Clifford tableau once, then batch-sample all shots
@@ -922,6 +923,7 @@ def simulate_stabilizer(
         for name, q_idx, params in unitary_ops:
             tableau.apply_gate(name, q_idx, params)
 
+        active_tableau = tableau
         counts = tableau.sample_measurements(
             shots=shots,
             seed=seed,
@@ -964,6 +966,7 @@ def simulate_stabilizer(
                         clbits[q] = m_val
 
             if shot_idx == 0:
+                active_tableau = tab
                 mem_bytes = tab.tableau_memory_bytes
                 clifford_count = tab.clifford_gate_count
 
@@ -985,6 +988,7 @@ def simulate_stabilizer(
         "runs_count": 1,
         "counts": counts,
         "probabilities": probabilities,
+        "tableau": active_tableau,
         "tableau_memory_bytes": mem_bytes,
         "ram_savings_vs_statevector": ram_savings,
         "clifford_gate_count": clifford_count,

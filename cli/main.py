@@ -44,6 +44,7 @@ def build_argument_parser() -> argparse.ArgumentParser:
     param_group.add_argument("--bond-dim", type=int, default=64, help="Max bond dimension for MPS simulation (default 64).")
     param_group.add_argument("--max-bond-dim", type=int, default=64, help="Maximum bond dimension chi_max for SVD compression in MPS (default: 64).")
     param_group.add_argument("--svd-cutoff", type=float, default=1e-9, help="Singular value truncation threshold for SVD compression in MPS (default: 1e-9).")
+    param_group.add_argument("--precision", choices=["fp64", "fp32"], default="fp64", help="Floating-point precision for statevector/MPS emulation: fp64 (complex128) or fp32 (complex64, 50% memory reduction).")
     param_group.add_argument("--device", choices=["cpu", "gpu", "multi_gpu"], default="cpu", help="Simulation compute device backend (default cpu).")
     param_group.add_argument("--gpu", action="store_true", help="Shorthand flag to enable GPU acceleration (--device gpu).")
     param_group.add_argument("--multi-gpu", action="store_true", help="Enable multi-GPU distributed simulation backend.")

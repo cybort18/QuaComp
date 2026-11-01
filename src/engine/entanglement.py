@@ -432,6 +432,49 @@ def calculate_bipartite_entropy(
     n_b = n - n_a
     s_max = float(min(n_a, n_b))
     
+    # If method is explicitly stabilizer, use Binary Symplectic Rank engine
+    if method.lower() == "stabilizer":
+        from src.engine.stabilizer import StabilizerTableau, _extract_instructions_from_circuit
+        num_q_stab, _, insts = _extract_instructions_from_circuit(circuit)
+        tab = StabilizerTableau(num_q_stab)
+        for op_name, q_idx, params, _, _ in insts:
+            if op_name in ("barrier", "delay", "measure", "reset"):
+                continue
+            tab.apply_gate(op_name, q_idx, params)
+        s_vn = calculate_stabilizer_entanglement_entropy(tab, list(range(n_a)))
+        schmidt_rank = int(round(2 ** s_vn))
+        participation_ratio = float(schmidt_rank)
+        entanglement_ratio = float(np.clip(s_vn / s_max, 0.0, 1.0)) if s_max > 0 else 0.0
+        if s_vn < 1e-6:
+            regime = "Product State"
+            hardness = "Trivial (chi=1)"
+        elif s_vn <= 1.0:
+            regime = "Low (Area-law)"
+            hardness = "Efficient (Low chi <= 16)"
+        elif s_vn < (0.7 * s_max):
+            regime = "Moderate Entanglement"
+            hardness = "Challenging (Moderate chi <= 64)"
+        else:
+            regime = "Volume-law (Maximal)"
+            hardness = "Exponentially Hard (Volume-law)"
+        return {
+            "num_qubits": n,
+            "subsystem_a_size": n_a,
+            "subsystem_b_size": n_b,
+            "von_neumann_entropy": round(s_vn, 4),
+            "max_possible_entropy": round(s_max, 4),
+            "entanglement_ratio": round(entanglement_ratio, 4),
+            "schmidt_rank": schmidt_rank,
+            "participation_ratio": round(participation_ratio, 4),
+            "entanglement_regime": regime,
+            "mps_hardness": hardness,
+            "singular_values": [],
+            "computation_engine": "Stabilizer Binary Symplectic Rank (GF(2))",
+            "truncation_error": 0.0,
+            "routing_swaps": 0,
+            "topology_optimized": False
+        }
+
     # If method is explicitly MPS, or if system is large (n > 22) in auto mode, use Native MPS Tensor engine
     use_mps_engine = (method.lower() in ("mps", "matrix_product_state")) or (method.lower() == "auto" and n > 22)
     
@@ -503,3 +546,170 @@ def calculate_bipartite_entropy(
         "routing_swaps": 0,
         "topology_optimized": False
     }
+
+
+def gf2_rank(binary_matrix: np.ndarray) -> int:
+    """
+    Compute the exact rank of a 2D binary matrix over the finite field GF(2)
+    using row-echelon Gaussian elimination modulo 2 in O(rows * cols * min(rows, cols)).
+
+    Args:
+        binary_matrix (np.ndarray): 2D binary array (entries in {0, 1}).
+
+    Returns:
+        int: Rank over GF(2).
+    """
+    mat = (np.asarray(binary_matrix, dtype=np.uint8) & 1).copy()
+    if mat.ndim != 2 or mat.size == 0:
+        return 0
+
+    num_rows, num_cols = mat.shape
+    rank = 0
+    for col in range(num_cols):
+        if rank >= num_rows:
+            break
+        # Find pivot row at or below `rank` with a 1 in column `col`
+        pivot_candidates = np.nonzero(mat[rank:, col])[0]
+        if len(pivot_candidates) == 0:
+            continue
+        pivot_row = rank + int(pivot_candidates[0])
+        if pivot_row != rank:
+            mat[[rank, pivot_row]] = mat[[pivot_row, rank]]
+
+        # Eliminate all other 1s below the pivot in column `col`
+        below_rows = np.nonzero(mat[rank + 1:, col])[0] + (rank + 1)
+        if len(below_rows) > 0:
+            mat[below_rows] ^= mat[rank]
+        rank += 1
+
+    return rank
+
+
+def calculate_mps_entanglement_entropy(
+    mps: Any,
+    cut_index: Optional[int] = None
+) -> float:
+    """
+    Calculate the bipartite Von Neumann entanglement entropy S = -sum_k p_k log2(p_k)
+    (where p_k = sigma_k^2) directly from an MPS tensor chain at a specified cut bond
+    in O(n * chi^3) without constructing a 2^n statevector.
+
+    Args:
+        mps (MatrixProductState): Active MatrixProductState instance.
+        cut_index (Optional[int]): Bond index (0 <= cut_index <= n - 2) or subsystem A size.
+            Defaults to the central cut (n // 2 - 1).
+
+    Returns:
+        float: Von Neumann entanglement entropy in bits (ebits).
+    """
+    from src.engine.mps import MatrixProductState
+
+    if not isinstance(mps, MatrixProductState):
+        raise TypeError("mps must be a MatrixProductState instance.")
+
+    n = mps.num_qubits
+    if n <= 1:
+        return 0.0
+
+    if cut_index is None:
+        bond_idx = max(0, (n // 2) - 1)
+    else:
+        if not isinstance(cut_index, int):
+            raise TypeError("cut_index must be an integer or None.")
+        if cut_index < 0 or cut_index >= n:
+            raise ValueError(f"cut_index must be between 0 and {n - 2}.")
+        bond_idx = min(cut_index, n - 2)
+
+    # Canonicalize a copy of the MPS chain toward bond_idx to guarantee exact Schmidt values
+    tensors = [t.astype(np.complex128, copy=True) for t in mps.tensors]
+
+    # Left-canonical QR sweep from site 0 to bond_idx - 1
+    for i in range(0, bond_idx):
+        t = tensors[i]
+        d_l, p, d_r = t.shape
+        q_mat, r_mat = np.linalg.qr(t.reshape(d_l * p, d_r))
+        tensors[i] = q_mat.reshape(d_l, p, -1)
+        tensors[i + 1] = np.einsum("ij,jkl->ikl", r_mat, tensors[i + 1])
+
+    # Right-canonical QR sweep from site n - 1 down to bond_idx + 2
+    for i in range(n - 1, bond_idx + 1, -1):
+        t = tensors[i]
+        d_l, p, d_r = t.shape
+        q_mat, r_mat = np.linalg.qr(t.reshape(d_l, p * d_r).T)
+        tensors[i] = q_mat.T.reshape(-1, p, d_r)
+        tensors[i - 1] = np.einsum("ijk,kl->ijl", tensors[i - 1], r_mat.T)
+
+    # Two-site contraction and SVD across (bond_idx, bond_idx + 1)
+    t_left = tensors[bond_idx]
+    t_right = tensors[bond_idx + 1]
+    theta = np.einsum("ijk,klm->ijlm", t_left, t_right)
+    mat_cut = theta.reshape(t_left.shape[0] * 2, 2 * t_right.shape[2])
+
+    sigma = np.linalg.svd(mat_cut, compute_uv=False)
+    s_norm = float(np.linalg.norm(sigma))
+    if s_norm > 1e-14:
+        sigma = sigma / s_norm
+
+    probs = sigma ** 2
+    non_zero = probs[probs > 1e-14]
+    if len(non_zero) == 0:
+        return 0.0
+    non_zero = non_zero / np.sum(non_zero)
+    s_vn = float(-np.sum(non_zero * np.log2(non_zero)))
+    return 0.0 if abs(s_vn) < 1e-10 else round(s_vn, 6)
+
+
+def calculate_stabilizer_entanglement_entropy(
+    tableau: Any,
+    partition_a_qubits: Optional[List[int]] = None
+) -> float:
+    """
+    Calculate the exact bipartite entanglement entropy S(rho_A) for an n-qubit stabilizer
+    state in O(n^3) time using the Pauli group projection formula over GF(2):
+        S(rho_A) = rank_{GF(2)}(M_B) - |B|
+    where M_B is the n x 2|B| binary matrix obtained by restricting the n stabilizer
+    generators (rows n .. 2n - 1 of (X | Z)) to the complement subsystem B = {0..n-1} \\ A.
+
+    Args:
+        tableau (Any): StabilizerTableau instance, or a QuantumCircuit / ParsedQASMCircuit / QASM string/path.
+        partition_a_qubits (Optional[List[int]]): Qubit indices in subsystem A (defaults to 0 .. n//2 - 1).
+
+    Returns:
+        float: Exact entanglement entropy in bits (ebits).
+    """
+    from src.engine.stabilizer import StabilizerTableau, _extract_instructions_from_circuit
+
+    if not isinstance(tableau, StabilizerTableau):
+        num_q, _, insts = _extract_instructions_from_circuit(tableau)
+        tab = StabilizerTableau(num_q)
+        for op_name, q_idx, params, _, _ in insts:
+            if op_name in ("barrier", "delay", "measure", "reset"):
+                continue
+            tab.apply_gate(op_name, q_idx, params)
+    else:
+        tab = tableau
+
+    n = tab.num_qubits
+    if n <= 1:
+        return 0.0
+
+    if partition_a_qubits is None:
+        partition_a_qubits = list(range(n // 2))
+
+    set_a = set(int(q) for q in partition_a_qubits)
+    for q in set_a:
+        if q < 0 or q >= n:
+            raise ValueError(f"Qubit index {q} in partition_a_qubits is out of range [0, {n - 1}].")
+
+    b_qubits = [q for q in range(n) if q not in set_a]
+    if len(set_a) == 0 or len(b_qubits) == 0:
+        return 0.0
+
+    # Restrict stabilizer generator rows (n .. 2n - 1) to columns in complement subsystem B
+    x_b = tab.x[n:2 * n, b_qubits]
+    z_b = tab.z[n:2 * n, b_qubits]
+    m_b = np.hstack([x_b, z_b])
+
+    r_b = gf2_rank(m_b)
+    s_a = max(0, r_b - len(b_qubits))
+    return float(s_a)

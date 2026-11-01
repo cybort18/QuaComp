@@ -83,8 +83,19 @@ def export_to_markdown(
         best_energy = best_run.get("energy_metrics", {})
         total_energy_j = best_energy.get("total_energy_joules") if best_energy else None
 
+        best_method = best_run.get("method", "statevector")
+        best_precision = best_run.get("precision", "fp64")
+        best_active_bond = best_run.get("max_active_bond_dim") or best_run.get("bond_dimension") or 16
+
         breakdown = calculate_scoring_breakdown(
-            best_qubits, gates, best_mean_latency, fidelity=best_fidelity, energy_joules=total_energy_j
+            best_qubits,
+            gates,
+            best_mean_latency,
+            fidelity=best_fidelity,
+            energy_joules=total_energy_j,
+            sim_method=best_method,
+            precision=best_precision,
+            active_bond_dim=best_active_bond
         )
         score = breakdown["composite_score"]
         capacity_metric = breakdown["capacity_metric"]

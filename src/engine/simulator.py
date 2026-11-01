@@ -19,34 +19,47 @@ from src.engine.noise import (
 from src.engine.parser import NON_GATE_INSTRUCTIONS
 
 
+def _resolve_complex_dtype(precision: str = "fp64") -> Tuple[str, Any]:
+    """Normalize precision label ('fp64' or 'fp32') to canonical name and NumPy complex dtype."""
+    prec_norm = str(precision).lower().strip()
+    if prec_norm in ("fp32", "single", "complex64"):
+        return "fp32", np.complex64
+    if prec_norm in ("fp64", "double", "complex128"):
+        return "fp64", np.complex128
+    raise ValueError(f"Unsupported precision '{precision}'. Must be 'fp64' or 'fp32'.")
+
+
 def _trajectory_worker_batch(
     parsed_ops: List[Tuple[str, List[int], np.ndarray]],
     num_qubits: int,
     batch_shots: int,
     traj_model: Optional[TrajectoryNoiseModel],
-    seed_seq: Any
+    seed_seq: Any,
+    precision: str = "fp64"
 ) -> Dict[str, int]:
     """
     Execute a batch of stochastic quantum trajectories independently on a single worker process or thread.
     """
+    _, sv_dtype = _resolve_complex_dtype(precision)
     rng = np.random.default_rng(seed_seq)
     worker_counts: Dict[str, int] = {}
 
     if traj_model is None:
-        sv = np.zeros(1 << num_qubits, dtype=np.complex128)
+        sv = np.zeros(1 << num_qubits, dtype=sv_dtype)
         sv[0] = 1.0 + 0.0j
         for name, q_idx, mat in parsed_ops:
+            mat_cast = np.asarray(mat, dtype=sv_dtype)
             if len(q_idx) == 1:
-                apply_gate_1q_to_statevector(sv, mat, q_idx[0], num_qubits)
+                apply_gate_1q_to_statevector(sv, mat_cast, q_idx[0], num_qubits)
             elif len(q_idx) == 2:
-                apply_gate_2q_to_statevector(sv, mat, q_idx[0], q_idx[1], num_qubits)
+                apply_gate_2q_to_statevector(sv, mat_cast, q_idx[0], q_idx[1], num_qubits)
             else:
                 raise ValueError(
                     f"Trajectory engine cannot execute operation '{name}' on {len(q_idx)} qubits; "
                     f"only 1-qubit and 2-qubit unitary gates are supported."
                 )
 
-        probs = np.abs(sv) ** 2
+        probs = np.asarray(np.abs(sv) ** 2, dtype=np.float64)
         p_sum = float(np.sum(probs))
         if p_sum > 0:
             probs /= p_sum
@@ -56,13 +69,14 @@ def _trajectory_worker_batch(
             worker_counts[bs] = worker_counts.get(bs, 0) + 1
     else:
         for _ in range(batch_shots):
-            sv = np.zeros(1 << num_qubits, dtype=np.complex128)
+            sv = np.zeros(1 << num_qubits, dtype=sv_dtype)
             sv[0] = 1.0 + 0.0j
             for name, q_idx, mat in parsed_ops:
+                mat_cast = np.asarray(mat, dtype=sv_dtype)
                 if len(q_idx) == 1:
-                    apply_gate_1q_to_statevector(sv, mat, q_idx[0], num_qubits)
+                    apply_gate_1q_to_statevector(sv, mat_cast, q_idx[0], num_qubits)
                 elif len(q_idx) == 2:
-                    apply_gate_2q_to_statevector(sv, mat, q_idx[0], q_idx[1], num_qubits)
+                    apply_gate_2q_to_statevector(sv, mat_cast, q_idx[0], q_idx[1], num_qubits)
                 else:
                     raise ValueError(
                         f"Trajectory engine cannot execute operation '{name}' on {len(q_idx)} qubits; "
@@ -70,7 +84,7 @@ def _trajectory_worker_batch(
                     )
                 traj_model.apply_stochastic_gate_noise(sv, q_idx, name, rng)
 
-            probs = np.abs(sv) ** 2
+            probs = np.asarray(np.abs(sv) ** 2, dtype=np.float64)
             p_sum = float(np.sum(probs))
             if p_sum > 0:
                 probs /= p_sum
@@ -89,7 +103,8 @@ def simulate_trajectories(
     shots: int = 1024,
     backend: str = 'auto',
     seed: Optional[int] = None,
-    num_workers: Optional[int] = None
+    num_workers: Optional[int] = None,
+    precision: str = 'fp64'
 ) -> Dict[str, Any]:
     """
     Execute quantum circuit simulation using the Monte Carlo Wavefunction (MCWF) /
@@ -254,9 +269,11 @@ def simulate_trajectories(
     active_be.device_synchronize()
     t0 = time.perf_counter()
 
+    prec_label, sv_dtype = _resolve_complex_dtype(precision)
+
     if shots < 100 or effective_workers <= 1:
         # Serial execution in main thread
-        counts = _trajectory_worker_batch(parsed_ops, num_qubits, shots, traj_model, seed)
+        counts = _trajectory_worker_batch(parsed_ops, num_qubits, shots, traj_model, seed, precision=prec_label)
     else:
         # Parallel execution across worker pool with orthogonal SeedSequence streams
         base_shots = shots // effective_workers
@@ -272,7 +289,7 @@ def simulate_trajectories(
         try:
             with ProcessPoolExecutor(max_workers=actual_workers) as executor:
                 futures = [
-                    executor.submit(_trajectory_worker_batch, parsed_ops, num_qubits, batch_sizes[i], traj_model, child_seeds[i])
+                    executor.submit(_trajectory_worker_batch, parsed_ops, num_qubits, batch_sizes[i], traj_model, child_seeds[i], prec_label)
                     for i in range(actual_workers)
                 ]
                 for fut in as_completed(futures):
@@ -281,7 +298,7 @@ def simulate_trajectories(
             batch_results = []
             with ThreadPoolExecutor(max_workers=actual_workers) as executor:
                 futures = [
-                    executor.submit(_trajectory_worker_batch, parsed_ops, num_qubits, batch_sizes[i], traj_model, child_seeds[i])
+                    executor.submit(_trajectory_worker_batch, parsed_ops, num_qubits, batch_sizes[i], traj_model, child_seeds[i], prec_label)
                     for i in range(actual_workers)
                 ]
                 for fut in as_completed(futures):
@@ -310,6 +327,8 @@ def simulate_trajectories(
         "backend_version": "1.0.0",
         "method": "trajectory",
         "noise_method": "trajectory",
+        "precision": prec_label,
+        "dtype": str(np.dtype(sv_dtype)),
         "shots": shots,
         "workers": effective_workers,
         "qubits": num_qubits,
@@ -337,6 +356,8 @@ def simulate_trajectories(
         "counts": counts,
         "device": backend.upper(),
         "workers": effective_workers,
+        "precision": prec_label,
+        "dtype": str(np.dtype(sv_dtype)),
         "native_kernel_used": False,
         "accelerator_backend": active_be.tier_label,
         "accelerator_badge": None,
@@ -351,6 +372,113 @@ def simulate_trajectories(
         "memory_saved_ratio": saved_ratio,
         "error": None,
         "metadata": metadata
+    }
+
+
+def evolve_statevector(circuit: Any, precision: str = "fp64") -> np.ndarray:
+    """
+    Evolve an n-qubit quantum circuit in-place into a statevector of dtype
+    np.complex128 ('fp64') or np.complex64 ('fp32').
+
+    Args:
+        circuit (Any): Qiskit QuantumCircuit, ParsedQASMCircuit, or QASM string/path.
+        precision (str): 'fp64' (complex128, 16 bytes/amp) or 'fp32' (complex64, 8 bytes/amp).
+
+    Returns:
+        np.ndarray: Statevector array of length 2^n with dtype complex128 or complex64.
+    """
+    if isinstance(circuit, str):
+        from src.engine.parser import load_qasm, parse_qasm
+        if os.path.exists(circuit) or circuit.lower().endswith(".qasm"):
+            circuit = load_qasm(circuit).to_quantum_circuit()
+        else:
+            circuit = parse_qasm(circuit).to_quantum_circuit()
+    elif hasattr(circuit, "to_quantum_circuit"):
+        circuit = circuit.to_quantum_circuit()
+    elif not isinstance(circuit, QuantumCircuit):
+        raise TypeError("circuit must be a QuantumCircuit, ParsedQASMCircuit, or QASM string/path.")
+
+    _, sv_dtype = _resolve_complex_dtype(precision)
+    num_qubits = circuit.num_qubits
+    if num_qubits < 1:
+        raise ValueError("Circuit must have at least 1 qubit.")
+
+    circ_clean = circuit.copy()
+    if len(circ_clean.clbits) > 0:
+        circ_clean.remove_final_measurements(inplace=True)
+
+    basis_gates = ['h', 'x', 'y', 'z', 's', 't', 'rx', 'ry', 'rz', 'cx', 'cz', 'swap', 'u', 'u1', 'u2', 'u3', 'p', 'sx', 'id']
+    tqc = transpile(circ_clean, basis_gates=basis_gates)
+
+    sv = np.zeros(1 << num_qubits, dtype=sv_dtype)
+    sv[0] = 1.0 + 0.0j
+
+    for inst in tqc.data:
+        op = inst.operation
+        if op.name in ("barrier", "delay", "measure"):
+            continue
+        q_idx = [tqc.find_bit(q).index for q in inst.qubits]
+        mat = np.asarray(op.to_matrix(), dtype=sv_dtype)
+        if len(q_idx) == 1:
+            apply_gate_1q_to_statevector(sv, mat, q_idx[0], num_qubits)
+        elif len(q_idx) == 2:
+            apply_gate_2q_to_statevector(sv, mat, q_idx[0], q_idx[1], num_qubits)
+        else:
+            raise ValueError(f"Unsupported {len(q_idx)}-qubit gate '{op.name}' in evolve_statevector.")
+
+    return sv
+
+
+def evaluate_precision_drift(circuit: Any) -> Dict[str, Any]:
+    """
+    Evaluate numerical precision drift between FP64 (complex128) and FP32 (complex64)
+    statevector emulation for a given quantum circuit.
+
+    Args:
+        circuit (Any): QuantumCircuit, ParsedQASMCircuit, or OpenQASM 2.0 path/string.
+
+    Returns:
+        Dict[str, Any]: Dictionary containing:
+            - l2_state_drift (float): L2 norm drift between amplitude magnitudes || |psi_fp64| - |psi_fp32| ||_2
+            - complex_l2_drift (float): Full complex statevector L2 norm || psi_fp64 - psi_fp32 ||_2
+            - total_variation_distance (float): 0.5 * sum_x |P_fp64(x) - P_fp32(x)|
+            - fp64_bytes (int): Memory footprint in bytes for complex128
+            - fp32_bytes (int): Memory footprint in bytes for complex64
+            - memory_saved_pct (float): Memory reduction percentage (50.0%)
+            - dtype_fp64 (str): 'complex128'
+            - dtype_fp32 (str): 'complex64'
+    """
+    sv_fp64 = evolve_statevector(circuit, precision="fp64")
+    sv_fp32 = evolve_statevector(circuit, precision="fp32")
+
+    sv_fp32_up = sv_fp32.astype(np.complex128)
+    l2_mag_drift = float(np.linalg.norm(np.abs(sv_fp64) - np.abs(sv_fp32_up)))
+    complex_l2_drift = float(np.linalg.norm(sv_fp64 - sv_fp32_up))
+
+    probs_64 = np.abs(sv_fp64) ** 2
+    p64_sum = float(np.sum(probs_64))
+    if p64_sum > 0.0:
+        probs_64 = probs_64 / p64_sum
+
+    probs_32 = np.abs(sv_fp32_up) ** 2
+    p32_sum = float(np.sum(probs_32))
+    if p32_sum > 0.0:
+        probs_32 = probs_32 / p32_sum
+
+    tvd = float(0.5 * np.sum(np.abs(probs_64 - probs_32)))
+    fp64_bytes = int(sv_fp64.nbytes)
+    fp32_bytes = int(sv_fp32.nbytes)
+    mem_saved_pct = round(((fp64_bytes - fp32_bytes) / float(fp64_bytes)) * 100.0, 2) if fp64_bytes > 0 else 50.0
+
+    return {
+        "l2_state_drift": l2_mag_drift,
+        "complex_l2_drift": complex_l2_drift,
+        "total_variation_distance": tvd,
+        "fp64_bytes": fp64_bytes,
+        "fp32_bytes": fp32_bytes,
+        "memory_saved_pct": mem_saved_pct,
+        "dtype_fp64": str(sv_fp64.dtype),
+        "dtype_fp32": str(sv_fp32.dtype)
     }
 
 
@@ -370,7 +498,8 @@ def run_simulation(
     use_native_kernels: bool = False,
     physical_noise_profile: Optional[str] = None,
     backend: str = 'auto',
-    noise_method: str = 'trajectory'
+    noise_method: str = 'trajectory',
+    precision: str = 'fp64'
 ) -> Dict[str, Any]:
 
     """
@@ -419,6 +548,8 @@ def run_simulation(
 
     if not isinstance(workers, int) or workers < 1:
         raise ValueError("Number of workers must be an integer >= 1.")
+
+    prec_label, sv_dtype = _resolve_complex_dtype(precision)
 
     dev_clean = str(device).upper()
     is_multi_gpu = dev_clean in ("MULTI_GPU", "GPU:ALL", "MULTI-GPU")
@@ -560,7 +691,10 @@ def run_simulation(
 
         # Initialize AerSimulator based on simulation method, device, multi-GPU options & noise model
         aer_device_target = "GPU" if is_gpu_req else "CPU"
-        sim_kwargs: Dict[str, Any] = {"device": aer_device_target}
+        sim_kwargs: Dict[str, Any] = {
+            "device": aer_device_target,
+            "precision": "single" if prec_label == "fp32" else "double"
+        }
 
         # Configure multi-device / parallel cluster options & distributed statevector slicing
         num_q = circ_to_run.num_qubits
@@ -605,7 +739,8 @@ def run_simulation(
                         shots=shots,
                         backend=backend,
                         seed=None,
-                        num_workers=workers
+                        num_workers=workers,
+                        precision=prec_label
                     )
                     latencies.append(t_res["latency"])
                     last_counts = t_res["counts"]
@@ -771,6 +906,8 @@ def run_simulation(
             "accelerator_badge": accelerator_badge,
             "fusion_metrics": fusion_metrics,
             "physical_noise_profile": active_noise_profile,
+            "precision": prec_label,
+            "dtype": str(np.dtype(sv_dtype)),
             "complexity_profile": complexity_profile,
             "solver_routing": solver_routing,
             "error": None,
