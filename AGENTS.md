@@ -27,11 +27,16 @@ When writing or editing Markdown files (`README.md`, `PRD.md`, docs, etc.) that 
 
 ---
 
-## 2. Code Quality & System Architecture
+## 2. Code Quality, CLI & CI/CD Parity Rules
 
 - Maintain 100% test coverage across all test suites (`pytest`).
 - Preserve Graceful Fallback: All native accelerations (C++ extension, Apple Metal, NVIDIA CUDA) must fall back cleanly to CPU/Python if native libraries or GPUs are unavailable.
 - Do not bump the version beyond `1.0.0` unless explicitly requested.
+- **Argparse `%` Escaping Rule**: Never write an unescaped `%` character inside `argparse.ArgumentParser.add_argument(..., help="...")` strings. Python's `argparse` internally applies `help_string % params` when rendering `--help`, which raises `ValueError: unsupported format character` on single `%` signs (e.g., write `50%% memory reduction`, never `50% memory reduction`).
+- **Pre-Push CI Verification Checklist**: Before every commit/push, always execute the exact commands run by `.github/workflows/ci.yml`:
+  1. `python -m pytest -v`
+  2. `python -m cli --help`
+  3. `python -m cli --quick`
 
 ---
 

@@ -24,3 +24,7 @@ To ensure 100% flawless LaTeX math rendering on GitHub:
    - Never use emojis or unicode emotes (e.g., ⚡, 🚀, 🔬, ⚠️, ℹ️, ✨, 🛠️) in documentation (`README.md`, `PRD.md`), docstrings, code comments, or CLI terminal output messages. Emojis can create an impression of unvetted, AI-generated code.
    - Avoid hyperbolic, sensationalized, or marketing language. Keep all statements objective, mathematically accurate, and engineering-grounded.
 
+5. **CLI `argparse` Escaping & Pre-Push CI Parity**:
+   - Always escape literal percent signs as `%%` inside `argparse` `help=` strings (`argparse` uses `%`-formatting when rendering `--help`).
+   - Always verify `python -m pytest`, `python -m cli --help`, and `python -m cli --quick` locally before pushing to `main`.
+

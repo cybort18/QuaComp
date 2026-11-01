@@ -42,11 +42,14 @@ jobs:
           pip install -e .
 
       - name: Run unit tests with Pytest
+        shell: bash
         run: |
+          set -eo pipefail
           python -m pytest -v -rA --tb=short 2>&1 | tee pytest_summary.log
 
       - name: Publish Test Summary
         if: always()
+        shell: bash
         run: |
           echo "### Pytest Summary" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
@@ -54,6 +57,8 @@ jobs:
           echo '```' >> $GITHUB_STEP_SUMMARY
 
       - name: Verify CLI command execution
+        shell: bash
         run: |
+          set -eo pipefail
           python -m cli --help
           python -m cli --quick

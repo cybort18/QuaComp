@@ -192,3 +192,26 @@ def test_run_quick_benchmark_smoke(monkeypatch):
     assert len(results) == 3
     assert all(r["success"] for r in results)
     assert [r["qubits"] for r in results] == [10, 15, 20]
+
+
+def test_cli_argument_parser_help_formatting():
+    """Verify build_argument_parser().format_help() and 'python -m cli --help' never fail on unescaped % characters."""
+    import subprocess
+    import sys
+    from cli.main import build_argument_parser
+
+    parser = build_argument_parser()
+    help_text = " ".join(parser.format_help().split())
+    assert "--precision" in help_text
+    assert "50% memory reduction" in help_text
+    assert "--sim-method" in help_text
+
+    proc = subprocess.run(
+        [sys.executable, "-m", "cli", "--help"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    assert proc.returncode == 0, f"CLI --help failed with stderr: {proc.stderr}"
+    assert "QuaComp" in proc.stdout
