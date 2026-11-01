@@ -1,13 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 620" width="100%" height="100%">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 650" width="100%" height="100%">
   <defs>
     <style>
       .bg { fill: #0d1117; }
       .title { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 20px; font-weight: 700; fill: #f0f6fc; }
       .subtitle { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 12px; fill: #8b949e; }
       .layer-title { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11px; font-weight: 600; fill: #58a6ff; letter-spacing: 0.08em; text-transform: uppercase; }
-      .box { rx: 6px; ry: 6px; stroke-width: 1px; }
+      .box { rx: 6px; ry: 6px; stroke-width: 1.2px; }
       .box-ingress { fill: #161b22; stroke: #30363d; }
       .box-workload { fill: #161b22; stroke: #388bfd; }
+      .box-router { fill: #12283a; stroke: #58a6ff; }
       .box-engine { fill: #161b22; stroke: #7ee787; }
       .box-backend { fill: #161b22; stroke: #d29922; }
       .box-telemetry { fill: #161b22; stroke: #f0883e; }
@@ -26,83 +27,109 @@
   </defs>
 
   <!-- Background -->
-  <rect width="960" height="620" class="bg" />
+  <rect width="960" height="650" class="bg" />
 
   <!-- Header -->
-  <text x="40" y="42" class="title">QuaComp System Architecture</text>
-  <text x="40" y="62" class="subtitle">Modular Quantum Circuit Benchmarking, Telemetry, Simulation &amp; Scoring Pipeline</text>
+  <text x="40" y="38" class="title">QuaComp 3-Paradigm System Architecture</text>
+  <text x="40" y="58" class="subtitle">Multi-Paradigm Quantum-Classical Emulation Engine, Complexity Auto-Router &amp; Hardware Roofline Profiler</text>
 
   <!-- Layer 1: CLI & Ingress -->
-  <text x="40" y="105" class="layer-title">Layer 1: CLI Ingress &amp; Parameter Validation</text>
-  <rect x="40" y="115" width="260" height="70" class="box box-ingress" />
-  <text x="55" y="142" class="box-text">CLI Parser &amp; Argument Guards</text>
-  <text x="55" y="162" class="box-sub">cli/main.py (argparse &amp; Rich UI)</text>
+  <text x="40" y="95" class="layer-title">Layer 1: CLI Ingress, Solver-Aware Memory Guards &amp; Baseline Registry</text>
+  <rect x="40" y="105" width="280" height="68" class="box box-ingress" />
+  <text x="55" y="130" class="box-text">CLI Parser &amp; Mixed-Precision Config</text>
+  <text x="55" y="148" class="box-sub">cli/main.py (--sim-method, --precision fp64|fp32)</text>
+  <text x="55" y="162" class="box-sub">Rich Terminal Dashboard &amp; UTF-8 Safe Guard</text>
 
-  <rect x="340" y="115" width="270" height="70" class="box box-ingress" />
-  <text x="355" y="142" class="box-text">Pre-Flight Resource Verifier</text>
-  <text x="355" y="162" class="box-sub">src/profiler/memory.py, gpu.py (85% limit)</text>
+  <rect x="340" y="105" width="280" height="68" class="box box-ingress" />
+  <text x="355" y="130" class="box-text">Solver-Aware Pre-Flight Verifier</text>
+  <text x="355" y="148" class="box-sub">src/profiler/memory.py, gpu.py (85% RAM/VRAM)</text>
+  <text x="355" y="162" class="box-sub">O(2^n) Guard vs O(n^2)/O(n*chi^2) Bypass (100+Q)</text>
 
-  <rect x="650" y="115" width="270" height="70" class="box box-ingress" />
-  <text x="665" y="142" class="box-text">Baseline Registry &amp; Comparison</text>
-  <text x="665" y="162" class="box-sub">src/comparator/registry.py (Hardware Baselines)</text>
+  <rect x="640" y="105" width="280" height="68" class="box box-ingress" />
+  <text x="655" y="130" class="box-text">Hardware Registry &amp; Roofline Diff</text>
+  <text x="655" y="148" class="box-sub">src/comparator/registry.py, differ.py</text>
+  <text x="655" y="162" class="box-sub">DDR4 vs Unified Memory vs HBM3 Baselines</text>
 
   <!-- Connectors L1 to L2 -->
-  <line x1="170" y1="185" x2="170" y2="230" class="arrow-accent" />
-  <line x1="475" y1="185" x2="475" y2="230" class="arrow" />
+  <line x1="180" y1="173" x2="180" y2="212" class="arrow-accent" />
+  <line x1="480" y1="173" x2="480" y2="212" class="arrow" />
+  <line x1="780" y1="173" x2="780" y2="212" class="arrow-accent" />
 
-  <!-- Layer 2: Workload Generation & AST Parsing -->
-  <text x="40" y="220" class="layer-title">Layer 2: Workload Generation &amp; Circuit AST Parsing</text>
-  <rect x="40" y="230" width="410" height="70" class="box box-workload" />
-  <text x="55" y="257" class="box-text">Built-in Circuits (QFT, VQE, QAOA, QV)</text>
-  <text x="55" y="277" class="box-sub">src/engine/circuits.py (Variational &amp; Model Ansätze)</text>
+  <!-- Layer 2: Workload Generation, AST Parsing & Complexity Auto-Router -->
+  <text x="40" y="202" class="layer-title">Layer 2: Circuit Ingestion, AST Compilation &amp; Complexity Auto-Solver Router</text>
+  <rect x="40" y="212" width="280" height="72" class="box box-workload" />
+  <text x="55" y="237" class="box-text">Algorithmic &amp; Variational Circuits</text>
+  <text x="55" y="255" class="box-sub">src/engine/circuits.py</text>
+  <text x="55" y="269" class="box-sub">QFT, VQE, QAOA, Quantum Volume, Shallow/Deep</text>
 
-  <rect x="490" y="230" width="430" height="70" class="box box-workload" />
-  <text x="505" y="257" class="box-text">OpenQASM 2.0 Lexer &amp; Parser</text>
-  <text x="505" y="277" class="box-sub">src/engine/parser.py (Custom AST, Transpiler Bridge)</text>
+  <rect x="340" y="212" width="280" height="72" class="box box-workload" />
+  <text x="355" y="237" class="box-text">OpenQASM 2.0 Lexer &amp; AST Parser</text>
+  <text x="355" y="255" class="box-sub">src/engine/parser.py</text>
+  <text x="355" y="269" class="box-sub">Custom Gates, Broadcasts, 100-Qubit GHZ/Clifford</text>
+
+  <rect x="640" y="212" width="280" height="72" class="box box-router" />
+  <text x="655" y="237" class="box-text">Complexity Profiler &amp; Auto-Router</text>
+  <text x="655" y="255" class="box-sub">src/engine/complexity.py (--sim-method auto)</text>
+  <text x="655" y="269" class="box-sub">Entanglement Topology vs Quantum Magic Density</text>
 
   <!-- Connectors L2 to L3 -->
-  <line x1="245" y1="300" x2="245" y2="345" class="arrow-accent" />
-  <line x1="705" y1="300" x2="705" y2="345" class="arrow" />
+  <line x1="180" y1="284" x2="180" y2="325" class="arrow" />
+  <line x1="480" y1="284" x2="480" y2="325" class="arrow-accent" />
+  <line x1="780" y1="284" x2="780" y2="325" class="arrow-accent" />
 
-  <!-- Layer 3: Simulation Engines -->
-  <text x="40" y="335" class="layer-title">Layer 3: Core Simulation Engines &amp; Noise Modeling</text>
-  <rect x="40" y="345" width="270" height="74" class="box box-engine" />
-  <text x="55" y="372" class="box-text">Statevector Simulation</text>
-  <text x="55" y="392" class="box-sub">AerSimulator / O(2^n) Dense State</text>
+  <!-- Layer 3: 3-Paradigm Simulation Engines -->
+  <text x="40" y="315" class="layer-title">Layer 3: Multi-Paradigm Quantum Simulation Engines &amp; Stochastic Noise Trajectories</text>
+  <rect x="40" y="325" width="280" height="84" class="box box-engine" />
+  <text x="55" y="350" class="box-text">Statevector Engine O(2^n)</text>
+  <text x="55" y="368" class="box-sub">src/engine/simulator.py, noise.py</text>
+  <text x="55" y="382" class="box-sub">FP64 (16B) &amp; FP32 (8B, 50% RAM Reduction)</text>
+  <text x="55" y="396" class="box-sub">MCWF Stochastic Jump Trajectories (&lt;= 30Q)</text>
 
-  <rect x="340" y="345" width="270" height="74" class="box box-engine" />
-  <text x="355" y="372" class="box-text">Matrix Product State (MPS)</text>
-  <text x="355" y="392" class="box-sub">src/engine/mps.py / Bond Dim Truncation</text>
+  <rect x="340" y="325" width="280" height="84" class="box box-engine" />
+  <text x="355" y="350" class="box-text">MPS Tensor Network O(n * chi^3)</text>
+  <text x="355" y="368" class="box-sub">src/engine/mps.py (--mps, --max-bond-dim)</text>
+  <text x="355" y="382" class="box-sub">1D Tensor Train + SWAP Network Routing</text>
+  <text x="355" y="396" class="box-sub">SVD Truncation Fidelity &amp; Error Tracking</text>
 
-  <rect x="640" y="345" width="280" height="74" class="box box-engine" />
-  <text x="655" y="372" class="box-text">MCWF Trajectory Engine</text>
-  <text x="655" y="392" class="box-sub">src/engine/noise.py (O(2^n) Stochastic Jumps)</text>
+  <rect x="640" y="325" width="280" height="84" class="box box-engine" />
+  <text x="655" y="350" class="box-text">Stabilizer Tableau O(n^2)</text>
+  <text x="655" y="368" class="box-sub">src/engine/stabilizer.py (--stabilizer)</text>
+  <text x="655" y="382" class="box-sub">Aaronson-Gottesman CHP (2n x 2n+1 Bit Matrix)</text>
+  <text x="655" y="396" class="box-sub">100 to 1,000+ Qubit Ideal &amp; Noisy Pauli Trajectories</text>
 
   <!-- Connectors L3 to L4 -->
-  <line x1="175" y1="419" x2="175" y2="460" class="arrow" />
-  <line x1="475" y1="419" x2="475" y2="460" class="arrow-accent" />
-  <line x1="780" y1="419" x2="780" y2="460" class="arrow" />
+  <line x1="180" y1="409" x2="180" y2="450" class="arrow-accent" />
+  <line x1="480" y1="409" x2="480" y2="450" class="arrow-accent" />
+  <line x1="780" y1="409" x2="780" y2="450" class="arrow" />
 
-  <!-- Layer 4: Compute Accelerator Dispatch & Telemetry -->
-  <text x="40" y="450" class="layer-title">Layer 4: Accelerator Dispatch, Kernel Fusion &amp; Telemetry</text>
-  <rect x="40" y="460" width="570" height="65" class="box box-backend" />
-  <text x="55" y="485" class="box-text">Hardware Acceleration: CUDA | Apple Metal | C++ SIMD | NumPy</text>
-  <text x="55" y="505" class="box-sub">src/engine/accelerator.py, fusion.py (Dynamic Backend Dispatch &amp; Graceful Fallback)</text>
+  <!-- Layer 4: Compute Accelerator Dispatch, Observables & Roofline Telemetry -->
+  <text x="40" y="440" class="layer-title">Layer 4: Hardware Acceleration, In-Place Pauli Observables &amp; Roofline Bandwidth Profiler</text>
+  <rect x="40" y="450" width="280" height="74" class="box box-backend" />
+  <text x="55" y="475" class="box-text">Compute Accelerator Dispatch</text>
+  <text x="55" y="493" class="box-sub">src/engine/accelerator.py, fusion.py</text>
+  <text x="55" y="507" class="box-sub">NVIDIA CUDA | Apple Metal | C++ SIMD | NumPy</text>
 
-  <rect x="640" y="460" width="280" height="65" class="box box-telemetry" />
-  <text x="655" y="485" class="box-text">Hardware Telemetry &amp; Energy</text>
-  <text x="655" y="505" class="box-sub">src/profiler/ (RAPL / TDP / CPU / VRAM)</text>
+  <rect x="340" y="450" width="280" height="74" class="box box-backend" />
+  <text x="355" y="475" class="box-text">Observables &amp; Bipartite Entropy</text>
+  <text x="355" y="493" class="box-sub">src/engine/observables.py, entanglement.py</text>
+  <text x="355" y="507" class="box-sub">&lt;H_Ising&gt;, &lt;Z_0 Z_{n-1}&gt;, S(rho_A) via SVD/GF(2)</text>
+
+  <rect x="640" y="450" width="280" height="74" class="box box-telemetry" />
+  <text x="655" y="475" class="box-text">Roofline Bandwidth &amp; Energy Profiler</text>
+  <text x="655" y="493" class="box-sub">src/profiler/telemetry.py, energy.py</text>
+  <text x="655" y="507" class="box-sub">Solver-Aware GB/s, FLOPs/Byte, RAPL/TDP Joules</text>
 
   <!-- Connectors L4 to L5 -->
-  <line x1="325" y1="525" x2="325" y2="550" class="arrow-accent" />
-  <line x1="780" y1="525" x2="780" y2="550" class="arrow" />
+  <line x1="250" y1="524" x2="250" y2="562" class="arrow-accent" />
+  <line x1="710" y1="524" x2="710" y2="562" class="arrow" />
 
   <!-- Layer 5: Metrics & Exporters -->
-  <rect x="40" y="550" width="430" height="52" class="box box-export" />
-  <text x="55" y="572" class="box-text">Scorer &amp; Synthetic Index (QSI)</text>
-  <text x="55" y="589" class="box-sub">src/scorer/calculator.py (Throughput, Capacity, Fidelity, EDP)</text>
+  <text x="40" y="552" class="layer-title">Layer 5: Dual-Mode Scoring, Academic Verification &amp; Multi-Format Reporting</text>
+  <rect x="40" y="562" width="430" height="62" class="box box-export" />
+  <text x="55" y="586" class="box-text">Dual-Mode Scorer &amp; Academic Verification Suite</text>
+  <text x="55" y="605" class="box-sub">src/scorer/calculator.py (QSI, kGates/s, Effective GB/s, QV, EDP)</text>
 
-  <rect x="490" y="550" width="430" height="52" class="box box-export" />
-  <text x="505" y="572" class="box-text">Reporting &amp; Visualizations</text>
-  <text x="505" y="589" class="box-sub">src/reporter/ (JSON schema, Markdown, Matplotlib PNG charts)</text>
+  <rect x="490" y="562" width="430" height="62" class="box box-export" />
+  <text x="505" y="586" class="box-text">Telemetry Exporters &amp; 300 DPI Chart Engine</text>
+  <text x="505" y="605" class="box-sub">src/reporter/ (JSON Schema, GFM Markdown Reports, Matplotlib Plots)</text>
 </svg>

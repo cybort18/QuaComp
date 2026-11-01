@@ -301,6 +301,24 @@ def export_to_markdown(
             )
         md_content.append("\n---\n")
 
+    # Quantum Observables & Bipartite Entanglement Table (if available)
+    observable_runs = [r for r in results if r.get("success", False) and (r.get("bipartite_entropy_ebits") is not None or r.get("ising_energy_expectation") is not None)]
+    if observable_runs:
+        md_content.append("## Quantum Observables & Bipartite Entanglement")
+        md_content.append("| Qubits | Workload | Solver | Precision | Bipartite Entanglement Entropy | ZZ Correlation ⟨Z_0 Z_(n-1)⟩ | Ising Energy Expectation ⟨H_Ising⟩ |")
+        md_content.append("| :---: | :--- | :---: | :---: | :---: | :---: | :---: |")
+        for obr in observable_runs:
+            ent_ebits = obr.get("bipartite_entropy_ebits")
+            zz_exp = obr.get("end_to_end_zz_expectation")
+            ising_e = obr.get("ising_energy_expectation")
+            ent_str = f"{ent_ebits:.4f} ebits" if ent_ebits is not None else "N/A"
+            zz_str = f"{zz_exp:+.4f}" if zz_exp is not None else "N/A"
+            ising_str = f"{ising_e:+.4f}" if ising_e is not None else "N/A"
+            md_content.append(
+                f"| {obr['qubits']} | {obr.get('workload_label', 'Circuit')} | {obr.get('method', 'statevector')} | {obr.get('precision', 'fp64')} | {ent_str} | {zz_str} | {ising_str} |"
+            )
+        md_content.append("\n---\n")
+
     # Hardware Power & Energy Telemetry Table (if available)
     energy_runs = [r for r in results if r.get("success", False) and r.get("energy_metrics") and "total_energy_joules" in r["energy_metrics"]]
     if energy_runs:

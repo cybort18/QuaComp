@@ -60,11 +60,11 @@
 <body>
   <div class="container">
     <h1>QuaComp Architectural &amp; Methodological Diagrams</h1>
-    <p class="lead">System design, execution lifecycle, backend dispatch, simulation scaling paradigms, and noise models.</p>
+    <p class="lead">Multi-paradigm simulation architecture (Statevector, MPS, Stabilizer Tableau), Complexity Auto-Solver Router, hardware dispatch, Roofline telemetry, and stochastic noise trajectories.</p>
 
     <div class="diagram-card">
-      <h2>Diagram 1: High-Level System Architecture</h2>
-      <p>Modular pipeline spanning CLI ingress, AST compilation, simulation engines, hardware dispatch, and telemetry reporting.</p>
+      <h2>Diagram 1: 3-Paradigm High-Level System Architecture</h2>
+      <p>Modular pipeline spanning CLI ingress, solver-aware memory guards, Complexity Auto-Solver Router, 3-paradigm engines (Statevector, MPS, Stabilizer Tableau), in-place Pauli observables, and Roofline bandwidth telemetry.</p>
       <div class="diagram-wrapper">
         <img src="../images/architecture.svg" alt="High-Level Architecture">
       </div>
@@ -79,24 +79,24 @@
     </div>
 
     <div class="diagram-card">
-      <h2>Diagram 3: Backend Selection &amp; Graceful Fallback</h2>
-      <p>Automated hardware hierarchy checking CUDA, Apple Metal, C++ SIMD, and pure NumPy baselines.</p>
+      <h2>Diagram 3: Complexity Auto-Solver Router &amp; Hardware Backend Dispatch</h2>
+      <p>Two-stage routing: (1) algorithmic solver selection via entanglement topology vs. magic density, and (2) 4-tier hardware accelerator fallback (CUDA, Apple Metal, C++ SIMD, NumPy).</p>
       <div class="diagram-wrapper">
         <img src="../images/backend-selection.svg" alt="Backend Selection">
       </div>
     </div>
 
     <div class="diagram-card">
-      <h2>Diagram 4: Simulation Paradigms — Statevector vs. MPS</h2>
-      <p>Detailed comparison of exact exponential dense states versus linear tensor trains with singular value truncation.</p>
+      <h2>Diagram 4: Three-Paradigm Simulation Engines — Statevector vs. MPS vs. Stabilizer Tableau</h2>
+      <p>Comparative scaling across exponential dense vectors O(2^n), 1D tensor trains O(n*chi^3) with SWAP routing, and Aaronson-Gottesman binary symplectic tableaux O(n^2) for 100 to 1,000+ qubits.</p>
       <div class="diagram-wrapper">
-        <img src="../images/statevector-vs-mps.svg" alt="Statevector vs MPS">
+        <img src="../images/statevector-vs-mps.svg" alt="Three-Paradigm Simulation Engines">
       </div>
     </div>
 
     <div class="diagram-card">
       <h2>Diagram 5: Noise Simulation Workflow</h2>
-      <p>Monte Carlo Wavefunction (MCWF) stochastic jumps vs. full density matrix superoperator evolution.</p>
+      <p>Monte Carlo Wavefunction (MCWF) stochastic jumps and Pauli frame propagation vs. full density matrix superoperator evolution.</p>
       <div class="diagram-wrapper">
         <img src="../images/noise-workflow.svg" alt="Noise Workflow">
       </div>

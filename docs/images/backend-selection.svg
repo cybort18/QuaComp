@@ -1,17 +1,20 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 620" width="100%" height="100%">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 650" width="100%" height="100%">
   <defs>
     <style>
       .bg { fill: #0d1117; }
       .title { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 20px; font-weight: 700; fill: #f0f6fc; }
       .subtitle { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 12px; fill: #8b949e; }
+      .sec-label { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11px; font-weight: 700; fill: #58a6ff; letter-spacing: 0.08em; text-transform: uppercase; }
       .node { rx: 6px; ry: 6px; stroke-width: 1.2px; }
       .node-req { fill: #161b22; stroke: #58a6ff; }
+      .node-router { fill: #12283a; stroke: #a371f7; }
       .node-check { fill: #161b22; stroke: #d29922; }
       .node-backend { fill: #12283a; stroke: #3fb950; }
       .node-fallback { fill: #21262d; stroke: #8b949e; }
       .text-head { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 13px; font-weight: 600; fill: #f0f6fc; }
       .text-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11px; fill: #8b949e; }
       .text-check { font-family: 'SFMono-Regular', Consolas, Menlo, monospace; font-size: 10px; fill: #d29922; }
+      .text-purple { font-family: 'SFMono-Regular', Consolas, Menlo, monospace; font-size: 10px; fill: #d2a8ff; }
       .text-success { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11px; font-weight: 600; fill: #3fb950; }
       .arrow { stroke: #58a6ff; stroke-width: 1.5; fill: none; marker-end: url(#bs-arrow-blue); }
       .arrow-pass { stroke: #3fb950; stroke-width: 1.5; fill: none; marker-end: url(#bs-arrow-green); }
@@ -28,89 +31,109 @@
     </marker>
   </defs>
 
-  <rect width="960" height="620" class="bg" />
+  <rect width="960" height="650" class="bg" />
 
-  <text x="40" y="42" class="title">Hardware Backend Resolution &amp; Fallback Dispatch</text>
-  <text x="40" y="62" class="subtitle">Dynamic hardware detection hierarchy ensuring execution stability across diverse platforms</text>
+  <text x="40" y="38" class="title">Complexity Auto-Solver Router &amp; Hardware Backend Dispatch</text>
+  <text x="40" y="58" class="subtitle">Two-stage dispatch: (1) Algorithmic Solver Selection by Entanglement vs. Magic, (2) 4-Tier Hardware Accelerator Fallback</text>
+
+  <!-- Stage 1: Complexity Auto-Solver Router -->
+  <text x="40" y="88" class="sec-label">Stage 1: Circuit Complexity Profiler &amp; Auto-Solver Router (src/engine/complexity.py)</text>
+  <rect x="40" y="98" width="260" height="72" class="node node-router" />
+  <text x="55" y="118" class="text-purple">RULE 1: CLIFFORD SUBSPACE</text>
+  <text x="55" y="138" class="text-head">non_clifford_gates == 0</text>
+  <text x="55" y="155" class="text-body">Routes to: Stabilizer Tableau O(n^2)</text>
+
+  <rect x="350" y="98" width="260" height="72" class="node node-router" />
+  <text x="365" y="118" class="text-purple">RULE 2: AREA-LAW / N &gt; 24</text>
+  <text x="365" y="138" class="text-head">1D Local or Exceeds SV RAM</text>
+  <text x="365" y="155" class="text-body">Routes to: MPS Tensor Network O(n*chi^3)</text>
+
+  <rect x="660" y="98" width="260" height="72" class="node node-router" />
+  <text x="675" y="118" class="text-purple">RULE 3: DENSE NON-CLIFFORD</text>
+  <text x="675" y="138" class="text-head">High Magic &amp; Volume-Law (n &lt;= 24)</text>
+  <text x="675" y="155" class="text-body">Routes to: Statevector O(2^n) (FP64/FP32)</text>
+
+  <!-- Stage 2: Hardware Backend Dispatch -->
+  <text x="40" y="200" class="sec-label">Stage 2: 4-Tier Hardware Accelerator Resolution &amp; Graceful Fallback Hierarchy</text>
 
   <!-- User Request Input -->
-  <rect x="40" y="100" width="220" height="70" class="node node-req" />
-  <text x="55" y="126" class="text-head">Backend Request</text>
-  <text x="55" y="145" class="text-body">--backend auto (default)</text>
-  <text x="55" y="158" class="text-body">or explicit: cuda, metal, cpp, numpy</text>
+  <rect x="40" y="212" width="220" height="78" class="node node-req" />
+  <text x="55" y="236" class="text-head">Backend &amp; Precision Request</text>
+  <text x="55" y="255" class="text-body">--backend auto|cuda|metal|cpp|numpy</text>
+  <text x="55" y="271" class="text-body">--precision fp64 (16B) | fp32 (8B)</text>
 
-  <line x1="260" y1="135" x2="310" y2="135" class="arrow" />
+  <line x1="260" y1="250" x2="310" y2="250" class="arrow" />
 
   <!-- Tier 1: CUDA Check -->
-  <rect x="310" y="100" width="280" height="74" class="node node-check" />
-  <text x="325" y="122" class="text-check">TIER 1: NVIDIA CUDA QUERY</text>
-  <text x="325" y="142" class="text-head">CuPy / PyTorch &amp; VRAM Headroom</text>
-  <text x="325" y="159" class="text-body">Driver active &amp; free VRAM &gt;= 10% safety buffer</text>
+  <rect x="310" y="212" width="280" height="78" class="node node-check" />
+  <text x="325" y="234" class="text-check">TIER 1: NVIDIA CUDA QUERY</text>
+  <text x="325" y="254" class="text-head">CuPy / PyTorch &amp; VRAM Headroom</text>
+  <text x="325" y="271" class="text-body">Driver active &amp; free VRAM &gt;= 10% safety buffer</text>
 
   <!-- CUDA Success Branch -->
-  <line x1="590" y1="135" x2="670" y2="135" class="arrow-pass" />
-  <rect x="670" y="100" width="250" height="70" class="node node-backend" />
-  <text x="685" y="128" class="text-success">ACTIVE: CUDA ACCELERATOR</text>
-  <text x="685" y="148" class="text-head">Single-Pass GPU Gate Fusion</text>
-  <text x="685" y="161" class="text-body">NVRTC runtime or PyTorch cuBLAS</text>
+  <line x1="590" y1="250" x2="670" y2="250" class="arrow-pass" />
+  <rect x="670" y="212" width="250" height="78" class="node node-backend" />
+  <text x="685" y="238" class="text-success">ACTIVE: CUDA ACCELERATOR</text>
+  <text x="685" y="258" class="text-head">Single-Pass GPU Gate Fusion</text>
+  <text x="685" y="273" class="text-body">NVRTC runtime or PyTorch cuBLAS</text>
 
   <!-- CUDA Fail to Tier 2 -->
-  <line x1="450" y1="174" x2="450" y2="225" class="arrow-fail" />
+  <line x1="450" y1="290" x2="450" y2="325" class="arrow-fail" />
 
   <!-- Tier 2: Metal Check -->
-  <rect x="310" y="225" width="280" height="74" class="node node-check" />
-  <text x="325" y="247" class="text-check">TIER 2: APPLE METAL QUERY</text>
-  <text x="325" y="267" class="text-head">macOS Apple Silicon Metal</text>
-  <text x="325" y="284" class="text-body">Darwin OS &amp; queryable Metal.framework</text>
+  <rect x="310" y="325" width="280" height="78" class="node node-check" />
+  <text x="325" y="347" class="text-check">TIER 2: APPLE METAL QUERY</text>
+  <text x="325" y="367" class="text-head">macOS Apple Silicon Metal</text>
+  <text x="325" y="384" class="text-body">Darwin OS &amp; queryable Metal.framework</text>
 
   <!-- Metal Success Branch -->
-  <line x1="590" y1="260" x2="670" y2="260" class="arrow-pass" />
-  <rect x="670" y="225" width="250" height="70" class="node node-backend" />
-  <text x="685" y="253" class="text-success">ACTIVE: METAL ACCELERATOR</text>
-  <text x="685" y="273" class="text-head">Metal Shading Language (MSL)</text>
-  <text x="685" y="286" class="text-body">Unified Memory zero-copy buffers</text>
+  <line x1="590" y1="364" x2="670" y2="364" class="arrow-pass" />
+  <rect x="670" y="325" width="250" height="78" class="node node-backend" />
+  <text x="685" y="351" class="text-success">ACTIVE: METAL ACCELERATOR</text>
+  <text x="685" y="371" class="text-head">Metal Shading Language (MSL)</text>
+  <text x="685" y="386" class="text-body">Unified Memory zero-copy buffers</text>
 
   <!-- Metal Fail to Tier 3 -->
-  <line x1="450" y1="299" x2="450" y2="350" class="arrow-fail" />
+  <line x1="450" y1="403" x2="450" y2="438" class="arrow-fail" />
 
   <!-- Tier 3: C++ SIMD Check -->
-  <rect x="310" y="350" width="280" height="74" class="node node-check" />
-  <text x="325" y="372" class="text-check">TIER 3: C++ SIMD EXTENSION QUERY</text>
-  <text x="325" y="392" class="text-head">Compiled Native Extension</text>
-  <text x="325" y="409" class="text-body">AVX2 / NEON _fusion_cpp library</text>
+  <rect x="310" y="438" width="280" height="78" class="node node-check" />
+  <text x="325" y="460" class="text-check">TIER 3: C++ SIMD EXTENSION QUERY</text>
+  <text x="325" y="480" class="text-head">Compiled Native Extension</text>
+  <text x="325" y="497" class="text-body">AVX2 / NEON _fusion_cpp library</text>
 
   <!-- C++ Success Branch -->
-  <line x1="590" y1="385" x2="670" y2="385" class="arrow-pass" />
-  <rect x="670" y="350" width="250" height="70" class="node node-backend" />
-  <text x="685" y="378" class="text-success">ACTIVE: C++ SIMD ACCELERATOR</text>
-  <text x="685" y="398" class="text-head">Single-Pass Matrix Fusion</text>
-  <text x="685" y="411" class="text-body">Native CPU vector extensions</text>
+  <line x1="590" y1="477" x2="670" y2="477" class="arrow-pass" />
+  <rect x="670" y="438" width="250" height="78" class="node node-backend" />
+  <text x="685" y="464" class="text-success">ACTIVE: C++ SIMD ACCELERATOR</text>
+  <text x="685" y="484" class="text-head">Single-Pass Matrix Fusion</text>
+  <text x="685" y="499" class="text-body">Native CPU vector extensions</text>
 
   <!-- C++ Fail to Tier 4 -->
-  <line x1="450" y1="424" x2="450" y2="475" class="arrow-fail" />
+  <line x1="450" y1="516" x2="450" y2="550" class="arrow-fail" />
 
   <!-- Tier 4: NumPy Vectorized Fallback -->
-  <rect x="310" y="475" width="280" height="85" class="node node-check" />
-  <text x="325" y="497" class="text-check">TIER 4: NUMPY FALLBACK</text>
-  <text x="325" y="517" class="text-head">Default Pure Python / NumPy</text>
-  <text x="325" y="534" class="text-body">Runs universally across all OS/CPUs;</text>
-  <text x="325" y="547" class="text-body">zero external compiler requirements</text>
+  <rect x="310" y="550" width="280" height="78" class="node node-check" />
+  <text x="325" y="572" class="text-check">TIER 4: NUMPY FALLBACK</text>
+  <text x="325" y="592" class="text-head">Default Pure Python / NumPy</text>
+  <text x="325" y="609" class="text-body">Universal cross-platform CPU baseline</text>
 
   <!-- Fallback Final Branch -->
-  <line x1="590" y1="517" x2="670" y2="517" class="arrow-pass" />
-  <rect x="670" y="475" width="250" height="85" class="node node-fallback" />
-  <text x="685" y="503" class="text-body" fill="#f0f6fc">STANDARD BACKEND (CPU)</text>
-  <text x="685" y="523" class="text-head">NumPy Array Operations</text>
-  <text x="685" y="539" class="text-body">Standard Python runtime fallback</text>
-  <text x="685" y="552" class="text-body">Guaranteed operational baseline</text>
+  <line x1="590" y1="589" x2="670" y2="589" class="arrow-pass" />
+  <rect x="670" y="550" width="250" height="78" class="node node-fallback" />
+  <text x="685" y="576" class="text-body" fill="#f0f6fc">STANDARD BACKEND (CPU)</text>
+  <text x="685" y="596" class="text-head">NumPy Array Operations</text>
+  <text x="685" y="612" class="text-body">Guaranteed operational baseline</text>
 
   <!-- Graceful Notice Annotation -->
-  <rect x="40" y="350" width="220" height="150" class="node node-fallback" />
-  <text x="55" y="375" class="text-head">Explicit Request Notice</text>
-  <text x="55" y="398" class="text-body">If user requests an explicit</text>
-  <text x="55" y="414" class="text-body">backend (e.g. --backend cuda)</text>
-  <text x="55" y="430" class="text-body">on an unsupported host:</text>
-  <text x="55" y="452" class="text-check">[Hardware Notice] printed</text>
-  <text x="55" y="470" class="text-body">Clean fallback to optimal backend</text>
-  <text x="55" y="486" class="text-body">Zero unhandled crashes</text>
+  <rect x="40" y="438" width="220" height="190" class="node node-fallback" />
+  <text x="55" y="463" class="text-head">Graceful Fallback &amp; Roofline</text>
+  <text x="55" y="485" class="text-body">If an explicit backend is requested</text>
+  <text x="55" y="501" class="text-body">on an unsupported host:</text>
+  <text x="55" y="521" class="text-check">[Hardware Notice] emitted</text>
+  <text x="55" y="539" class="text-body">Clean fallback to optimal tier.</text>
+  <text x="55" y="563" class="text-head">Roofline Bandwidth Tracking</text>
+  <text x="55" y="581" class="text-body">Measures solver-aware GB/s</text>
+  <text x="55" y="597" class="text-body">and FLOPs/Byte across DDR4,</text>
+  <text x="55" y="613" class="text-body">Unified Memory, and HBM3.</text>
 </svg>

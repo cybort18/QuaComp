@@ -7,81 +7,115 @@
       .col-box { rx: 8px; ry: 8px; stroke-width: 1.5px; }
       .col-sv { fill: #161b22; stroke: #388bfd; }
       .col-mps { fill: #161b22; stroke: #a371f7; }
-      .col-head-sv { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 16px; font-weight: 700; fill: #58a6ff; }
-      .col-head-mps { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 16px; font-weight: 700; fill: #bc8cff; }
+      .col-stab { fill: #161b22; stroke: #3fb950; }
+      .col-head-sv { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 15px; font-weight: 700; fill: #58a6ff; }
+      .col-head-mps { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 15px; font-weight: 700; fill: #bc8cff; }
+      .col-head-stab { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 15px; font-weight: 700; fill: #7ee787; }
       .feature-card { rx: 6px; ry: 6px; fill: #0d1117; stroke: #30363d; stroke-width: 1px; }
       .card-title { font-family: 'SFMono-Regular', Consolas, Menlo, monospace; font-size: 10px; font-weight: 700; fill: #8b949e; text-transform: uppercase; letter-spacing: 0.05em; }
       .card-val { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 12px; font-weight: 600; fill: #f0f6fc; }
-      .card-desc { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11px; fill: #8b949e; }
-      .card-code { font-family: 'SFMono-Regular', Consolas, Menlo, monospace; font-size: 11px; fill: #79c0ff; }
-      .card-code-purple { font-family: 'SFMono-Regular', Consolas, Menlo, monospace; font-size: 11px; fill: #d2a8ff; }
+      .card-desc { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 10.5px; fill: #8b949e; }
+      .card-code { font-family: 'SFMono-Regular', Consolas, Menlo, monospace; font-size: 10.5px; fill: #79c0ff; }
+      .card-code-purple { font-family: 'SFMono-Regular', Consolas, Menlo, monospace; font-size: 10.5px; fill: #d2a8ff; }
+      .card-code-green { font-family: 'SFMono-Regular', Consolas, Menlo, monospace; font-size: 10.5px; fill: #7ee787; }
     </style>
   </defs>
 
   <rect width="960" height="620" class="bg" />
 
-  <text x="40" y="42" class="title">Simulation Paradigms: Statevector vs. Matrix Product State (MPS)</text>
-  <text x="40" y="62" class="subtitle">Structural comparison of computational representation, memory scaling, approximation limits, and algorithmic domains</text>
+  <text x="40" y="40" class="title">Three-Paradigm Simulation Engines: Statevector vs. MPS vs. Stabilizer Tableau</text>
+  <text x="40" y="60" class="subtitle">Mathematical representation, memory complexity, entanglement/magic boundaries, and Roofline arithmetic intensity</text>
 
-  <!-- Left Column: Statevector -->
-  <rect x="40" y="90" width="425" height="505" class="col-box col-sv" />
-  <text x="65" y="125" class="col-head-sv">Statevector Simulation (Dense)</text>
-  <text x="65" y="145" class="card-desc">Exact mathematical representation of the entire Hilbert space</text>
+  <!-- Column 1: Statevector -->
+  <rect x="30" y="85" width="290" height="510" class="col-box col-sv" />
+  <text x="48" y="116" class="col-head-sv">1. Dense Statevector O(2^n)</text>
+  <text x="48" y="134" class="card-desc">Exact Hilbert-space amplitude vector</text>
 
-  <!-- SV Feature 1: Mathematical Form -->
-  <rect x="65" y="165" width="375" height="65" class="feature-card" />
-  <text x="80" y="185" class="card-title">STATE REPRESENTATION</text>
-  <text x="80" y="205" class="card-code">|ψ⟩ = ∑ c_x |x⟩, where x ∈ {0, 1}^n</text>
-  <text x="80" y="220" class="card-desc">Vector of 2^n double-precision complex amplitudes (16 B / state)</text>
+  <rect x="45" y="150" width="260" height="82" class="feature-card" />
+  <text x="58" y="168" class="card-title">MATHEMATICAL REPRESENTATION</text>
+  <text x="58" y="186" class="card-code">|psi&gt; = sum_x c_x |x&gt;, x in {0,1}^n</text>
+  <text x="58" y="204" class="card-desc">FP64 (complex128, 16B) or FP32 (complex64,</text>
+  <text x="58" y="218" class="card-desc">8B, 50% RAM reduction &amp; +1 qubit capacity)</text>
 
-  <!-- SV Feature 2: Memory Scaling -->
-  <rect x="65" y="240" width="375" height="75" class="feature-card" />
-  <text x="80" y="260" class="card-title">MEMORY COMPLEXITY &amp; SCALING</text>
-  <text x="80" y="280" class="card-code">Exact O(2^n × 16 Bytes)</text>
-  <text x="80" y="297" class="card-desc">10 qubits: ~16 KB | 20 qubits: 16 MB | 30 qubits: 16 GB</text>
-  <text x="80" y="309" class="card-desc">32 qubits: 64 GB | Hits physical RAM wall strictly at ~30–34 qubits</text>
+  <rect x="45" y="244" width="260" height="82" class="feature-card" />
+  <text x="58" y="262" class="card-title">MEMORY &amp; ROOFLINE PROFILE</text>
+  <text x="58" y="280" class="card-code">O(2^n x 16B) | AI: 0.4375 FLOPs/B</text>
+  <text x="58" y="298" class="card-desc">Memory-bandwidth bound. Practical ceiling:</text>
+  <text x="58" y="312" class="card-desc">~28-30 qubits on 16-32 GB RAM/VRAM</text>
 
-  <!-- SV Feature 3: Precision & Entanglement -->
-  <rect x="65" y="325" width="375" height="75" class="feature-card" />
-  <text x="80" y="345" class="card-title">ACCURACY &amp; ENTANGLEMENT HANDLING</text>
-  <text x="80" y="365" class="card-val">Exact: Zero Truncation Error (ε = 0)</text>
-  <text x="80" y="382" class="card-desc">Simulates arbitrary multi-qubit entanglement, volume-law states,</text>
-  <text x="80" y="394" class="card-desc">deep random Haar unitaries, and heavy all-to-all CX patterns</text>
+  <rect x="45" y="338" width="260" height="82" class="feature-card" />
+  <text x="58" y="356" class="card-title">ENTANGLEMENT &amp; MAGIC REGIME</text>
+  <text x="58" y="374" class="card-val">Exact for Arbitrary Magic &amp; Entanglement</text>
+  <text x="58" y="392" class="card-desc">Zero truncation error (eps = 0) on volume-law</text>
+  <text x="58" y="406" class="card-desc">states and dense non-Clifford T/Toffoli gates</text>
 
-  <!-- SV Feature 4: Practical Sweet Spot -->
-  <rect x="65" y="410" width="375" height="70" class="feature-card" />
-  <text x="80" y="430" class="card-title">OPTIMAL APPLICATION DOMAIN</text>
-  <text x="80" y="450" class="card-val">Deep, highly-entangled circuits with n ≤ 30 qubits</text>
-  <text x="80" y="468" class="card-desc">Quantum Volume, QFT verification, dense VQE/QAOA benchmarks</text>
+  <rect x="45" y="432" width="260" height="145" class="feature-card" />
+  <text x="58" y="450" class="card-title">OPTIMAL WORKLOADS &amp; NOISE</text>
+  <text x="58" y="468" class="card-val">Deep QFT, VQE, QAOA, Quantum Volume</text>
+  <text x="58" y="486" class="card-desc">- Exact Pauli expectations &lt;psi|P|psi&gt;</text>
+  <text x="58" y="502" class="card-desc">- Bipartite entropy via statevector SVD</text>
+  <text x="58" y="518" class="card-desc">- MCWF stochastic jump trajectories O(2^n)</text>
+  <text x="58" y="534" class="card-desc">- Accelerated via CUDA, Metal, C++ SIMD</text>
 
-  <!-- Right Column: MPS -->
-  <rect x="495" y="90" width="425" height="505" class="col-box col-mps" />
-  <text x="520" y="125" class="col-head-mps">Matrix Product State (MPS / Tensor Train)</text>
-  <text x="520" y="145" class="card-desc">Factorized 1D tensor contraction with singular value truncation</text>
+  <!-- Column 2: MPS -->
+  <rect x="335" y="85" width="290" height="510" class="col-box col-mps" />
+  <text x="353" y="116" class="col-head-mps">2. MPS Tensor Network O(n*chi^3)</text>
+  <text x="353" y="134" class="card-desc">1D tensor chain with SWAP routing &amp; SVD</text>
 
-  <!-- MPS Feature 1: Mathematical Form -->
-  <rect x="520" y="165" width="375" height="65" class="feature-card" />
-  <text x="535" y="185" class="card-title">STATE REPRESENTATION</text>
-  <text x="535" y="205" class="card-code-purple">|ψ⟩ ≈ ∑ Tr(A^{[1]}_{s_1} A^{[2]}_{s_2} ... A^{[n]}_{s_n}) |s_1...s_n⟩</text>
-  <text x="535" y="220" class="card-desc">1D network of rank-3 tensors bonded by maximum dimension χ</text>
+  <rect x="350" y="150" width="260" height="82" class="feature-card" />
+  <text x="363" y="168" class="card-title">MATHEMATICAL REPRESENTATION</text>
+  <text x="363" y="186" class="card-code-purple">|psi&gt; ~ sum A^[1] A^[2] ... A^[n] |s&gt;</text>
+  <text x="363" y="204" class="card-desc">Rank-3 site tensors (chi_L, 2, chi_R) bounded</text>
+  <text x="363" y="218" class="card-desc">by max bond dimension chi_max (default 64)</text>
 
-  <!-- MPS Feature 2: Memory Scaling -->
-  <rect x="520" y="240" width="375" height="75" class="feature-card" />
-  <text x="535" y="260" class="card-title">MEMORY COMPLEXITY &amp; SCALING</text>
-  <text x="535" y="280" class="card-code-purple">Linear O(n · χ^2 × 16 Bytes)</text>
-  <text x="535" y="297" class="card-desc">Memory scales linearly with qubit count n for a fixed bond dim χ</text>
-  <text x="535" y="309" class="card-desc">Enables simulating 50–100+ qubits on commodity laptops</text>
+  <rect x="350" y="244" width="260" height="82" class="feature-card" />
+  <text x="363" y="262" class="card-title">MEMORY &amp; ROOFLINE PROFILE</text>
+  <text x="363" y="280" class="card-code-purple">O(n * chi^2) | AI: 2.0 FLOPs/B</text>
+  <text x="363" y="298" class="card-desc">Scales linearly with qubit count n; supports</text>
+  <text x="363" y="312" class="card-desc">30 to 100+ qubits with minimal RAM footprint</text>
 
-  <!-- MPS Feature 3: Precision & Entanglement -->
-  <rect x="520" y="325" width="375" height="75" class="feature-card" />
-  <text x="535" y="345" class="card-title">ACCURACY &amp; ENTANGLEMENT HANDLING</text>
-  <text x="535" y="365" class="card-val">Approximation: Truncated SVD (Singular Values &lt; threshold)</text>
-  <text x="535" y="382" class="card-desc">Accurate only when bipartite entanglement entropy S ≤ log2(χ);</text>
-  <text x="535" y="394" class="card-desc">suffers severe fidelity collapse on volume-law entanglement</text>
+  <rect x="350" y="338" width="260" height="82" class="feature-card" />
+  <text x="363" y="356" class="card-title">ENTANGLEMENT &amp; MAGIC REGIME</text>
+  <text x="363" y="374" class="card-val">Area-Law Entanglement (S &lt;= log2(chi))</text>
+  <text x="363" y="392" class="card-desc">Tracks cumulative SVD truncation fidelity:</text>
+  <text x="363" y="406" class="card-desc">F_mps = prod_k (1 - sum_{i&gt;chi} lambda_i^2)</text>
 
-  <!-- MPS Feature 4: Practical Sweet Spot -->
-  <rect x="520" y="410" width="375" height="70" class="feature-card" />
-  <text x="535" y="430" class="card-title">OPTIMAL APPLICATION DOMAIN</text>
-  <text x="535" y="450" class="card-val">Shallow or 1D-localized circuits with n ≥ 50 qubits</text>
-  <text x="535" y="468" class="card-desc">1D transverse-field Ising models, nearest-neighbor Clifford circuits</text>
+  <rect x="350" y="432" width="260" height="145" class="feature-card" />
+  <text x="363" y="450" class="card-title">OPTIMAL WORKLOADS &amp; ROUTING</text>
+  <text x="363" y="468" class="card-val">1D Ising, Shallow Ansatze, 50+ Qubits</text>
+  <text x="363" y="486" class="card-desc">- Automatic SWAP routing for |i - j| &gt; 1</text>
+  <text x="363" y="502" class="card-desc">- O(n * chi^3) transfer-matrix Pauli &lt;H&gt;</text>
+  <text x="363" y="518" class="card-desc">- Central-cut SVD entanglement entropy</text>
+  <text x="363" y="534" class="card-desc">- Supports both FP64 and FP32 tensors</text>
+
+  <!-- Column 3: Stabilizer Tableau -->
+  <rect x="640" y="85" width="290" height="510" class="col-box col-stab" />
+  <text x="658" y="116" class="col-head-stab">3. Stabilizer Tableau O(n^2)</text>
+  <text x="658" y="134" class="card-desc">Aaronson-Gottesman CHP binary symplectic</text>
+
+  <rect x="655" y="150" width="260" height="82" class="feature-card" />
+  <text x="668" y="168" class="card-title">MATHEMATICAL REPRESENTATION</text>
+  <text x="668" y="186" class="card-code-green">2n x (2n + 1) Boolean Tableau (X|Z|r)</text>
+  <text x="668" y="204" class="card-desc">Tracks n destabilizer and n stabilizer Pauli</text>
+  <text x="668" y="218" class="card-desc">generators with phase bits r_i in {0, 1}</text>
+
+  <rect x="655" y="244" width="260" height="82" class="feature-card" />
+  <text x="668" y="262" class="card-title">MEMORY &amp; ROOFLINE PROFILE</text>
+  <text x="668" y="280" class="card-code-green">O(n^2) Bytes | AI: 0.25 FLOPs/B</text>
+  <text x="668" y="298" class="card-desc">100 qubits require &lt; 10 KB RAM; simulates</text>
+  <text x="668" y="312" class="card-desc">100 to 1,000+ qubits in milliseconds</text>
+
+  <rect x="655" y="338" width="260" height="82" class="feature-card" />
+  <text x="668" y="356" class="card-title">ENTANGLEMENT &amp; MAGIC REGIME</text>
+  <text x="668" y="374" class="card-val">Zero Magic (Clifford Only), Any S(rho_A)</text>
+  <text x="668" y="392" class="card-desc">Exact for maximally entangled volume-law</text>
+  <text x="668" y="406" class="card-desc">states (GHZ, cluster, stabilizer codes)</text>
+
+  <rect x="655" y="432" width="260" height="145" class="feature-card" />
+  <text x="668" y="450" class="card-title">OPTIMAL WORKLOADS &amp; NOISE</text>
+  <text x="668" y="468" class="card-val">100-1000+ Qubit GHZ &amp; QEC Circuits</text>
+  <text x="668" y="486" class="card-desc">- Gates: H, S, Sdg, X, Y, Z, CX, CZ, SWAP</text>
+  <text x="668" y="502" class="card-desc">- GF(2) rank bipartite entanglement entropy</text>
+  <text x="668" y="518" class="card-desc">- Exact O(n^2) Pauli string expectation</text>
+  <text x="668" y="534" class="card-desc">- Noisy Pauli Frame Monte Carlo trajectories</text>
 </svg>

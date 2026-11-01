@@ -11,19 +11,21 @@
 ## 1. Executive Summary & Vision
 
 ### 1.1 Overview
-`QuaComp` is an open-source library and CLI-based benchmarking tool designed to profile local hardware performance (PC / Laptop / Workstation) when simulating quantum computers. 
+`QuaComp` is an open-source **Multi-Paradigm Quantum-Classical Emulation Engine & Hardware Roofline Profiler** designed to evaluate local and workstation hardware performance (CPU, NVIDIA CUDA, Apple Metal, and C++ SIMD) when simulating quantum computation across three distinct mathematical paradigms:
 
-By leveraging state-vector simulation of dimension $2^n$, `QuaComp` measures memory allocation (RAM), CPU usage, and execution latency of quantum gate operations across different qubit sizes and circuit depths. In addition to the state-vector method, QuaComp supports Matrix Product State (MPS) simulations to efficiently handle large-scale quantum circuits (30 to 100+ qubits for low-to-moderate entanglement workloads) by compressing the state-space tensor representation on memory-constrained systems. Furthermore, QuaComp supports Noisy Intermediate-Scale Quantum (NISQ) simulation benchmarking using synthetic parameterized noise channels (Thermal Relaxation $T_1/T_2$ & Depolarizing Error) to evaluate CPU computational overhead and quantum state fidelity loss compared to ideal circuit execution. QuaComp also features an automated Visualization Engine (`--chart`) that generates high-resolution telemetry plots for latency, memory safety thresholds, MPS savings, and NISQ noise fidelity impacts, alongside the **Relative Benchmark Comparison Engine (`--compare`)**, **GPU Acceleration Support (`--device gpu` / `--gpu`)**, and **Entanglement Entropy Metrics (`--entropy`)**.
+1. **Dense Statevector Engine ($\mathcal{O}(2^n)$):** Exact full-amplitude simulation in double precision (`fp64` / `complex128`) or single precision (`fp32` / `complex64`, 50% memory reduction) up to physical memory limits ($\sim 28\text{--}30$ qubits).
+2. **Matrix Product State / MPS Tensor Network Engine ($\mathcal{O}(n \cdot \chi^3)$):** Factorized 1D tensor train with automated SWAP network routing for non-local 2-qubit gates and cumulative SVD truncation fidelity tracking for circuits beyond 30 qubits.
+3. **Stabilizer Tableau Engine ($\mathcal{O}(n^2)$):** Binary symplectic implementation of the Aaronson-Gottesman CHP algorithm capable of simulating **100 to 1,000+ maximally entangled qubits** (Clifford circuits and noisy Pauli frame Monte Carlo trajectories) in milliseconds.
+
+In addition, QuaComp incorporates a static **Circuit Complexity Profiler & Auto-Solver Router (`--sim-method auto`)** that analyzes entanglement topology versus non-Clifford magic density before execution, an **In-Place Multi-Paradigm Pauli Expectation & Bipartite Entanglement Engine**, and a **Solver-Aware Roofline Memory Bandwidth Profiler** (`GB/s` and `FLOPs/Byte`).
 
 ### 1.2 Core Value Proposition
-- **Pre-flight Safety:** Prevents system crashes and Out-Of-Memory (OOM) errors by calculating theoretical $2^n$ RAM requirements before running simulation runs.
-- **Representative Workloads:** Evaluates hardware against diverse quantum circuit workloads (Shallow, Deep, and Algorithmic QFT).
-- **Statistical Multi-Run Profiling:** Executes multiple benchmark iterations per circuit (`--runs INT`, default 3) to compute Mean (μ), Median, and Standard Deviation (σ) of execution latencies, mitigating CPU governor and background process noise.
-- **Dual-Mode Scoring & Academic Suite:** Balances rapid engineering comparison via the logarithmic QuaComp Synthetic Index (QSI) while providing formal scientific benchmarks (kGates/s throughput, Quantum Volume verification, and Energy-Delay Product).
-- **Scalable MPS Simulation:** Supports high-qubit simulation (up to 100+ qubits) specifically for low-to-moderate entanglement circuits using tensor network compression (Matrix Product State), overcoming conventional state-vector memory limits.
-- **NISQ Synthetic Noise & Fidelity Profiling:** Evaluates hardware computational overhead under synthetic parameterized noise channels (thermal relaxation and depolarizing errors) while measuring classical Hellinger state fidelity loss.
-- **Standard OpenQASM 2.0 Ingestion:** Consumes industry-standard OpenQASM 2.0 quantum assembly code without third-party compilation dependencies, enabling direct benchmarking of production algorithms from QASMBench, IBM Quantum, and academic literature.
-- **Automated Telemetry Visualizations:** Generates modern high-DPI chart graphics (`--chart`) illustrating qubit scalability, memory safety boundaries, simulation method comparisons, and noise fidelity degradation.
+- **Solver-Aware Pre-flight Safety:** Prevents Out-Of-Memory (OOM) crashes by enforcing an 85% RAM/VRAM safety budget for $\mathcal{O}(2^n)$ statevectors while allowing 100 to 1,000+ qubit circuits to execute smoothly on $\mathcal{O}(n^2)$ Stabilizer and $\mathcal{O}(n \cdot \chi^2)$ MPS engines.
+- **Automated Complexity Routing:** Inspects quantum circuits prior to execution—measuring Clifford vs. non-Clifford gate ratios (Quantum Magic) and interaction distances—to automatically select `stabilizer`, `mps`, or `statevector`.
+- **Multi-Paradigm Physical Observables:** Evaluates 1D transverse-field Ising energy expectations ($\langle \hat{H}_{\text{Ising}} \rangle$), end-to-end spin correlations ($\langle Z_0 Z_{n-1} \rangle$), and bipartite Von Neumann entanglement entropy ($S(\rho_A)$ in *ebits*) in-place across all three solvers.
+- **Solver-Aware Roofline & Mixed-Precision Telemetry:** Measures effective memory bandwidth (`GB/s`), arithmetic intensity (`FLOPs/Byte`), and numerical drift between `fp64` and `fp32` representations.
+- **Stochastic Noise Beyond the Density Matrix Wall:** Combines $\mathcal{O}(2^n)$ Monte Carlo Wavefunction (MCWF) jump trajectories for general circuits with $\mathcal{O}(n^2)$ Pauli frame propagation for noisy 100+ qubit Clifford circuits.
+- **Dual-Mode Scoring & Academic Suite:** Balances rapid engineering comparison via the logarithmic QuaComp Synthetic Index (QSI) with peer-reviewed HPC metrics (kGates/s, Effective Memory Bandwidth, Quantum Volume, and Energy-Delay Product).
 
 ---
 
@@ -301,6 +303,54 @@ where:
     - Runner displays noise simulation mode, shot count, and memory savings ratio:
 
       $$\text{Memory Saved Ratio} \approx 2^n \times$$
+
+### FR-20: MPS SWAP Network Routing & SVD Truncation Fidelity (`--mps`, `--max-bond-dim`, `--svd-cutoff`)
+- **Description:** The native Matrix Product State (`MatrixProductState`) engine in `src/engine/mps.py` must support arbitrary non-adjacent 2-qubit gates ($|i - j| > 1$) from OpenQASM 2.0 and algorithmic circuits while tracking cumulative singular value truncation error and overall tensor-network fidelity.
+- **Specifications & Behavior:**
+  - **Automated SWAP Network Routing:** Decomposes long-range 2-qubit gates acting on sites $(i, j)$ with $|i - j| > 1$ into a bridal chain of nearest-neighbor SWAP contractions to bring the qubits adjacent, applies the target 2-qubit unitary, and reverses the SWAP chain to restore canonical site ordering while incrementing `swap_count`.
+  - **SVD Truncation Fidelity Tracking:** During each 2-qubit bond SVD split capped at `max_bond_dim` ($\chi_{\max}$) and `svd_cutoff`, calculates the discarded spectral weight $\epsilon_{\text{step}} = \sum_{k > \chi_{\max}} \lambda_k^2 / \sum_{\text{all}} \lambda_k^2$ and updates multiplicative fidelity:
+
+    $$F_{\text{MPS}} = \prod_{\text{steps}} (1 - \epsilon_{\text{step}})$$
+
+  - **Pre-Execution 1Q Gate Contraction:** Consecutive 1-qubit gates acting on the same wire in `simulate_trajectories` are fused into a single $2 \times 2$ unitary matrix prior to trajectory sampling, tracking `logical_gate_count`, `executed_gate_count`, and `gate_fusion_compression_ratio`.
+
+### FR-21: Solver-Aware Roofline Memory Bandwidth & Mixed-Precision Emulation (`--precision {fp64,fp32}`)
+- **Description:** The telemetry profiler (`src/profiler/telemetry.py`) and scoring engine (`src/scorer/calculator.py`) must compute solver-aware and precision-aware Effective Memory Bandwidth (`GB/s`) and Arithmetic Intensity (`FLOPs/Byte`), while supporting mixed-precision (`fp32`/`complex64` vs `fp64`/`complex128`) statevector and MPS execution.
+- **Specifications & Behavior:**
+  - **Solver-Aware Byte Traffic Formulas:**
+    - `statevector`: $\text{Bytes} = G \times 2^n \times (2 \times B_{\text{elem}})$, where $B_{\text{elem}} = 16\text{ B}$ (`fp64`) or $8\text{ B}$ (`fp32`), with Arithmetic Intensity $0.4375\text{ FLOPs/Byte}$ (`fp64`) or $0.875\text{ FLOPs/Byte}$ (`fp32`).
+    - `mps`: $\text{Bytes} = (G + 3 \cdot N_{\text{swaps}}) \times 4 \cdot \chi_{\text{active}}^2 \times 2 \cdot B_{\text{elem}}$, with Arithmetic Intensity $2.0\text{ FLOPs/Byte}$.
+    - `stabilizer`: $\text{Bytes} = G \times 2n \times \lceil (2n + 1) / 8 \rceil \times 2$, with Arithmetic Intensity $0.25\text{ FLOPs/Byte}$, preventing exponential $\mathcal{O}(2^n)$ overflow on 100+ qubit Clifford circuits.
+  - **Mixed-Precision Drift Analysis:** Provides `measure_precision_drift()` to quantify the L2 norm divergence $\|\psi_{\text{fp64}} - \psi_{\text{fp32}}\|_2$ and fidelity loss between double-precision and single-precision emulation.
+
+### FR-22: Aaronson-Gottesman Stabilizer Tableau Engine ($\mathcal{O}(n^2)$) & Noisy Pauli Frame Trajectories (`--stabilizer`)
+- **Description:** The system must provide a polynomial-memory $\mathcal{O}(n^2)$ Stabilizer Tableau engine (`src/engine/stabilizer.py`) based on the Gottesman-Knill theorem and the Aaronson-Gottesman (2004) CHP algorithm, supporting both ideal Clifford simulation and multi-shot noisy Pauli frame trajectories for 100 to 1,000+ qubits.
+- **Specifications & Behavior:**
+  - **Binary Symplectic Tableau (`StabilizerTableau`):** Maintains a $2n \times (2n + 1)$ boolean matrix $(X \mid Z \mid r)$ tracking $n$ destabilizer generators and $n$ stabilizer generators in $\mathcal{O}(n^2)$ memory ($< 10\text{ KB}$ for 100 qubits).
+  - **Exact Clifford Gate Set:** Supports $\mathcal{O}(n)$ column updates for $H, S, S^\dagger, X, Y, Z, I, SX, \text{CNOT}(c, t), \text{CZ}(c, t), \text{CY}(c, t), \text{SWAP}(a, b)$ and $\mathcal{O}(n^2)$ projective computational-basis measurements via symplectic `rowsum`.
+  - **Non-Clifford Rejection Guard:** Raises `NonCliffordGateError` with diagnostic guidance when non-Clifford gates ($T, T^\dagger, \text{CCX}$, or non-multiples of $\pi/2$ rotations) are encountered.
+  - **Noisy Stabilizer Trajectories (`simulate_noisy_stabilizer_trajectories`):** Injects stochastic 1-qubit and 2-qubit depolarizing Pauli errors ($X, Y, Z$) after each Clifford gate and readout bit-flips across $N_{\text{shots}}$ trajectories, computing ensemble fidelity and entanglement retention at 100+ qubits in $\mathcal{O}(N_{\text{shots}} \cdot G \cdot n)$ time.
+
+### FR-23: Circuit Complexity Profiler & Auto-Solver Router (`--sim-method auto`)
+- **Description:** The system must provide a static pre-execution circuit complexity analyzer (`src/engine/complexity.py`) that profiles entanglement topology against non-Clifford magic density and automatically routes execution to the optimal simulation engine.
+- **Specifications & Behavior:**
+  - **Two-Axis Complexity Classification (`analyze_circuit_complexity`):**
+    - Axis 1 (Quantum Magic): Counts `clifford_gates`, `non_clifford_gates`, and `magic_density`. Rotations $R_x(\theta), R_y(\theta), R_z(\theta), U_1(\theta)$ whose angles are integer multiples of $\pi/2$ are recognized as Clifford operations.
+    - Axis 2 (Entanglement Topology): Computes `two_qubit_gate_density`, `max_interaction_distance` ($\max |i - j|$), and classifies topology as `unentangled`, `1D_local`, `moderate_entangled`, or `volume_law`.
+  - **Deterministic Routing Rules (`select_optimal_solver`):**
+    1. If `non_clifford_gates == 0`, routes to `stabilizer` ($\mathcal{O}(n^2)$ exact).
+    2. If `num_qubits > 24` or estimated statevector RAM exceeds 80% of available physical RAM, or if `num_qubits >= 16` with `1D_local`/`unentangled` topology, routes to `mps`.
+    3. Otherwise (`num_qubits <= 24` with non-Clifford gates), routes to `statevector`.
+
+### FR-24: Multi-Paradigm Pauli Expectation ($\langle \hat{H} \rangle$) & Scalable Bipartite Entanglement Entropy
+- **Description:** The system must compute in-place expectation values for arbitrary Pauli strings $P \in \{I, X, Y, Z\}^{\otimes n}$, linear Hamiltonians $\hat{H} = \sum_k c_k P_k$ (`src/engine/observables.py`), and bipartite Von Neumann entanglement entropy (`src/engine/entanglement.py`) across all three solvers without converting compressed representations into $2^n$ statevectors.
+- **Specifications & Behavior:**
+  - **In-Place Pauli & Hamiltonian Evaluation:**
+    - `statevector`: Bitwise index permutation and parity popcount in $\mathcal{O}(2^n)$ time with zero matrix allocation.
+    - `mps`: Local rank-2 transfer-matrix contraction from site $0$ to $n-1$ in $\mathcal{O}(n \cdot \chi^3)$ time.
+    - `stabilizer`: Symplectic anticommutation check against stabilizer generators and destabilizer row reduction in $\mathcal{O}(n^2)$ time, returning exact expectations in $\{-1.0, 0.0, +1.0\}$.
+  - **Scalable Bipartite Entanglement Entropy ($S(\rho_A)$):**
+    - Computed via central bond singular values $\lambda_i$ in `mps` ($\mathcal{O}(\chi^3)$) and via $\text{GF}(2)$ binary Gaussian elimination rank of the cross-partition stabilizer commutator matrix in `stabilizer` ($\mathcal{O}(n^3)$), enabling exact entanglement verification on 100+ qubit states.
 
 ---
 
