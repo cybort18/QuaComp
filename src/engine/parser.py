@@ -287,15 +287,29 @@ class ParsedQASMCircuit:
             counts[inst.name] = counts.get(inst.name, 0) + 1
         return counts
 
-    def validate_memory_limits(self, max_allowed_ram_gb: Optional[float] = None) -> bool:
+    def validate_memory_limits(
+        self,
+        max_allowed_ram_gb: Optional[float] = None,
+        sim_method: str = "statevector"
+    ) -> bool:
         """
         Validate whether this circuit can be simulated within memory limits.
-        
-        Formula: Statevector RAM = 2^n * 16 bytes.
+
+        Formula:
+            - statevector: 2^n * 16 bytes
+            - mps: n * 2 * (64^2) * 16 bytes
+            - stabilizer: (2n + 1)^2 bytes
         """
-        if self.num_qubits > 35:
-            return False
-        req_bytes = (2 ** self.num_qubits) * 16.0
+        method_norm = str(sim_method).lower().strip()
+        if method_norm == "stabilizer":
+            req_bytes = float((2 * self.num_qubits + 1) ** 2)
+        elif method_norm in ("mps", "matrix_product_state"):
+            req_bytes = float(max(1, self.num_qubits) * 2 * (64 ** 2) * 16)
+        else:
+            if self.num_qubits > 35:
+                return False
+            req_bytes = (2 ** self.num_qubits) * 16.0
+
         req_gb = req_bytes / (1024.0 ** 3)
         if max_allowed_ram_gb is not None:
             return req_gb <= max_allowed_ram_gb

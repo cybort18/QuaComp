@@ -497,8 +497,11 @@ class StabilizerTableau:
         shots: int = 1024,
         seed: Optional[int] = None,
         measured_Map: Optional[List[Tuple[int, int]]] = None,
-        num_clbits: Optional[int] = None
-    ) -> Dict[str, int]:
+        num_clbits: Optional[int] = None,
+        initial_r_matrix: Optional[np.ndarray] = None,
+        readout_error_prob: float = 0.0,
+        return_coupled_fidelity: bool = False
+    ) -> Any:
         """
         Perform multi-shot computational-basis sampling from the current stabilizer state.
 
@@ -512,9 +515,12 @@ class StabilizerTableau:
             seed (Optional[int]): Random seed for reproducible sampling.
             measured_Map (Optional[List[Tuple[int, int]]]): Optional list of (qubit_idx, clbit_idx) pairs.
             num_clbits (Optional[int]): Number of classical bits if measured_Map is provided.
+            initial_r_matrix (Optional[np.ndarray]): Pre-evolved noisy phase matrix of shape (2n, shots).
+            readout_error_prob (float): Readout bit-flip error probability in [0, 1].
+            return_coupled_fidelity (bool): If True, returns (counts, noisy_fidelity_estimate).
 
         Returns:
-            Dict[str, int]: Dictionary mapping bitstrings (little-endian) to observed counts.
+            Dict[str, int] or Tuple[Dict[str, int], float]: Bitstring counts (and fidelity estimate if requested).
         """
         if shots < 1:
             raise ValueError("shots must be >= 1.")
@@ -536,8 +542,14 @@ class StabilizerTableau:
             c_len = n
 
         # Phase matrix R of shape (2*n, shots) for parallel shot evolution
-        R = np.repeat(work.r[:2 * n, None], shots, axis=1)
+        R_ideal = np.repeat(work.r[:2 * n, None], shots, axis=1)
+        if initial_r_matrix is not None:
+            R = np.asarray(initial_r_matrix[:2 * n, :], dtype=np.uint8).copy()
+        else:
+            R = R_ideal.copy()
+
         qubit_outcomes: Dict[int, np.ndarray] = {}
+        ideal_outcomes: Dict[int, np.ndarray] = {}
 
         for a in measure_qubits:
             p_candidates = np.nonzero(work.x[n:2 * n, a])[0]
@@ -555,12 +567,16 @@ class StabilizerTableau:
                     )
                     g_bit = ((np.sum(g, axis=1) // 2) & 1).astype(np.uint8)
                     R[other_rows, :] ^= R[p, None, :] ^ g_bit[:, None]
+                    if return_coupled_fidelity:
+                        R_ideal[other_rows, :] ^= R_ideal[p, None, :] ^ g_bit[:, None]
                     work.x[other_rows] ^= work.x[p][None, :]
                     work.z[other_rows] ^= work.z[p][None, :]
 
                 work.x[p - n] = work.x[p]
                 work.z[p - n] = work.z[p]
                 R[p - n, :] = R[p, :]
+                if return_coupled_fidelity:
+                    R_ideal[p - n, :] = R_ideal[p, :]
 
                 work.x[p].fill(0)
                 work.z[p].fill(0)
@@ -569,14 +585,21 @@ class StabilizerTableau:
                 outcomes_a = rng.integers(0, 2, size=shots, dtype=np.uint8)
                 R[p, :] = outcomes_a
                 qubit_outcomes[a] = outcomes_a
+                if return_coupled_fidelity:
+                    R_ideal[p, :] = outcomes_a
+                    ideal_outcomes[a] = outcomes_a.copy()
             else:
                 active_destab = np.nonzero(work.x[:n, a])[0]
                 if len(active_destab) == 0:
                     qubit_outcomes[a] = np.zeros(shots, dtype=np.uint8)
+                    if return_coupled_fidelity:
+                        ideal_outcomes[a] = np.zeros(shots, dtype=np.uint8)
                 else:
                     stab_rows = active_destab + n
                     if len(stab_rows) == 1:
                         qubit_outcomes[a] = R[stab_rows[0], :].copy()
+                        if return_coupled_fidelity:
+                            ideal_outcomes[a] = R_ideal[stab_rows[0], :].copy()
                     else:
                         x_seq = work.x[stab_rows]
                         z_seq = work.z[stab_rows]
@@ -588,6 +611,9 @@ class StabilizerTableau:
                         g_det_bit = int((np.sum(g_matrix) // 2) & 1)
                         r_xor = np.bitwise_xor.reduce(R[stab_rows, :], axis=0)
                         qubit_outcomes[a] = r_xor ^ g_det_bit
+                        if return_coupled_fidelity:
+                            r_xor_ideal = np.bitwise_xor.reduce(R_ideal[stab_rows, :], axis=0)
+                            ideal_outcomes[a] = r_xor_ideal ^ g_det_bit
 
         # Assemble classical register bitstrings in Qiskit little-endian order (c_{c_len-1} ... c_1 c_0)
         clbit_matrix = np.zeros((c_len, shots), dtype=np.uint8)
@@ -595,16 +621,42 @@ class StabilizerTableau:
             if 0 <= c_idx < c_len and q_idx in qubit_outcomes:
                 clbit_matrix[c_len - 1 - c_idx, :] = qubit_outcomes[q_idx]
 
+        if readout_error_prob > 0.0:
+            flip_mask = (rng.random(clbit_matrix.shape) < float(readout_error_prob)).astype(np.uint8)
+            clbit_matrix ^= flip_mask
+
         # Convert columns of clbit_matrix into bitstrings and count unique occurrences
         counts: Dict[str, int] = {}
-        # Transpose to (shots, c_len) for fast byte/string conversion
         shots_bits = clbit_matrix.T
         unique_rows, row_counts = np.unique(shots_bits, axis=0, return_counts=True)
         for row, cnt in zip(unique_rows, row_counts):
             bs = "".join("1" if b else "0" for b in row)
             counts[bs] = int(cnt)
 
-        return counts
+        if not return_coupled_fidelity:
+            return counts
+
+        clbit_ideal = np.zeros((c_len, shots), dtype=np.uint8)
+        for q_idx, c_idx in seen_q.items():
+            if 0 <= c_idx < c_len and q_idx in ideal_outcomes:
+                clbit_ideal[c_len - 1 - c_idx, :] = ideal_outcomes[q_idx]
+
+        coupled_survival = float(np.mean(np.all(clbit_matrix == clbit_ideal, axis=0)))
+        ideal_counts: Dict[str, int] = {}
+        u_id, c_id = np.unique(clbit_ideal.T, axis=0, return_counts=True)
+        for row, cnt in zip(u_id, c_id):
+            bs = "".join("1" if b else "0" for b in row)
+            ideal_counts[bs] = int(cnt)
+
+        # Classical Bhattacharyya overlap on shared bitstrings
+        bc = 0.0
+        for bs, cnt_id in ideal_counts.items():
+            cnt_ns = counts.get(bs, 0)
+            if cnt_ns > 0:
+                bc += math.sqrt((cnt_id / float(shots)) * (cnt_ns / float(shots)))
+        bhatt_fidelity = min(1.0, max(0.0, bc * bc))
+        fidelity_est = max(coupled_survival, bhatt_fidelity)
+        return counts, round(float(fidelity_est), 6)
 
     def apply_gate(
         self,
@@ -860,27 +912,80 @@ def _extract_instructions_from_circuit(
     )
 
 
+def _resolve_stabilizer_noise_params(
+    noise_level: str = "none",
+    noise_model: Any = None
+) -> Tuple[bool, float, float, float]:
+    """
+    Resolve single-qubit depolarizing error p_1q, two-qubit depolarizing error p_2q,
+    and classical readout bit-flip error p_readout for Noisy Stabilizer Trajectories.
+
+    Returns:
+        Tuple[bool, float, float, float]: (is_noisy, p_1q, p_2q, p_readout)
+    """
+    p_1q = 0.0
+    p_2q = 0.0
+    p_readout = 0.0
+
+    if noise_model is not None:
+        if isinstance(noise_model, dict):
+            p_1q = float(noise_model.get("gate_error_1q", noise_model.get("p_1q", 0.001)))
+            p_2q = float(noise_model.get("gate_error_2q", noise_model.get("p_2q", p_1q * 2.0)))
+            p_readout = float(noise_model.get("readout_error", noise_model.get("p_readout", 0.005)))
+        elif hasattr(noise_model, "gate_error_1q"):
+            p_1q = float(getattr(noise_model, "gate_error_1q", 0.001))
+            p_2q = float(getattr(noise_model, "gate_error_2q", p_1q * 2.0))
+            p_readout = float(getattr(noise_model, "readout_error", 0.005))
+        elif hasattr(noise_model, "to_trajectory_noise_model"):
+            tm = noise_model.to_trajectory_noise_model()
+            p_1q = float(getattr(tm, "gate_error_1q", 0.001))
+            p_2q = float(getattr(tm, "gate_error_2q", p_1q * 2.0))
+            p_readout = float(getattr(tm, "readout_error", 0.005))
+        elif isinstance(noise_model, str) and noise_model.strip().lower() != "none":
+            noise_level = noise_model
+        else:
+            # Generic Qiskit Aer NoiseModel or custom object: fall back to noise_level or 'low'
+            if not noise_level or str(noise_level).strip().lower() == "none":
+                noise_level = "low"
+
+    lvl = str(noise_level or "none").strip().lower()
+    if p_1q == 0.0 and p_2q == 0.0 and p_readout == 0.0 and lvl not in ("none", ""):
+        if lvl.startswith("physical:"):
+            lvl = "low"
+        from src.engine.noise import get_trajectory_noise_model
+        tm = get_trajectory_noise_model(lvl)
+        if tm is not None:
+            p_1q = float(tm.gate_error_1q)
+            p_2q = float(tm.gate_error_2q)
+            p_readout = float(tm.readout_error)
+
+    is_noisy = (p_1q > 0.0) or (p_2q > 0.0) or (p_readout > 0.0)
+    return is_noisy, p_1q, p_2q, p_readout
+
+
 def simulate_stabilizer(
     circuit: Any,
     shots: int = 1024,
-    seed: Optional[int] = None
+    seed: Optional[int] = None,
+    noise_level: str = "none",
+    noise_model: Any = None
 ) -> Dict[str, Any]:
     """
-    Execute an n-qubit Clifford circuit using the Aaronson-Gottesman Stabilizer Tableau engine.
-
-    Optimization:
-        If the circuit is a pure unitary Clifford circuit (with optional terminal measurements
-        and no mid-circuit resets or mid-circuit measurements), the tableau is evolved once
-        and sampled across all shots in parallel via vectorized phase propagation.
+    Execute an n-qubit Clifford circuit using the Aaronson-Gottesman Stabilizer Tableau engine,
+    with optional Monte Carlo Noisy Stabilizer Trajectories (1Q/2Q Pauli depolarizing jumps
+    and readout bit-flip errors) and exact O(n^2)/O(n^3) observable & entanglement evaluation.
 
     Args:
         circuit (Any): QuantumCircuit, ParsedQASMCircuit, or OpenQASM 2.0 path/string.
-        shots (int): Number of measurement shots (default 1024).
+        shots (int): Number of measurement shots / trajectories (default 1024).
         seed (Optional[int]): Random seed for reproducible sampling.
+        noise_level (str): NISQ noise preset ('none', 'low', 'medium', 'high').
+        noise_model (Any): Optional TrajectoryNoiseModel, PhysicalNoiseModel, dict, or Aer NoiseModel.
 
     Returns:
         Dict[str, Any]: Structured simulation telemetry including counts, probabilities,
-            num_qubits, tableau_memory_bytes, ram_savings_vs_statevector, and clifford_gate_count.
+            bipartite_entropy_ebits, end_to_end_zz_expectation, ising_energy_expectation,
+            noisy_fidelity_estimate, tableau_memory_bytes, and clifford_gate_count.
 
     Raises:
         NonCliffordGateError: If the circuit contains any non-Clifford gate.
@@ -891,6 +996,8 @@ def simulate_stabilizer(
     num_qubits, num_clbits, instructions = _extract_instructions_from_circuit(circuit)
     if num_qubits < 1:
         raise ValueError("Circuit must contain at least 1 qubit.")
+
+    is_noisy, p_1q, p_2q, p_readout = _resolve_stabilizer_noise_params(noise_level, noise_model)
 
     # Separate unitary prefix from terminal measurements, or detect dynamic mid-circuit ops
     has_mid_circuit_nonunitary = False
@@ -916,20 +1023,79 @@ def simulate_stabilizer(
 
     t0 = time.perf_counter()
     active_tableau = None
+    noisy_fidelity_estimate = 1.0
+    pauli_jump_count = 0
 
     if not has_mid_circuit_nonunitary:
-        # Fast-Path: Evolve unitary Clifford tableau once, then batch-sample all shots
+        # Fast-Path: Evolve unitary Clifford tableau once, with vectorized noisy trajectory phase matrix R if noisy
         tableau = StabilizerTableau(num_qubits)
-        for name, q_idx, params in unitary_ops:
-            tableau.apply_gate(name, q_idx, params)
-
         active_tableau = tableau
-        counts = tableau.sample_measurements(
-            shots=shots,
-            seed=seed,
-            measured_Map=terminal_measurements if terminal_measurements else None,
-            num_clbits=num_clbits if terminal_measurements else num_qubits
-        )
+
+        if not is_noisy:
+            for name, q_idx, params in unitary_ops:
+                tableau.apply_gate(name, q_idx, params)
+
+            counts = tableau.sample_measurements(
+                shots=shots,
+                seed=seed,
+                measured_Map=terminal_measurements if terminal_measurements else None,
+                num_clbits=num_clbits if terminal_measurements else num_qubits
+            )
+        else:
+            rng = np.random.default_rng(seed)
+            n2 = 2 * num_qubits
+            R = np.zeros((n2, shots), dtype=np.uint8)
+
+            for name, q_idx, params in unitary_ops:
+                r_prev = tableau.r[:n2].copy()
+                tableau.apply_gate(name, q_idx, params)
+                delta_r = tableau.r[:n2] ^ r_prev
+                R ^= delta_r[:, None]
+
+                if len(q_idx) == 1 and p_1q > 0.0:
+                    q = q_idx[0]
+                    u = rng.random(shots)
+                    err_mask = u < p_1q
+                    n_jumps = int(np.sum(err_mask))
+                    if n_jumps > 0:
+                        pauli_jump_count += n_jumps
+                        # X: [0, p/3) -> flips z; Y: [p/3, 2p/3) -> flips x^z; Z: [2p/3, p) -> flips x
+                        mask_z = (u < (2.0 * p_1q / 3.0)).astype(np.uint8)
+                        mask_x = ((u >= (p_1q / 3.0)) & err_mask).astype(np.uint8)
+                        R ^= (tableau.z[:n2, q, None] & mask_z[None, :]) ^ (
+                            tableau.x[:n2, q, None] & mask_x[None, :]
+                        )
+                elif len(q_idx) == 2 and p_2q > 0.0:
+                    q0, q1 = q_idx[0], q_idx[1]
+                    u = rng.random(shots)
+                    err_mask = u < p_2q
+                    n_jumps = int(np.sum(err_mask))
+                    if n_jumps > 0:
+                        pauli_jump_count += n_jumps
+                        # Uniformly pick 1..15 non-identity two-qubit Pauli operator (P0, P1)
+                        k = np.where(err_mask, rng.integers(1, 16, size=shots), 0).astype(np.uint8)
+                        b0 = k & 1
+                        b1 = (k >> 1) & 1
+                        b2 = (k >> 2) & 1
+                        b3 = (k >> 3) & 1
+                        R ^= (tableau.z[:n2, q0, None] & b0[None, :]) ^ (
+                            tableau.x[:n2, q0, None] & b1[None, :]
+                        )
+                        R ^= (tableau.z[:n2, q1, None] & b2[None, :]) ^ (
+                            tableau.x[:n2, q1, None] & b3[None, :]
+                        )
+
+            meas_seed = int(rng.integers(0, 2**31 - 1))
+            counts, noisy_fidelity_estimate = tableau.sample_measurements(
+                shots=shots,
+                seed=meas_seed,
+                measured_Map=terminal_measurements if terminal_measurements else None,
+                num_clbits=num_clbits if terminal_measurements else num_qubits,
+                initial_r_matrix=R,
+                readout_error_prob=p_readout,
+                return_coupled_fidelity=True
+            )
+
         mem_bytes = tableau.tableau_memory_bytes
         clifford_count = tableau.clifford_gate_count
     else:
@@ -939,6 +1105,13 @@ def simulate_stabilizer(
         c_len = num_clbits if num_clbits > 0 else num_qubits
         mem_bytes = 0
         clifford_count = 0
+
+        # Build ideal unitary reference tableau for pre-measurement observable expectations
+        ideal_ref = StabilizerTableau(num_qubits)
+        for name, q_idx, params, _, cond in instructions:
+            if cond is None and name not in ("measure", "reset", "barrier", "delay"):
+                ideal_ref.apply_gate(name, q_idx, params)
+        active_tableau = ideal_ref
 
         for shot_idx in range(shots):
             tab = StabilizerTableau(num_qubits)
@@ -953,20 +1126,49 @@ def simulate_stabilizer(
                 if name == "measure":
                     measured_any = True
                     m_val = tab.measure(q_idx[0], rng=rng)
+                    if is_noisy and p_readout > 0.0 and float(rng.random()) < p_readout:
+                        m_val ^= 1
                     c_target = c_idx[0] if c_idx else q_idx[0]
                     if 0 <= c_target < c_len:
                         clbits[c_target] = m_val
                 else:
                     tab.apply_gate(name, q_idx, params, rng=rng)
+                    if is_noisy and name not in ("barrier", "delay", "reset"):
+                        if len(q_idx) == 1 and p_1q > 0.0 and float(rng.random()) < p_1q:
+                            pauli_jump_count += 1
+                            p_choice = int(rng.integers(0, 3))
+                            if p_choice == 0:
+                                tab.apply_x(q_idx[0])
+                            elif p_choice == 1:
+                                tab.apply_y(q_idx[0])
+                            else:
+                                tab.apply_z(q_idx[0])
+                            tab.clifford_gate_count -= 1
+                        elif len(q_idx) == 2 and p_2q > 0.0 and float(rng.random()) < p_2q:
+                            pauli_jump_count += 1
+                            k = int(rng.integers(1, 16))
+                            p0_code = k & 3
+                            p1_code = (k >> 2) & 3
+                            for q_t, code in ((q_idx[0], p0_code), (q_idx[1], p1_code)):
+                                if code == 1:
+                                    tab.apply_x(q_t)
+                                    tab.clifford_gate_count -= 1
+                                elif code == 2:
+                                    tab.apply_z(q_t)
+                                    tab.clifford_gate_count -= 1
+                                elif code == 3:
+                                    tab.apply_y(q_t)
+                                    tab.clifford_gate_count -= 1
 
             if not measured_any:
                 for q in range(num_qubits):
                     m_val = tab.measure(q, rng=rng)
+                    if is_noisy and p_readout > 0.0 and float(rng.random()) < p_readout:
+                        m_val ^= 1
                     if q < c_len:
                         clbits[q] = m_val
 
             if shot_idx == 0:
-                active_tableau = tab
                 mem_bytes = tab.tableau_memory_bytes
                 clifford_count = tab.clifford_gate_count
 
@@ -976,6 +1178,27 @@ def simulate_stabilizer(
     latency = time.perf_counter() - t0
     probabilities = {k: v / float(shots) for k, v in counts.items()}
     ram_savings = calculate_stabilizer_ram_savings(num_qubits, mem_bytes)
+
+    # Evaluate exact O(n^3) bipartite entanglement entropy and O(n^2) Pauli expectations on active_tableau
+    from src.engine.entanglement import calculate_stabilizer_entanglement_entropy
+    from src.engine.observables import expectation_stabilizer, evaluate_hamiltonian
+
+    bipartite_entropy_ebits = calculate_stabilizer_entanglement_entropy(
+        active_tableau,
+        list(range(num_qubits // 2))
+    )
+    if num_qubits == 1:
+        end_to_end_zz = expectation_stabilizer(active_tableau, "Z")
+        ising_energy = -end_to_end_zz
+    else:
+        zz_end_str = "Z" + ("I" * (num_qubits - 2)) + "Z"
+        end_to_end_zz = expectation_stabilizer(active_tableau, zz_end_str)
+        weight = -1.0 / float(num_qubits - 1)
+        ising_terms = [
+            (("I" * i) + "ZZ" + ("I" * (num_qubits - 2 - i)), weight)
+            for i in range(num_qubits - 1)
+        ]
+        ising_energy = evaluate_hamiltonian(active_tableau, ising_terms)
 
     return {
         "success": True,
@@ -992,6 +1215,14 @@ def simulate_stabilizer(
         "tableau_memory_bytes": mem_bytes,
         "ram_savings_vs_statevector": ram_savings,
         "clifford_gate_count": clifford_count,
+        "bipartite_entropy_ebits": float(bipartite_entropy_ebits),
+        "bipartite_entanglement_entropy_ebits": float(bipartite_entropy_ebits),
+        "end_to_end_zz_expectation": float(end_to_end_zz),
+        "zz_correlation_expectation": float(end_to_end_zz),
+        "ising_energy_expectation": float(ising_energy),
+        "noisy_fidelity_estimate": float(noisy_fidelity_estimate),
+        "pauli_jump_count": int(pauli_jump_count),
+        "noise_level": str(noise_level or "none"),
         "method": "stabilizer",
         "shots": shots,
         "error": None

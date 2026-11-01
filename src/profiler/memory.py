@@ -53,8 +53,10 @@ def check_memory_safety(
     available_ram = vm.available
     available_gb = available_ram / (1024 ** 3)
     
+    method_norm = str(method).lower().strip()
+
     # Stabilizer Tableau O(n^2) safety check
-    if method == 'stabilizer':
+    if method_norm == 'stabilizer':
         tableau_bytes = (2 * num_qubits + 1) * (2 * num_qubits + 1)
         min_ram_needed = max(50 * (1024 ** 2), tableau_bytes)
         if available_ram < min_ram_needed:
@@ -69,7 +71,7 @@ def check_memory_safety(
         )
 
     # MPS safety check
-    if method in ('mps', 'matrix_product_state'):
+    if method_norm in ('mps', 'matrix_product_state'):
         min_ram_needed = 200 * (1024 ** 2)  # 200 MB baseline
         if available_ram < min_ram_needed:
             min_gb = min_ram_needed / (1024 ** 3)

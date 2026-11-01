@@ -249,7 +249,12 @@ def run_single_simulation(
             "mps_fidelity": last_mps_res["mps_fidelity"],
             "cumulative_truncation_error": last_mps_res["cumulative_truncation_error"],
             "max_active_bond_dim": last_mps_res["max_active_bond_dim"],
-            "swap_count": last_mps_res["swap_count"]
+            "swap_count": last_mps_res["swap_count"],
+            "bipartite_entropy_ebits": last_mps_res.get("bipartite_entropy_ebits", 0.0),
+            "bipartite_entanglement_entropy_ebits": last_mps_res.get("bipartite_entropy_ebits", 0.0),
+            "end_to_end_zz_expectation": last_mps_res.get("end_to_end_zz_expectation", 0.0),
+            "zz_correlation_expectation": last_mps_res.get("end_to_end_zz_expectation", 0.0),
+            "ising_energy_expectation": last_mps_res.get("ising_energy_expectation", 0.0)
         }
     elif method == 'stabilizer':
         from src.engine.stabilizer import simulate_stabilizer
@@ -260,7 +265,9 @@ def run_single_simulation(
             for _ in range(runs):
                 stab_res = simulate_stabilizer(
                     stab_input,
-                    shots=shots
+                    shots=shots,
+                    noise_level=noise_level,
+                    noise_model=noise_model
                 )
                 stab_latencies.append(stab_res["latency"])
                 last_stab_res = stab_res
@@ -297,7 +304,14 @@ def run_single_simulation(
             "physical_noise_profile": None,
             "tableau_memory_bytes": last_stab_res["tableau_memory_bytes"],
             "clifford_gate_count": last_stab_res["clifford_gate_count"],
-            "ram_savings_vs_statevector": last_stab_res["ram_savings_vs_statevector"]
+            "ram_savings_vs_statevector": last_stab_res["ram_savings_vs_statevector"],
+            "bipartite_entropy_ebits": last_stab_res.get("bipartite_entropy_ebits", 0.0),
+            "bipartite_entanglement_entropy_ebits": last_stab_res.get("bipartite_entropy_ebits", 0.0),
+            "end_to_end_zz_expectation": last_stab_res.get("end_to_end_zz_expectation", 0.0),
+            "zz_correlation_expectation": last_stab_res.get("end_to_end_zz_expectation", 0.0),
+            "ising_energy_expectation": last_stab_res.get("ising_energy_expectation", 0.0),
+            "noisy_fidelity_estimate": last_stab_res.get("noisy_fidelity_estimate", 1.0),
+            "pauli_jump_count": last_stab_res.get("pauli_jump_count", 0)
         }
     else:
         try:
@@ -370,7 +384,7 @@ def run_single_simulation(
     if method in ('mps', 'matrix_product_state'):
         fidelity = round(sim_result.get("mps_fidelity", 1.0) * 100.0, 4)
     elif method == 'stabilizer':
-        fidelity = 100.0
+        fidelity = round(sim_result.get("noisy_fidelity_estimate", 1.0) * 100.0, 4)
     elif noise_level != "none" and sim_result["success"]:
         active_be.device_synchronize()
         try:
@@ -430,6 +444,46 @@ def run_single_simulation(
             )
         except Exception as ee:
             entanglement_metrics = {"error": str(ee)}
+
+    # 8b. Ensure scalable bipartite entanglement entropy & Pauli expectations are populated across all solvers
+    bipartite_entropy_ebits = sim_result.get("bipartite_entropy_ebits")
+    end_to_end_zz_expectation = sim_result.get("end_to_end_zz_expectation")
+    ising_energy_expectation = sim_result.get("ising_energy_expectation")
+
+    if sim_result["success"] and circuit is not None and (
+        bipartite_entropy_ebits is None or end_to_end_zz_expectation is None or ising_energy_expectation is None
+    ):
+        try:
+            if entanglement_metrics and "von_neumann_entropy" in entanglement_metrics:
+                bipartite_entropy_ebits = float(entanglement_metrics["von_neumann_entropy"])
+            elif qubits <= 16:
+                from src.engine.simulator import evolve_statevector
+                from src.engine.observables import expectation_statevector, evaluate_hamiltonian
+                sv_obs = evolve_statevector(circuit, precision=precision)
+                if bipartite_entropy_ebits is None:
+                    ent_res = calculate_bipartite_entropy(circuit, method="auto", max_bond_dimension=bond_dimension)
+                    bipartite_entropy_ebits = float(ent_res.get("von_neumann_entropy", 0.0))
+                if qubits == 1:
+                    end_to_end_zz_expectation = float(expectation_statevector(sv_obs, "Z"))
+                    ising_energy_expectation = -end_to_end_zz_expectation
+                else:
+                    zz_end_str = "Z" + ("I" * (qubits - 2)) + "Z"
+                    end_to_end_zz_expectation = float(expectation_statevector(sv_obs, zz_end_str))
+                    weight = -1.0 / float(qubits - 1)
+                    ising_terms = [
+                        (("I" * i) + "ZZ" + ("I" * (qubits - 2 - i)), weight)
+                        for i in range(qubits - 1)
+                    ]
+                    ising_energy_expectation = float(evaluate_hamiltonian(sv_obs, ising_terms))
+        except Exception:
+            pass
+
+    if bipartite_entropy_ebits is None:
+        bipartite_entropy_ebits = 0.0
+    if end_to_end_zz_expectation is None:
+        end_to_end_zz_expectation = 0.0
+    if ising_energy_expectation is None:
+        ising_energy_expectation = 0.0
 
     # 9. Calculate Quantum Volume Heavy Output Metrics if applicable
     if workload_type == "qv" and sim_result["success"] and sim_result.get("counts") and qubits <= 16:
@@ -512,6 +566,12 @@ def run_single_simulation(
         "qasm_metrics": qasm_metrics,
         "complexity_profile": complexity_profile,
         "solver_routing": solver_routing,
+        "bipartite_entropy_ebits": float(bipartite_entropy_ebits),
+        "bipartite_entanglement_entropy_ebits": float(bipartite_entropy_ebits),
+        "end_to_end_zz_expectation": float(end_to_end_zz_expectation),
+        "zz_correlation_expectation": float(end_to_end_zz_expectation),
+        "ising_energy_expectation": float(ising_energy_expectation),
+        "noisy_fidelity_estimate": sim_result.get("noisy_fidelity_estimate") if method == "stabilizer" else None,
         "tableau_memory_bytes": sim_result.get("tableau_memory_bytes") if method == "stabilizer" else None,
         "clifford_gate_count": sim_result.get("clifford_gate_count") if method == "stabilizer" else None,
         "mps_fidelity": sim_result.get("mps_fidelity") if method in ('mps', 'matrix_product_state') else None,
@@ -693,8 +753,17 @@ def run_custom_simulation(
         workload_desc = args.type.upper()
 
     if args.noise_level != 'none' or noise_profile is not None:
-        noise_desc = "Monte Carlo Wavefunction (Trajectory)" if noise_method == "trajectory" else "Density Matrix"
-        c.print(f"[bold cyan]Noise Simulation Mode:[/] [bold magenta]{noise_desc}[/] | Shots: [bold green]{shots:,}[/] | Preserving O(2^n) Scaling (Memory Saved: [bold yellow]~2^{effective_qubits} = ~{1 << effective_qubits:,} x[/bold yellow])")
+        if args.method == "stabilizer":
+            noise_desc = "Noisy Stabilizer Trajectories (Monte Carlo Pauli Jumps)"
+            scale_desc = "Preserving O(n^2) Stabilizer Tableau Scaling"
+        else:
+            noise_desc = "Monte Carlo Wavefunction (Trajectory)" if noise_method == "trajectory" else "Density Matrix"
+            scale_desc = (
+                f"Preserving O(2^n) Scaling (Memory Saved: [bold yellow]~2^{effective_qubits} = ~{1 << effective_qubits:,} x[/bold yellow])"
+                if effective_qubits <= 30
+                else f"Preserving O(2^n) Scaling (Memory Saved: [bold yellow]~2^{effective_qubits} x[/bold yellow])"
+            )
+        c.print(f"[bold cyan]Noise Simulation Mode:[/] [bold magenta]{noise_desc}[/] | Shots: [bold green]{shots:,}[/] | {scale_desc}")
 
     c.print(f"[bold yellow]Executing Custom Simulation (Qubits: {effective_qubits}, Workload: {workload_desc}, Method: {args.method.upper()}, Device: {effective_device.upper()}{slicing_label}{native_label}{backend_label}, Workers: {workers}, Noise: {args.noise_level.upper()} ({noise_method.upper()}, {shots} shots), Entropy: {args.entropy}, Runs: {args.runs})...[/bold yellow]\n")
     results = []

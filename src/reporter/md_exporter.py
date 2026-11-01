@@ -195,6 +195,10 @@ def export_to_markdown(
     if best_entanglement and "von_neumann_entropy" in best_entanglement:
         md_content.append(f"> **Entanglement Entropy:** `S_vN = {best_entanglement['von_neumann_entropy']:.4f} bits` (Schmidt Rank: `{best_entanglement['schmidt_rank']}` | `{best_entanglement['entanglement_regime']}`)")
         md_content.append(f"> **MPS Simulation Complexity:** `{best_entanglement['mps_hardness']}`")
+    elif successful_runs and best_run.get("bipartite_entropy_ebits") is not None:
+        md_content.append(
+            f"> **Quantum Observables & Entanglement:** `S(rho_A) = {best_run.get('bipartite_entropy_ebits', 0.0):.4f} ebits` | `<Z_0 Z_(n-1)> = {best_run.get('end_to_end_zz_expectation', 0.0):.4f}` | `<H_Ising> = {best_run.get('ising_energy_expectation', 0.0):.4f}`"
+        )
 
     if best_energy and "total_energy_joules" in best_energy:
         backend_raw = str(best_energy.get("energy_backend", "Generic Model"))

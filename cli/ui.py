@@ -286,7 +286,16 @@ def display_results(results: List[Dict[str, Any]], console: Optional[Console] = 
 
     score = calculate_qsim_score(max_qubits, gates, mean_latency, fidelity=best_fidelity)
     category = categorize_score(score)
-    breakdown = calculate_scoring_breakdown(max_qubits, gates, mean_latency, fidelity=best_fidelity, energy_joules=total_energy_j)
+    breakdown = calculate_scoring_breakdown(
+        max_qubits,
+        gates,
+        mean_latency,
+        fidelity=best_fidelity,
+        energy_joules=total_energy_j,
+        sim_method=best_run.get("method", "statevector"),
+        precision=best_run.get("precision", "fp64"),
+        active_bond_dim=best_run.get("max_active_bond_dim") or best_run.get("bond_dimension") or 16
+    )
 
     tier_colors = {
         "Entry-Level": "blue",
@@ -342,6 +351,11 @@ def display_results(results: List[Dict[str, Any]], console: Optional[Console] = 
         em = best_run["entanglement_metrics"]
         panel_content.append(f"Entanglement Entropy: S_vN = {em['von_neumann_entropy']:.4f} bits (Schmidt Rank: {em['schmidt_rank']} | {em['entanglement_regime']})\n", style="bold red")
         panel_content.append(f"MPS Simulation Complexity: {em['mps_hardness']}\n", style="bold magenta")
+    elif best_run.get("bipartite_entropy_ebits") is not None:
+        panel_content.append(
+            f"Quantum Observables: S(rho_A) = {best_run.get('bipartite_entropy_ebits', 0.0):.4f} ebits | <Z_0 Z_(n-1)> = {best_run.get('end_to_end_zz_expectation', 0.0):.4f} | <H_Ising> = {best_run.get('ising_energy_expectation', 0.0):.4f}\n",
+            style="bold cyan"
+        )
 
     if best_run.get("energy_metrics") and "total_energy_joules" in best_run["energy_metrics"]:
         enm = best_run["energy_metrics"]

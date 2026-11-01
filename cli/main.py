@@ -1,6 +1,12 @@
 import argparse
+import os
 import sys
 from typing import List, Dict, Any
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 from rich.console import Console
 
@@ -71,6 +77,7 @@ def build_argument_parser() -> argparse.ArgumentParser:
     report_group = parser.add_argument_group("Reporting Options")
     report_group.add_argument("--chart", action="store_true", help="Generate visualization chart PNG images in results directory.")
     report_group.add_argument("--export", choices=["json", "md", "all"], default="all", help="Export results format (default all).")
+    report_group.add_argument("--output-dir", type=str, default="results", help="Output directory for generated reports and charts (default: results).")
     
     return parser
 
@@ -98,6 +105,11 @@ def validate_cli_arguments(args: argparse.Namespace) -> None:
 
 def main():
     """Main CLI entrypoint for QuaComp."""
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
     parser = build_argument_parser()
     args = parser.parse_args()
     
@@ -213,19 +225,21 @@ def main():
         # Export individual benchmark results and charts
         if results:
             system_metadata = get_system_metadata()
+            out_dir = getattr(args, "output_dir", "results") or "results"
             generated_charts = []
             if args.chart:
-                generated_charts = generate_benchmark_charts(results, system_metadata)
+                generated_charts = generate_benchmark_charts(results, system_metadata, output_dir=out_dir)
                 if generated_charts:
-                    console.print("[bold green]Benchmark charts successfully generated in results/ directory:[/bold green]")
+                    console.print(f"[bold green]Benchmark charts successfully generated in {out_dir}/ directory:[/bold green]")
                     for cpath in generated_charts:
                         console.print(f"  - {cpath}")
                         
             if args.export in ("json", "all"):
-                json_path = export_to_json(results, system_metadata)
+                json_path = export_to_json(results, system_metadata, output_dir=out_dir)
                 console.print(f"[bold green]JSON report exported to:[/bold green] {json_path}")
             if args.export in ("md", "all"):
-                md_path = export_to_markdown(results, system_metadata, generated_charts=generated_charts)
+                md_out = os.path.join(out_dir, "report.md")
+                md_path = export_to_markdown(results, system_metadata, output_path=md_out, generated_charts=generated_charts)
                 console.print(f"[bold green]Markdown report exported to:[/bold green] {md_path}")
                 
     # If comparison was requested (either standalone or with live benchmark)

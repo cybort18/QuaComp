@@ -194,9 +194,9 @@ def check_gpu_vram_safety(
     if not is_gpu_available():
         return False, f"GPU acceleration requested for {qubits} qubits, but Qiskit Aer does not have GPU/CUDA backend support on this environment. Available devices: {get_available_aer_devices()}"
         
-    # If method is MPS, VRAM is minimal
-    if method.lower() in ('mps', 'matrix_product_state'):
-        return True, f"MPS simulation on GPU is memory efficient for {qubits} qubits."
+    # If method is MPS or Stabilizer, VRAM is minimal
+    if method.lower() in ('mps', 'matrix_product_state', 'stabilizer'):
+        return True, f"{method.upper()} simulation on GPU is memory efficient for {qubits} qubits."
         
     # Statevector theoretical VRAM requirement: 2^n * 16 bytes
     req_bytes = (2 ** qubits) * 16

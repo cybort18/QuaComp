@@ -583,7 +583,12 @@ def run_simulation(
         stab_latencies: List[float] = []
         last_stab_res: Optional[Dict[str, Any]] = None
         for _ in range(runs):
-            s_res = simulate_stabilizer(circuit, shots=shots)
+            s_res = simulate_stabilizer(
+                circuit,
+                shots=shots,
+                noise_level=noise_level,
+                noise_model=noise_model
+            )
             stab_latencies.append(s_res["latency"])
             last_stab_res = s_res
 
@@ -594,6 +599,10 @@ def run_simulation(
         mem_bytes = last_stab_res["tableau_memory_bytes"] if last_stab_res else 0
         ram_sav = last_stab_res["ram_savings_vs_statevector"] if last_stab_res else {}
         cliff_cnt = last_stab_res["clifford_gate_count"] if last_stab_res else 0
+        bip_ent = last_stab_res.get("bipartite_entropy_ebits", 0.0) if last_stab_res else 0.0
+        zz_exp = last_stab_res.get("end_to_end_zz_expectation", 0.0) if last_stab_res else 0.0
+        ising_exp = last_stab_res.get("ising_energy_expectation", 0.0) if last_stab_res else 0.0
+        noisy_fid = last_stab_res.get("noisy_fidelity_estimate", 1.0) if last_stab_res else 1.0
 
         metadata = {
             "backend_name": "QuaComp Stabilizer Tableau Engine (Aaronson-Gottesman CHP)",
@@ -609,6 +618,10 @@ def run_simulation(
             "clifford_gate_count": cliff_cnt,
             "complexity_profile": complexity_profile,
             "solver_routing": solver_routing,
+            "bipartite_entropy_ebits": bip_ent,
+            "end_to_end_zz_expectation": zz_exp,
+            "ising_energy_expectation": ising_exp,
+            "noisy_fidelity_estimate": noisy_fid,
             "counts": counts_out
         }
         return {
@@ -626,6 +639,12 @@ def run_simulation(
             "tableau_memory_bytes": mem_bytes,
             "ram_savings_vs_statevector": ram_sav,
             "clifford_gate_count": cliff_cnt,
+            "bipartite_entropy_ebits": bip_ent,
+            "bipartite_entanglement_entropy_ebits": bip_ent,
+            "end_to_end_zz_expectation": zz_exp,
+            "zz_correlation_expectation": zz_exp,
+            "ising_energy_expectation": ising_exp,
+            "noisy_fidelity_estimate": noisy_fid,
             "complexity_profile": complexity_profile,
             "solver_routing": solver_routing,
             "native_kernel_used": False,

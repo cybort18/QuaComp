@@ -449,6 +449,24 @@ def simulate_mps(
 
     latency = time.perf_counter() - t0
 
+    # Evaluate exact in-place MPS entanglement entropy and Pauli observables before measurement
+    from src.engine.entanglement import calculate_mps_entanglement_entropy
+    from src.engine.observables import expectation_mps, evaluate_hamiltonian
+
+    bipartite_entropy_ebits = calculate_mps_entanglement_entropy(mps)
+    if num_qubits == 1:
+        end_to_end_zz = expectation_mps(mps, "Z")
+        ising_energy = -end_to_end_zz
+    else:
+        zz_end_str = "Z" + ("I" * (num_qubits - 2)) + "Z"
+        end_to_end_zz = expectation_mps(mps, zz_end_str)
+        weight = -1.0 / float(num_qubits - 1)
+        ising_terms = [
+            (("I" * i) + "ZZ" + ("I" * (num_qubits - 2 - i)), weight)
+            for i in range(num_qubits - 1)
+        ]
+        ising_energy = evaluate_hamiltonian(mps, ising_terms)
+
     probs = mps.get_probabilities() if num_qubits <= 20 else None
     counts = mps.sample_counts(shots=shots, seed=seed)
     sv = mps.to_statevector() if num_qubits <= 16 else None
@@ -470,6 +488,11 @@ def simulate_mps(
         "cumulative_truncation_error": mps.cumulative_truncation_error,
         "max_active_bond_dim": mps.max_active_bond_dim,
         "swap_count": mps.swap_count,
+        "bipartite_entropy_ebits": float(bipartite_entropy_ebits),
+        "bipartite_entanglement_entropy_ebits": float(bipartite_entropy_ebits),
+        "end_to_end_zz_expectation": float(end_to_end_zz),
+        "zz_correlation_expectation": float(end_to_end_zz),
+        "ising_energy_expectation": float(ising_energy),
         "method": "mps",
         "precision": mps.precision,
         "dtype": str(mps.dtype),
